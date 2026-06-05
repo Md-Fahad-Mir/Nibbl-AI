@@ -129,19 +129,27 @@ class AiPromptTests(APITestCase):
         from unittest.mock import patch, MagicMock
         from Apps.reviews.ai import generate_prompts
 
-        with patch("google.generativeai.configure") as mock_configure, \
-             patch("google.generativeai.GenerativeModel") as mock_model_class:
-            mock_model = MagicMock()
-            mock_model_class.return_value = mock_model
+        with patch("google.genai.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
             mock_response = MagicMock()
             mock_response.text = "Gemini prompt 1\nGemini prompt 2"
-            mock_model.generate_content.return_value = mock_response
+            mock_client.models.generate_content.return_value = mock_response
 
             with self.settings(GOOGLE_STUDIO_API_KEY="test-gemini-key", GOOGLE_MODEL="gemini-test"):
                 prompts = generate_prompts(product_name="Cola", count=2)
                 self.assertEqual(prompts, ["Gemini prompt 1", "Gemini prompt 2"])
-                mock_configure.assert_called_once_with(api_key="test-gemini-key")
-                mock_model_class.assert_called_once_with(model_name="gemini-test")
+                mock_client_class.assert_called_once_with(api_key="test-gemini-key")
+                mock_client.models.generate_content.assert_called_once_with(
+                    model="gemini-test",
+                    contents=(
+                        "System Instruction: You generate short, friendly, open-ended prompts for a chat-based "
+                        "product review. Return exactly one prompt per line, no numbering.\n\n"
+                        "Product: Cola\n"
+                        "Context: n/a\n"
+                        "Generate 2 prompts."
+                    )
+                )
 
 
 

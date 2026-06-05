@@ -77,10 +77,9 @@ def _generate_with_openai(*, product_name, product_context, count, api_key) -> l
 
 
 def _generate_with_gemini(*, product_name, product_context, count, api_key) -> list[str]:
-    import google.generativeai as genai
+    from google import genai
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name=settings.GOOGLE_MODEL)
+    client = genai.Client(api_key=api_key)
     prompt = (
         "System Instruction: You generate short, friendly, open-ended prompts for a chat-based "
         "product review. Return exactly one prompt per line, no numbering.\n\n"
@@ -88,7 +87,10 @@ def _generate_with_gemini(*, product_name, product_context, count, api_key) -> l
         f"Context: {product_context or 'n/a'}\n"
         f"Generate {count} prompts."
     )
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model=settings.GOOGLE_MODEL,
+        contents=prompt,
+    )
     text = response.text or ""
     prompts = [line.strip(" -•\t") for line in text.splitlines() if line.strip()]
     return prompts[:count] or _mock_prompts(product_name, count)

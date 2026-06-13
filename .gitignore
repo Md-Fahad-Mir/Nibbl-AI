@@ -93,9 +93,6 @@ db.sqlite3-journal
 **/static_root/
 *.log
 
-**/CREDENTIALS_AUDIT.md
-**/SECRETS_MANAGEMENT.md
-**/HANDOVER_PACKAGE_MANIFEST.txt
 
 # AI Reports & outputs
 **/reports/

@@ -13,6 +13,8 @@ from Apps.accounts.models import SocialAccount, User
 class UserSerializer(serializers.ModelSerializer):
     """Public representation of a user (safe fields only)."""
 
+    avatar_url = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -20,6 +22,7 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "full_name",
+            "avatar",
             "avatar_url",
             "role",
             "is_email_verified",
@@ -27,7 +30,24 @@ class UserSerializer(serializers.ModelSerializer):
             "referral_code",
             "created_at",
         ]
-        read_only_fields = fields
+        read_only_fields = [
+            "id",
+            "email",
+            "role",
+            "is_email_verified",
+            "is_phone_verified",
+            "referral_code",
+            "created_at",
+            "avatar_url",
+        ]
+
+    def get_avatar_url(self, obj):
+        if obj.avatar:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
+            return obj.avatar.url
+        return None
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -100,7 +120,7 @@ class VerifyPhoneSerializer(serializers.Serializer):
 class ProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["full_name", "avatar_url"]
+        fields = ["full_name", "avatar"]
 
 
 class LogoutSerializer(serializers.Serializer):

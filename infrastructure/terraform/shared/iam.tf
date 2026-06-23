@@ -35,6 +35,31 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# S3 read/write on the media bucket so the app (django-storages) can store and
+# delete user uploads (avatars, receipt images) via the instance profile.
+resource "aws_iam_role_policy" "ec2_s3_media" {
+  name = "${var.project_name}-${var.environment}-s3-media"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "MediaObjectRW"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+        Resource = "${aws_s3_bucket.media.arn}/*"
+      },
+      {
+        Sid      = "MediaBucketList"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = aws_s3_bucket.media.arn
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-${var.environment}-ec2-profile"
   role = aws_iam_role.ec2.name

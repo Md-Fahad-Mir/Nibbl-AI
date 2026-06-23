@@ -68,7 +68,13 @@ MIDDLEWARE.insert(
 )
 
 STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "bucket_name": env("AWS_STORAGE_BUCKET_NAME", default="nibblai-media-prod"),
+            "region_name": env("AWS_REGION", default="us-west-1"),
+        },
+    },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },

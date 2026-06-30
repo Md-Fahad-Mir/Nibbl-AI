@@ -5,10 +5,28 @@ Tuned to run inside a container behind a TLS-terminating reverse proxy / load
 balancer (nginx, ALB, Cloudflare, etc.).
 """
 
+from django.core.exceptions import ImproperlyConfigured
+
 from .base import *  # noqa: F401,F403
-from .base import ALLOWED_HOSTS, MIDDLEWARE, env
+from .base import (
+    ALLOWED_HOSTS,
+    CORS_ALLOW_ALL_ORIGINS,
+    CORS_ALLOW_CREDENTIALS,
+    MIDDLEWARE,
+    env,
+)
 
 DEBUG = False
+
+# Fail fast on the one CORS combination browsers reject outright: a wildcard
+# origin together with credentials. Catching it at boot beats silently serving
+# responses the browser will discard. Use an explicit allowlist for credentials.
+if CORS_ALLOW_ALL_ORIGINS and CORS_ALLOW_CREDENTIALS:
+    raise ImproperlyConfigured(
+        "CORS_ALLOW_ALL_ORIGINS=True cannot be combined with "
+        "CORS_ALLOW_CREDENTIALS=True — browsers reject '*' with credentials. "
+        "Set CORS_ALLOW_ALL_ORIGINS=False and use CORS_ALLOWED_ORIGINS instead."
+    )
 
 # ---------------------------------------------------------------------------
 # Database — AWS RDS PostgreSQL (required; no SQLite fallback in production).

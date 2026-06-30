@@ -335,10 +335,18 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@nibblai.app")
 # blocked by the same-origin policy. Origins are env-driven (comma-separated,
 # full scheme+host, e.g. "https://app.joinnibbl.com"); dev.py adds localhost.
 #
-# We never enable CORS_ALLOW_ALL_ORIGINS: the frontend sends Authorization
-# headers / cookies, and browsers reject credentialed requests against a "*"
-# origin. CorsMiddleware (placed first in MIDDLEWARE) answers preflight OPTIONS
-# requests with 200 before auth runs, so preflights no longer 401.
+# Wildcard switch — TEMPORARY, for frontend development before the API domain is
+# wired up everywhere. Safe ONLY because auth is JWT via the Authorization header
+# (not cookies): with credentials disabled the browser permits a "*" origin, and
+# Bearer tokens still work. It is INVALID combined with CORS_ALLOW_CREDENTIALS=True
+# (the browser rejects "*" + credentials); prod.py raises at boot if both are set.
+# When True, django-cors-headers ignores the allowlist/regex below and echoes "*".
+# Lock this back to False and use the explicit allowlist for production.
+CORS_ALLOW_ALL_ORIGINS = env.bool("CORS_ALLOW_ALL_ORIGINS", default=False)
+
+# Explicit per-origin allowlist (used when CORS_ALLOW_ALL_ORIGINS is False).
+# CorsMiddleware (placed first in MIDDLEWARE) answers preflight OPTIONS requests
+# with 200 before auth runs, so preflights no longer 401.
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 
 # Regex allowlist for origins that are dynamic and can't be enumerated — e.g.

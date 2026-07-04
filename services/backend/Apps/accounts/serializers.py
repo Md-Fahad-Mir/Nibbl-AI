@@ -5,15 +5,18 @@ logic lives in services.py.
 """
 
 from django.contrib.auth.password_validation import validate_password
+from django.db import models
 from rest_framework import serializers
 
 from Apps.accounts.models import SocialAccount, User
+from Apps.brands.models import BrandMembership
 
 
 class UserSerializer(serializers.ModelSerializer):
     """Public representation of a user (safe fields only)."""
 
     avatar_url = serializers.SerializerMethodField()
+    role_id = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -25,6 +28,7 @@ class UserSerializer(serializers.ModelSerializer):
             "avatar",
             "avatar_url",
             "role",
+            "role_id",
             "is_approved",
             "is_email_verified",
             "is_phone_verified",
@@ -35,6 +39,7 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "email",
             "role",
+            "role_id",
             "is_approved",
             "is_email_verified",
             "is_phone_verified",
@@ -50,6 +55,40 @@ class UserSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.avatar.url)
             return obj.avatar.url
         return None
+
+    def get_role_id(self, obj):
+        """Return a dict with the role-specific ID.
+
+        - brand  → ``{"brand_id": <Brand.id>}`` via BrandMembership (owner-first).
+        - consumer → ``{"consumer_id": <User.id>}`` (no separate consumer model).
+        - admin  → ``{"admin_id": <User.id>}`` (no separate admin model).
+
+        Returns ``None`` values when the related record does not exist
+        (e.g. a brand user whose Brand Application hasn't been approved yet).
+        """
+        if obj.role == User.Role.BRAND:
+            # Prefer the ownership with the highest privilege (owner first).
+            membership = (
+                BrandMembership.objects
+                .filter(user=obj, is_active=True)
+                .select_related("brand")
+                .order_by(
+                    models.Case(
+                        models.When(role=BrandMembership.Role.OWNER, then=0),
+                        models.When(role=BrandMembership.Role.ADMIN, then=1),
+                        default=2,
+                        output_field=models.IntegerField(),
+                    )
+                )
+                .first()
+            )
+            return {"brand_id": str(membership.brand_id) if membership else None}
+
+        if obj.role == User.Role.ADMIN:
+            return {"admin_id": str(obj.id)}
+
+        # Default: consumer
+        return {"consumer_id": str(obj.id)}
 
 
 class RegisterSerializer(serializers.Serializer):

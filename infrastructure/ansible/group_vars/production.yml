@@ -8,4 +8,4 @@ certbot_email: "admin@joinnibbl.com"   # TODO: set a real, monitored inbox for L
 # for setup instructions. The fallback grafana_password below is only used if
 # Secrets Manager fetch fails (useful for initial bootstrap if the secret
 # hasn't been created yet).
-grafana_password: ""
+grafana_password: "{{ lookup('env', 'GRAFANA_PASSWORD') | default('', true) }}"

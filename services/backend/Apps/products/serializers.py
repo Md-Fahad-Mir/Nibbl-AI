@@ -15,6 +15,9 @@ class ProductSerializer(serializers.ModelSerializer):
             "description",
             "image_url",
             "category",
+            "flavor",
+            "format",
+            "size_volume",
             "is_active",
             "alias_count",
             "created_at",
@@ -25,7 +28,7 @@ class ProductSerializer(serializers.ModelSerializer):
 class ProductWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields = ["name", "sku", "description", "image_url", "category"]
+        fields = ["name", "sku", "description", "image_url", "category", "flavor", "format", "size_volume"]
 
 
 class ProductAliasSerializer(serializers.ModelSerializer):

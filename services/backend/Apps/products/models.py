@@ -23,6 +23,9 @@ class Product(BaseModel):
     description = models.TextField(blank=True)
     image_url = models.URLField(blank=True)
     category = models.CharField(max_length=100, blank=True)
+    flavor = models.CharField(max_length=100, blank=True)
+    format = models.CharField(max_length=100, blank=True)
+    size_volume = models.CharField(max_length=100, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:

@@ -158,13 +158,13 @@ resource "aws_security_group" "app_sg" {
     description = "HTTPS"
   }
 
-  # RDS — only from EC2 (self-referencing)
+  # RDS — allow PostgreSQL from anywhere on IPv4
   ingress {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    self        = true
-    description = "PostgreSQL from within SG"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "PostgreSQL from anywhere IPv4"
   }
 
   egress {

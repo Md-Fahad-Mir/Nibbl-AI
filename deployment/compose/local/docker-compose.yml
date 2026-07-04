@@ -12,7 +12,7 @@ services:
       # Hot-reloading dev image (Django runserver), not the gunicorn prod stage.
       target: dev
     env_file:
-      - ../environments/.env.local.backend
+      - ${PROJECT_ROOT:-.}/deployment/environments/.env.local.backend
     volumes:
       # Live source for autoreload...
       - ../../services/backend:/app

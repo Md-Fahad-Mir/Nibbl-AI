@@ -10,9 +10,10 @@ set -euo pipefail
 : "${IMAGE_TAG:?IMAGE_TAG env var required}"
 AWS_REGION="${AWS_REGION:-us-west-1}"
 export PATH="$PATH:/usr/local/bin"
-export REGISTRY IMAGE_TAG
+PROJECT_ROOT="/home/ubuntu/nibblai"
+export REGISTRY IMAGE_TAG PROJECT_ROOT
 
-cd /home/ubuntu/nibblai
+cd "$PROJECT_ROOT"
 
 # Authenticate Docker to ECR using the EC2 instance profile (no static keys).
 aws ecr get-login-password --region "$AWS_REGION" \

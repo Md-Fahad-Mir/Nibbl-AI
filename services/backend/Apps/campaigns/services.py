@@ -65,27 +65,26 @@ def ensure_access(campaign: Campaign):
 # ---------------------------------------------------------------------------
 # Create / update
 # ---------------------------------------------------------------------------
-def _resolve_product(brand, product_id) -> Product:
-    product = Product.objects.filter(
-        id=product_id, brand=brand, is_active=True
-    ).first()
-    if product is None:
-        raise CampaignError("Product not found in this brand's active library.")
-    return product
+def _resolve_products(brand, product_ids) -> list[Product]:
+    products = list(Product.objects.filter(
+        id__in=product_ids, brand=brand, is_active=True
+    ))
+    if len(products) != len(set(product_ids)):
+        raise CampaignError("One or more products not found in this brand's active library.")
+    return products
 
 
 @transaction.atomic
-def create_campaign(*, brand, product_id, name, daily_budget, description="",
+def create_campaign(*, brand, product_ids, name, daily_budget, description="",
                     min_purchase_units=1, is_bogo=False, cooldown_days=30,
                     start_at=None, end_at=None) -> Campaign:
-    product = _resolve_product(brand, product_id)
+    products = _resolve_products(brand, product_ids)
     daily_budget = to_money(daily_budget)
     if daily_budget <= ZERO:
         raise CampaignError("Daily budget must be positive.")
 
     campaign = Campaign.objects.create(
         brand=brand,
-        product=product,
         name=name,
         description=description,
         daily_budget=daily_budget,
@@ -95,6 +94,7 @@ def create_campaign(*, brand, product_id, name, daily_budget, description="",
         start_at=start_at,
         end_at=end_at,
     )
+    campaign.products.set(products)
     regenerate_restriction(campaign)
     ensure_access(campaign)
     return campaign
@@ -194,8 +194,8 @@ def _validate_ready_to_activate(campaign: Campaign) -> None:
     total = sum((t.allocation_percent for t in tiers), Decimal("0.00"))
     if total != HUNDRED:
         raise CampaignError("Tier allocations must sum to 100% before activating.")
-    if not campaign.product.is_active:
-        raise CampaignError("The campaign's product is archived.")
+    if not campaign.products.filter(is_active=True).exists():
+        raise CampaignError("All products in this campaign are archived.")
 
 
 def activate_campaign(campaign: Campaign) -> Campaign:

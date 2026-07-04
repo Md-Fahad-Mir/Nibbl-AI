@@ -31,7 +31,7 @@ class BroadcastSerializer(serializers.Serializer):
 
 class AdminCampaignSerializer(serializers.ModelSerializer):
     brand_name = serializers.CharField(source="brand.name", read_only=True)
-    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Campaign
@@ -40,6 +40,10 @@ class AdminCampaignSerializer(serializers.ModelSerializer):
             "daily_budget", "auto_paused", "created_at",
         ]
         read_only_fields = fields
+
+    def get_product_name(self, obj):
+        first_product = obj.products.first()
+        return first_product.name if first_product else ""
 
 
 class FraudFlagSerializer(serializers.ModelSerializer):

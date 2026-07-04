@@ -32,7 +32,8 @@ class FallbackOfferSerializer(serializers.ModelSerializer):
 
 
 class CampaignSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_name = serializers.SerializerMethodField(read_only=True)
+    products = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     tiers = RewardTierSerializer(many=True, read_only=True)
     restriction = RestrictionSerializer(read_only=True)
     fallback_offer = FallbackOfferSerializer(read_only=True)
@@ -44,7 +45,7 @@ class CampaignSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "status",
-            "product",
+            "products",
             "product_name",
             "daily_budget",
             "min_purchase_units",
@@ -60,9 +61,13 @@ class CampaignSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    def get_product_name(self, obj):
+        first_product = obj.products.first()
+        return first_product.name if first_product else ""
+
 
 class CampaignCreateSerializer(serializers.Serializer):
-    product = serializers.UUIDField()
+    product = serializers.ListField(child=serializers.UUIDField())
     name = serializers.CharField(max_length=255)
     description = serializers.CharField(required=False, allow_blank=True, default="")
     daily_budget = serializers.DecimalField(

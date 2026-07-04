@@ -25,8 +25,8 @@ class Campaign(BaseModel):
     brand = models.ForeignKey(
         "brands.Brand", on_delete=models.CASCADE, related_name="campaigns"
     )
-    product = models.ForeignKey(
-        "products.Product", on_delete=models.PROTECT, related_name="campaigns"
+    products = models.ManyToManyField(
+        "products.Product", related_name="campaigns"
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)

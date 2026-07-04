@@ -187,13 +187,13 @@ def generate_new_offer_notifications() -> int:
     dedupe_hours = settings.NOTIFY_NEW_OFFER_DEDUPE_DAYS * 24
     active = Campaign.objects.filter(
         status=Campaign.Status.ACTIVE, brand__status="active"
-    ).select_related("brand", "product")
+    ).select_related("brand").prefetch_related("products")
 
     sent = 0
     for campaign in active:
         bookmarkers = (
             Bookmark.objects.filter(brand=campaign.brand)
-            | Bookmark.objects.filter(product=campaign.product)
+            | Bookmark.objects.filter(product__in=campaign.products.all())
         )
         for bookmark in bookmarkers.select_related("user").distinct():
             user = bookmark.user

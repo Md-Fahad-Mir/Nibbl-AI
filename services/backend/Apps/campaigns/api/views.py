@@ -50,7 +50,7 @@ class CampaignListCreateView(APIView):
         campaign = _run(
             services.create_campaign,
             brand=brand,
-            product_id=data.pop("product"),
+            product_ids=data.pop("product"),
             **data,
         )
         return Response(

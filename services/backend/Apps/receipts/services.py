@@ -98,11 +98,11 @@ def _create_and_match_line_items(receipt: Receipt, items: list[dict]) -> None:
 
 
 def _matched_units(receipt: Receipt) -> int:
-    target = receipt.campaign.product_id
+    targets = set(receipt.campaign.products.values_list("id", flat=True))
     return sum(
         li.quantity
         for li in receipt.line_items.all()
-        if li.matched_product_id == target
+        if li.matched_product_id in targets
     )
 
 

@@ -74,19 +74,27 @@ def resolve_offer(campaign: Campaign, user=None) -> dict:
     restriction = getattr(campaign, "restriction", None)
 
     # Card credibility (Screens 1, 2, 4) — published-review aggregate.
-    summary = product_rating_summary(campaign.product_id)
+    # Card credibility (Screens 1, 2, 4) — published-review aggregate.
+    product_ids = list(campaign.products.values_list("id", flat=True))
+    summary = product_rating_summary(product_ids)
     # Claim state (Screen 2 CTA) — the user's live reservation for this campaign.
     reservation = active_reservation_for(user, campaign)
+
+    first_product = campaign.products.first()
+    product_id = str(first_product.id) if first_product else None
+    product_name = first_product.name if first_product else ""
+    product_image = first_product.image_url if first_product else ""
+    product_category = first_product.category if first_product else ""
 
     return {
         "campaign_id": str(campaign.id),
         "name": campaign.name,
         "brand_id": str(campaign.brand_id),
         "brand_name": campaign.brand.name,
-        "product_id": str(campaign.product_id),
-        "product_name": campaign.product.name,
-        "product_image": campaign.product.image_url,
-        "category": campaign.product.category,
+        "product_id": product_id,
+        "product_name": product_name,
+        "product_image": product_image,
+        "category": product_category,
         "offer_type": offer_type,
         "reward_amount": str(amount) if amount is not None else None,
         "restriction": restriction.description if restriction else "",
@@ -158,8 +166,9 @@ HOW_IT_WORKS = [
 
 def save_offer(*, user, campaign: Campaign) -> Bookmark:
     """'Save My Reward' — offers are dynamic, so we save the underlying product."""
+    first_product = campaign.products.first()
     return add_bookmark(
-        user=user, kind=Bookmark.Kind.PRODUCT, product_id=campaign.product_id
+        user=user, kind=Bookmark.Kind.PRODUCT, product_id=first_product.id if first_product else None
     )
 
 

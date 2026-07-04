@@ -10,9 +10,13 @@ from Apps.reviews.models import (
 
 
 def product_rating_summary(product_id) -> dict:
-    """Average rating + count of *published* reviews for a product."""
+    """Average rating + count of *published* reviews for a product or products."""
+    if isinstance(product_id, (list, tuple, set)):
+        filter_kwargs = {"product_id__in": product_id}
+    else:
+        filter_kwargs = {"product_id": product_id}
     agg = Review.objects.filter(
-        product_id=product_id, status=Review.Status.PUBLISHED
+        status=Review.Status.PUBLISHED, **filter_kwargs
     ).aggregate(avg=Avg("rating"), count=Count("id"))
     avg = agg["avg"]
     return {

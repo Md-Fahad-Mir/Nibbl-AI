@@ -16,17 +16,17 @@ def active_offers(*, search: str = "", category: str = ""):
         Campaign.objects.filter(
             status=Campaign.Status.ACTIVE, brand__status=Brand.Status.ACTIVE
         )
-        .select_related("brand", "product", "restriction", "fallback_offer")
-        .prefetch_related("tiers")
+        .select_related("brand", "restriction", "fallback_offer")
+        .prefetch_related("tiers", "products")
     )
     if category and category.lower() not in ("explore", "all"):
-        qs = qs.filter(product__category__iexact=category)
+        qs = qs.filter(products__category__iexact=category)
     if search:
         qs = qs.filter(
             Q(name__icontains=search)
             | Q(brand__name__icontains=search)
-            | Q(product__name__icontains=search)
-        )
+            | Q(products__name__icontains=search)
+        ).distinct()
     return qs.order_by("-created_at")
 
 
@@ -57,17 +57,19 @@ def saved_offers_for_user(user) -> list[dict]:
         Campaign.objects.filter(
             status=Campaign.Status.ACTIVE,
             brand__status=Brand.Status.ACTIVE,
-            product_id__in=product_to_bookmark.keys(),
+            products__id__in=product_to_bookmark.keys(),
         )
-        .select_related("brand", "product", "restriction", "fallback_offer")
-        .prefetch_related("tiers")
+        .select_related("brand", "restriction", "fallback_offer")
+        .prefetch_related("tiers", "products")
         .order_by("-created_at")
+        .distinct()
     )
 
     cards = []
     for campaign in campaigns:
         data = resolve_offer(campaign, user)
-        data["bookmark_id"] = product_to_bookmark.get(campaign.product_id)
+        matching_product_id = campaign.products.filter(id__in=product_to_bookmark.keys()).values_list("id", flat=True).first()
+        data["bookmark_id"] = product_to_bookmark.get(matching_product_id)
         # `discount_label` is intentionally null until the "% OFF" product
         # decision lands; the key is present so the FE contract is stable.
         data["discount_label"] = None

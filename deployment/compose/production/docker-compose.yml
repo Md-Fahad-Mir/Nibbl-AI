@@ -8,11 +8,11 @@ services:
   backend:
     image: ${REGISTRY}/nibblai-backend:${IMAGE_TAG:-latest}
     env_file:
-      - ../environments/.env.production.backend
+      - ../../environments/.env.production.backend
     restart: always
 
   ai:
     image: ${REGISTRY}/nibblai-ai:${IMAGE_TAG:-latest}
     env_file:
-      - ../environments/.env.production.ai
+      - ../../environments/.env.production.ai
     restart: always

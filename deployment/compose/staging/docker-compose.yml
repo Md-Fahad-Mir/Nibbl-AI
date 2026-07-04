@@ -8,4 +8,4 @@ services:
   backend:
     image: ${REGISTRY}/nibblai-backend:staging
     env_file:
-      - ../environments/.env.staging.backend
+      - ../../environments/.env.staging.backend

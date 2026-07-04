@@ -206,3 +206,15 @@ class BroadcastView(APIView):
         serializer.is_valid(raise_exception=True)
         sent = services.broadcast(admin=request.user, **serializer.validated_data)
         return Response({"recipients": sent})
+
+
+@extend_schema(tags=["admin"])
+class RoleStatisticsView(APIView):
+    """Return user counts grouped by role (consumers, brands, admins)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(responses={200: s.RoleStatisticsSerializer})
+    def get(self, request):
+        return Response(selectors.role_statistics())
+

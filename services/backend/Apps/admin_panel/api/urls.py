@@ -17,4 +17,5 @@ urlpatterns = [
     path("admin/reviews/<uuid:review_id>/remove/", views.AdminRemoveReviewView.as_view(), name="review-remove"),
     path("admin/audit-logs/", views.AuditLogListView.as_view(), name="audit-logs"),
     path("admin/announcements/", views.BroadcastView.as_view(), name="announcements"),
+    path("admin/role-statistics/", views.RoleStatisticsView.as_view(), name="role-statistics"),
 ]

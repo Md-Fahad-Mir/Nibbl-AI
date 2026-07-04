@@ -54,3 +54,29 @@ def audit_logs(*, target_type: str = "", actor_id: str = ""):
     if actor_id:
         qs = qs.filter(actor_id=actor_id)
     return qs[:LIST_LIMIT]
+
+
+def role_statistics() -> dict:
+    """Count active (non-deleted) users grouped by role.
+
+    Returns a dict like:
+        {"consumers": 1250, "brands": 84, "admins": 4, "total": 1338}
+
+    Uses a single aggregated query instead of three separate COUNT queries.
+    """
+    from django.db.models import Count
+
+    from Apps.accounts.models import User
+
+    counts = dict(
+        User.objects.filter(is_deleted=False)
+        .values_list("role")
+        .annotate(count=Count("id"))
+    )
+    return {
+        "consumers": counts.get(User.Role.CONSUMER, 0),
+        "brands": counts.get(User.Role.BRAND, 0),
+        "admins": counts.get(User.Role.ADMIN, 0),
+        "total": sum(counts.values()),
+    }
+

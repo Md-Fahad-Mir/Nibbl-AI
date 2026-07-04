@@ -86,3 +86,11 @@ class AuditLogSerializer(serializers.ModelSerializer):
         model = AuditLog
         fields = ["id", "action", "actor_type", "actor_id", "target_type", "target_id", "metadata", "created_at"]
         read_only_fields = fields
+
+
+class RoleStatisticsSerializer(serializers.Serializer):
+    consumers = serializers.IntegerField()
+    brands = serializers.IntegerField()
+    admins = serializers.IntegerField()
+    total = serializers.IntegerField()
+

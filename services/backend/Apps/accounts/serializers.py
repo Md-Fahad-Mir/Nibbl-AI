@@ -5,7 +5,6 @@ logic lives in services.py.
 """
 
 from django.contrib.auth.password_validation import validate_password
-from django.db import models
 from rest_framework import serializers
 
 from Apps.accounts.models import SocialAccount, User
@@ -57,32 +56,25 @@ class UserSerializer(serializers.ModelSerializer):
         return None
 
     def get_role_id(self, obj):
-        """Return a dict with the role-specific ID.
+        """Return a dict with the role-specific ID, or ``None``.
 
-        - brand  → ``{"brand_id": <Brand.id>}`` via BrandMembership (owner-first).
-        - consumer → ``{"consumer_id": <User.id>}`` (no separate consumer model).
-        - admin  → ``{"admin_id": <User.id>}`` (no separate admin model).
+        - brand  → ``{"brand_id": "<Brand.id>"}`` looked up via BrandMembership.
+        - consumer → ``{"consumer_id": "<User.id>"}`` (no separate model).
+        - admin  → ``{"admin_id": "<User.id>"}`` (no separate model).
 
-        Returns ``None`` values when the related record does not exist
+        Returns ``None`` when the related record does not exist
         (e.g. a brand user whose Brand Application hasn't been approved yet).
         """
         if obj.role == User.Role.BRAND:
-            # Prefer the ownership with the highest privilege (owner first).
             membership = (
                 BrandMembership.objects
                 .filter(user=obj, is_active=True)
-                .select_related("brand")
-                .order_by(
-                    models.Case(
-                        models.When(role=BrandMembership.Role.OWNER, then=0),
-                        models.When(role=BrandMembership.Role.ADMIN, then=1),
-                        default=2,
-                        output_field=models.IntegerField(),
-                    )
-                )
+                .values_list("brand_id", flat=True)
                 .first()
             )
-            return {"brand_id": str(membership.brand_id) if membership else None}
+            if membership is None:
+                return None
+            return {"brand_id": str(membership)}
 
         if obj.role == User.Role.ADMIN:
             return {"admin_id": str(obj.id)}

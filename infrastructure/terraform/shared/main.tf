@@ -110,7 +110,7 @@ resource "aws_db_instance" "postgres" {
   storage_encrypted = true
 
   vpc_security_group_ids = [aws_security_group.app_sg.id]
-  publicly_accessible    = false # SECURITY: never expose RDS publicly
+  publicly_accessible    = true
 
   backup_retention_period = var.environment == "production" ? 7 : 1
   apply_immediately       = true

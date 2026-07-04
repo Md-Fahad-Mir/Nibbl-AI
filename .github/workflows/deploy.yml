@@ -125,7 +125,7 @@ jobs:
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Nibbl AI deploy $TAG" \
-            --parameters "commands=sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$TAG AWS_REGION=${{ env.AWS_REGION }} bash /home/ubuntu/nibblai/deployment/scripts/server-deploy.sh" \
+            --parameters "commands=sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$TAG AWS_REGION=${{ env.AWS_REGION }} bash /home/ubuntu/nibblai/server-deploy.sh" \
             --query Command.CommandId --output text)
           echo "SSM command: $CMD_ID"
 

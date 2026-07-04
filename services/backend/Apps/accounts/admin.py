@@ -31,8 +31,17 @@ class UserAdmin(BaseUserAdmin):
 
     @admin.action(description="Approve selected brand accounts")
     def approve_brands(self, request, queryset):
-        updated = queryset.filter(is_approved=False).update(is_approved=True)
-        self.message_user(request, f"{updated} brand account(s) approved.")
+        from Apps.brands.services import ensure_brand_for_user
+
+        pending = queryset.filter(is_approved=False)
+        approved = 0
+        for user in pending:
+            user.is_approved = True
+            user.save(update_fields=["is_approved", "updated_at"])
+            if user.role == User.Role.BRAND:
+                ensure_brand_for_user(user)
+            approved += 1
+        self.message_user(request, f"{approved} brand account(s) approved.")
 
 
 @admin.register(VerificationCode)

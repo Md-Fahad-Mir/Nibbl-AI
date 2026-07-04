@@ -201,3 +201,46 @@ def remove_member(*, membership: BrandMembership) -> None:
     if membership.role == BrandMembership.Role.OWNER:
         raise BrandError("The brand owner cannot be removed.")
     membership.delete()
+
+
+# ---------------------------------------------------------------------------
+# Auto-provisioning
+# ---------------------------------------------------------------------------
+@transaction.atomic
+def ensure_brand_for_user(user: User) -> Brand | None:
+    """Create a Brand + owner membership for a brand-role user if none exists.
+
+    Called automatically when an admin approves a brand account so that the
+    user has a valid ``brand_id`` on first login.  Safe to call multiple times
+    (idempotent — skips if a membership already exists).
+
+    Returns the Brand, or ``None`` if the user already has one.
+    """
+    if BrandMembership.objects.filter(user=user, is_active=True).exists():
+        return None
+
+    plan = _default_plan()
+    brand = Brand.objects.create(
+        name=user.full_name,
+        slug=_unique_slug(user.full_name),
+        contact_email=user.email,
+        plan=plan,
+    )
+    BrandMembership.objects.create(
+        brand=brand,
+        user=user,
+        role=BrandMembership.Role.OWNER,
+    )
+    AuditLog.objects.create(
+        action=AuditLog.Action.CREATE,
+        actor_type="system",
+        actor_id="auto_provision",
+        target_type="brand",
+        target_id=str(brand.id),
+        metadata={
+            "event": "brand_auto_created",
+            "user_id": str(user.id),
+        },
+    )
+    return brand
+

@@ -159,9 +159,31 @@ class VerifyPhoneSerializer(serializers.Serializer):
 
 
 class ProfileUpdateSerializer(serializers.ModelSerializer):
+    phone = serializers.CharField(
+        max_length=20,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
     class Meta:
         model = User
-        fields = ["full_name", "avatar"]
+        fields = ["full_name", "avatar", "phone"]
+
+    def validate_phone(self, value):
+        phone = value or None
+        user = self.instance
+        qs = User.objects.filter(phone=phone, is_deleted=False)
+        if user is not None:
+            qs = qs.exclude(pk=user.pk)
+        if phone and qs.exists():
+            raise serializers.ValidationError("That phone number is already in use.")
+        return phone
+
+    def update(self, instance, validated_data):
+        if "phone" in validated_data and validated_data["phone"] != instance.phone:
+            instance.is_phone_verified = False
+        return super().update(instance, validated_data)
 
 
 class LogoutSerializer(serializers.Serializer):

@@ -205,6 +205,43 @@ class LoginTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["email"], "ada@example.com")
 
+    def test_me_patch_updates_phone_and_marks_unverified(self):
+        self.user.phone = "+15550001111"
+        self.user.is_phone_verified = True
+        self.user.save(update_fields=["phone", "is_phone_verified", "updated_at"])
+        self.client.force_authenticate(self.user)
+
+        resp = self.client.patch(
+            reverse("v1:accounts:users:me"),
+            {"phone": "+15551234567"},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["phone"], "+15551234567")
+        self.assertFalse(resp.data["is_phone_verified"])
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.phone, "+15551234567")
+        self.assertFalse(self.user.is_phone_verified)
+
+    def test_me_patch_rejects_duplicate_phone(self):
+        User.objects.create_user(
+            email="grace@example.com",
+            password="x",
+            full_name="Grace",
+            phone="+15551234567",
+        )
+        self.client.force_authenticate(self.user)
+
+        resp = self.client.patch(
+            reverse("v1:accounts:users:me"),
+            {"phone": "+15551234567"},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("phone", resp.data)
+
 
 class PasswordResetTests(APITestCase):
     def setUp(self):

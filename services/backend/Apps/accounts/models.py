@@ -99,6 +99,11 @@ class User(UUIDModel, AbstractBaseUser, PermissionsMixin):
     def get_short_name(self) -> str:
         return self.full_name.split(" ")[0] if self.full_name else self.email
 
+    @property
+    def is_platform_admin(self) -> bool:
+        """True for NibblAI platform admins (superuser, staff, or admin role)."""
+        return bool(self.is_superuser or self.is_staff or self.role == self.Role.ADMIN)
+
 
 class VerificationCode(BaseModel):
     """Short-lived numeric code for email/phone verification and password reset.

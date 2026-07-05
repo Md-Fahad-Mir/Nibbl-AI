@@ -12,8 +12,4 @@ class IsPlatformAdmin(BasePermission):
         user = request.user
         if not (user and user.is_authenticated):
             return False
-        return bool(
-            user.is_superuser
-            or user.is_staff
-            or getattr(user, "role", None) == "admin"
-        )
+        return user.is_platform_admin

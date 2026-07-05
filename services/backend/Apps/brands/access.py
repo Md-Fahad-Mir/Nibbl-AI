@@ -18,6 +18,12 @@ def get_brand_or_404(brand_id) -> Brand:
 
 
 def require_membership(user, brand, *, manager=False, active=False):
+    """Enforce brand tenancy — platform admins bypass all checks."""
+    # Platform admins have unrestricted access to every brand-scoped endpoint.
+    if getattr(user, "is_platform_admin", False):
+        # Return the real membership if one exists, otherwise None.
+        return get_active_membership(user, brand)
+
     membership = get_active_membership(user, brand)
     if membership is None:
         raise PermissionDenied("You are not a member of this brand.")

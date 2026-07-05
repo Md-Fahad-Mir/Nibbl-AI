@@ -256,10 +256,10 @@ CACHES = {
 import datetime as _dt  # noqa: E402
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": _dt.timedelta(minutes=30),
-    "REFRESH_TOKEN_LIFETIME": _dt.timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": _dt.timedelta(days=30),
+    "REFRESH_TOKEN_LIFETIME": _dt.timedelta(days=365),
     # "Remember me" issues a longer-lived refresh token (see accounts.services).
-    "REFRESH_TOKEN_REMEMBER_LIFETIME": _dt.timedelta(days=30),
+    "REFRESH_TOKEN_REMEMBER_LIFETIME": _dt.timedelta(days=365),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,

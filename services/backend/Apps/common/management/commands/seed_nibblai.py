@@ -16,7 +16,11 @@ from Apps.accounts.models import User
 from Apps.billing.models import Plan
 from Apps.brands.models import Brand, BrandMembership
 from Apps.campaigns.models import Campaign
+from Apps.payouts import services as payout_services
+from Apps.payouts.models import PayoutMethod
 from Apps.products.models import Product
+from Apps.wallets import services as wallet_services
+from Apps.wallets.models import LedgerEntry
 
 
 class Command(BaseCommand):
@@ -52,6 +56,12 @@ class Command(BaseCommand):
             default=5,
             help="Number of campaigns to create",
         )
+        parser.add_argument(
+            "--withdrawals",
+            type=int,
+            default=8,
+            help="Number of dummy withdrawal requests to create",
+        )
 
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS("🌱 Seeding NibblAI database...\n"))
@@ -73,6 +83,9 @@ class Command(BaseCommand):
 
         # Create campaigns
         self.create_campaigns(options["campaigns"])
+
+        # Create withdrawals
+        self.create_withdrawals(options["withdrawals"])
 
         self.stdout.write(self.style.SUCCESS("\n✅ Seeding complete!\n"))
 
@@ -245,3 +258,84 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(self.style.SUCCESS(f"✓ Created {count} campaigns"))
+
+    def create_withdrawals(self, count=8):
+        """Create sample payout methods + withdrawal requests for admin dashboard testing."""
+        self.stdout.write(f"💸 Creating {count} withdrawal requests...")
+
+        users = list(User.objects.filter(is_staff=False, is_active=True)[: max(count, 1)])
+        admin = User.objects.filter(is_staff=True).first()
+
+        if not users:
+            self.stdout.write(self.style.WARNING("⚠️  No active users found. Skipping withdrawals."))
+            return
+        if admin is None:
+            self.stdout.write(self.style.WARNING("⚠️  No admin user found. Skipping withdrawals."))
+            return
+
+        statuses = ["pending", "approved", "rejected", "flagged", "paid"]
+        created = 0
+
+        for i in range(count):
+            user = users[i % len(users)]
+            handle = f"{user.email.split('@')[0]}+seed{i}@paypal.com"
+
+            method = PayoutMethod.objects.filter(user=user).first()
+            if method is None:
+                try:
+                    method = payout_services.add_payout_method(
+                        user=user,
+                        provider=PayoutMethod.Provider.PAYPAL,
+                        handle=handle,
+                        is_default=True,
+                    )
+                except payout_services.PayoutError:
+                    method = PayoutMethod.objects.filter(user=user).first()
+                    if method is None:
+                        continue
+
+            wallet = wallet_services.get_or_create_customer_wallet(user)
+            wallet_services.credit(
+                wallet=wallet,
+                amount=Decimal("250.00"),
+                category=LedgerEntry.Category.ADJUSTMENT,
+                description="Seed wallet funds",
+                idempotency_key=f"seed-wallet-credit:{user.id}:{i}",
+            )
+
+            amount = Decimal(str(10 + (i % 5) * 10))
+            try:
+                withdrawal = payout_services.request_withdrawal(
+                    user=user,
+                    payout_method_id=method.id,
+                    amount=amount,
+                )
+            except payout_services.PayoutError:
+                continue
+
+            target_status = statuses[i % len(statuses)]
+            try:
+                if target_status == "approved":
+                    payout_services.approve_withdrawal(withdrawal=withdrawal, admin=admin)
+                elif target_status == "rejected":
+                    payout_services.reject_withdrawal(
+                        withdrawal=withdrawal,
+                        admin=admin,
+                        reason="Seeded rejected withdrawal",
+                    )
+                elif target_status == "flagged":
+                    payout_services.flag_withdrawal(
+                        withdrawal=withdrawal,
+                        admin=admin,
+                        reason="Seeded flagged withdrawal",
+                    )
+                elif target_status == "paid":
+                    payout_services.approve_withdrawal(withdrawal=withdrawal, admin=admin)
+                    payout_services.mark_paid(withdrawal=withdrawal, admin=admin)
+            except payout_services.PayoutError:
+                # If any transition fails for seeded data, keep the request in pending.
+                pass
+
+            created += 1
+
+        self.stdout.write(self.style.SUCCESS(f"✓ Created {created} withdrawals"))

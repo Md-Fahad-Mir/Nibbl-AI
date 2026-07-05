@@ -8,6 +8,7 @@ urlpatterns = [
     path("admin/brands/<uuid:brand_id>/wallet/credit/", views.PromoCreditView.as_view(), name="promo-credit"),
     path("admin/brands/<uuid:brand_id>/plan/", views.ChangePlanView.as_view(), name="change-plan"),
     path("admin/users/", views.AdminUserListView.as_view(), name="user-list"),
+    path("admin/users/<uuid:user_id>/wallet/credit/", views.AdminUserWalletCreditView.as_view(), name="user-wallet-credit"),
     path("admin/users/<uuid:user_id>/suspend/", views.SuspendUserView.as_view(), name="user-suspend"),
     path("admin/users/<uuid:user_id>/reactivate/", views.ReactivateUserView.as_view(), name="user-reactivate"),
     path("admin/fraud-flags/", views.FraudFlagListView.as_view(), name="fraud-flags"),

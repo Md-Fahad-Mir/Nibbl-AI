@@ -12,6 +12,7 @@ from Apps.campaigns import services as campaign_services
 from Apps.common.models import AuditLog
 from Apps.products.services import create_product
 from Apps.wallets import services as wallet_services
+from Apps.wallets.models import LedgerEntry
 
 
 def _admin():
@@ -37,8 +38,10 @@ class AdminGatingTests(APITestCase):
             ("v1:admin_panel:user-list", []),
             ("v1:admin_panel:audit-logs", []),
             ("v1:admin_panel:transactions", []),
+            ("v1:admin_panel:user-wallet-credit", [owner.id]),
         ]:
-            resp = self.client.get(reverse(name, args=args))
+            method = self.client.post if name == "v1:admin_panel:user-wallet-credit" else self.client.get
+            resp = method(reverse(name, args=args), {}, format="json")
             self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN, name)
 
     def test_admin_can_list_campaigns_across_brands(self):
@@ -87,6 +90,35 @@ class PlanChangeTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         brand.refresh_from_db()
         self.assertEqual(brand.plan.slug, "pro")
+
+
+class UserWalletCreditTests(APITestCase):
+    def test_admin_can_credit_user_wallet_and_audits(self):
+        target = User.objects.create_user(email="u@example.com", password="pw12345!", full_name="User")
+        admin = _admin()
+        self.client.force_authenticate(admin)
+
+        resp = self.client.post(
+            reverse("v1:admin_panel:user-wallet-credit", args=[target.id]),
+            {"amount": "75.00", "note": "Manual credit"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        wallet = wallet_services.get_or_create_customer_wallet(target)
+        self.assertEqual(wallet.balance, Decimal("75.00"))
+        self.assertTrue(
+            LedgerEntry.objects.filter(
+                wallet=wallet,
+                category=LedgerEntry.Category.ADJUSTMENT,
+                amount=Decimal("75.00"),
+            ).exists()
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                target_type="user", target_id=str(target.id), metadata__event="user_wallet_credit"
+            ).exists()
+        )
 
 
 class SuspendUserTests(APITestCase):

@@ -55,6 +55,30 @@ def promo_credit(*, brand, amount, note, admin) -> LedgerEntry:
     return entry
 
 
+@transaction.atomic
+def credit_user_wallet(*, user, amount, note, admin) -> LedgerEntry:
+    amount = to_money(amount)
+    if amount <= ZERO:
+        raise AdminError("Credit amount must be positive.")
+    wallet = wallet_services.get_or_create_customer_wallet(user)
+    entry = wallet_services.credit(
+        wallet=wallet,
+        amount=amount,
+        category=LedgerEntry.Category.ADJUSTMENT,
+        reference_type="admin_user_credit",
+        reference_id=user.id,
+        description=note or "Admin wallet credit",
+    )
+    _audit(
+        admin=admin,
+        action=AuditLog.Action.UPDATE,
+        target_type="user",
+        target_id=user.id,
+        metadata={"event": "user_wallet_credit", "amount": str(amount), "note": note},
+    )
+    return entry
+
+
 # ---------------------------------------------------------------------------
 # Plan management
 # ---------------------------------------------------------------------------

@@ -16,6 +16,13 @@ class PromoCreditSerializer(serializers.Serializer):
     note = serializers.CharField(required=False, allow_blank=True, default="")
 
 
+class UserWalletCreditSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
+    )
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
 class ChangePlanSerializer(serializers.Serializer):
     plan = serializers.CharField()
 

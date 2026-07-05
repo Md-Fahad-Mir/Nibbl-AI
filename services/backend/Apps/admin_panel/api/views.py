@@ -106,6 +106,27 @@ class ReactivateUserView(APIView):
 
 
 @extend_schema(tags=["admin"])
+class AdminUserWalletCreditView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(request=s.UserWalletCreditSerializer, responses={200: None})
+    def post(self, request, user_id):
+        user = User.objects.filter(id=user_id, is_deleted=False).first()
+        if user is None:
+            raise NotFound("User not found.")
+        serializer = s.UserWalletCreditSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        entry = _run(
+            services.credit_user_wallet,
+            user=user,
+            amount=serializer.validated_data["amount"],
+            note=serializer.validated_data.get("note", ""),
+            admin=request.user,
+        )
+        return Response({"ledger_entry_id": str(entry.id), "balance_after": str(entry.balance_after)})
+
+
+@extend_schema(tags=["admin"])
 class FraudFlagListView(APIView):
     permission_classes = [IsPlatformAdmin]
 

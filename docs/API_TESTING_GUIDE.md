@@ -668,6 +668,26 @@ Degraded (503): returned when the database is unreachable
 
 **Notes:** Liveness/readiness probe for load balancers and uptime checks. No auth, no setup.
 
+### 1b. Public Config
+
+- **Method / URL:** `GET /api/v1/config/`
+- **Auth:** None (public)
+- **Headers:** none
+
+```
+GET /api/v1/config/
+
+Success (200):
+{
+  "claim_window_days": 7,
+  "review_reward_amount": "1.00",
+  "referral_bonus_amount": "5.00",
+  "payout_min_amount": "1.00"
+}
+```
+
+**Notes:** Client-readable platform tunables so copy isn't hardcoded in the frontend/mobile app. No auth, no setup.
+
 ---
 
 ## Authentication APIs
@@ -689,6 +709,7 @@ Content-Type: application/json
   "full_name": "John Doe",
   "email": "john@example.com",
   "password": "SecurePass123!",
+  "role": "consumer",
   "accept_terms": true,
   "referral_code": null
 }
@@ -700,6 +721,7 @@ Success (201):
   "phone": null,
   "full_name": "John Doe",
   "role": "consumer",
+  "is_approved": true,
   "is_email_verified": false,
   "is_phone_verified": false,
   "referral_code": "",
@@ -713,8 +735,9 @@ Errors:
 ```
 
 **Notes:** Creates a **pending** registration; the user record is materialized on
-email verification (hence `id: null`). `referral_code` is optional. An email
-verification code is sent (printed to the console in dev).
+email verification (hence `id: null`). `role` ∈ `consumer` (default), `brand`,
+`admin`. Brand registrations require admin approval (`is_approved: false`).
+`referral_code` is optional. An email verification code is sent (printed to console in dev).
 
 ### 3. Verify Email
 
@@ -792,18 +815,36 @@ Content-Type: application/json
 Success (200):
 {
   "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "john@example.com",
+    "phone": null,
+    "full_name": "John Doe",
+    "avatar": null,
+    "avatar_url": null,
+    "role": "consumer",
+    "role_id": { "consumer_id": "550e8400-e29b-41d4-a716-446655440000" },
+    "is_approved": true,
+    "is_email_verified": true,
+    "is_phone_verified": false,
+    "referral_code": "JD2024A1B2",
+    "created_at": "2026-05-01T10:00:00Z"
+  }
 }
 
 Errors:
 - 400: Invalid email or password
 - 400: Email not verified
 - 400: Account suspended
+- 400: Your account is pending approval (brand users only)
 ```
 
-**Notes:** Requires a **verified** email. `remember_me: true` extends refresh
-lifetime. Save both tokens as Postman environment variables (`access_token`,
-`refresh_token`).
+**Notes:** Requires a **verified** email. Brand users also need admin approval
+(`is_approved: true`). `remember_me: true` extends refresh lifetime. The `user`
+object includes `role_id` — for brand users this is `{"brand_id": "<uuid>"}`, for
+consumers `{"consumer_id": "<uuid>"}`, for admins `{"admin_id": "<uuid>"}`.
+Save tokens as Postman environment variables (`access_token`, `refresh_token`).
 
 ### 6. Refresh Token
 
@@ -953,7 +994,11 @@ Success (200):
   "email": "john@example.com",
   "phone": "+15551234567",
   "full_name": "John Doe",
+  "avatar": null,
+  "avatar_url": null,
   "role": "consumer",
+  "role_id": { "consumer_id": "550e8400-e29b-41d4-a716-446655440000" },
+  "is_approved": true,
   "is_email_verified": true,
   "is_phone_verified": true,
   "referral_code": "JD2024A1B2",
@@ -968,7 +1013,7 @@ Errors:
 
 - **Method / URL:** `PATCH /api/v1/users/me/`
 - **Auth:** Bearer access token
-- **Headers:** `Authorization: Bearer {access_token}`, `Content-Type: application/json`
+- **Headers:** `Authorization: Bearer {access_token}`, `Content-Type: application/json` or `multipart/form-data`
 
 ```
 PATCH /api/v1/users/me/
@@ -982,23 +1027,33 @@ Content-Type: application/json
 Success (200): full UserSerializer (see step 11) with the updated name
 ```
 
-**Notes:** Only `full_name` is editable here. Email is immutable; phone is changed
-via the phone endpoints (steps 14–15).
+**Notes:** `full_name` and `avatar` (image file) are editable. Email is immutable;
+phone is changed via the phone endpoints (steps 14–15). Use `multipart/form-data`
+when uploading an avatar image file.
 
 ### 13. Delete Account
 
 - **Method / URL:** `DELETE /api/v1/users/me/`
 - **Auth:** Bearer access token
-- **Headers:** `Authorization: Bearer {access_token}`
+- **Headers:** `Authorization: Bearer {access_token}`, `Content-Type: application/json`
 
 ```
 DELETE /api/v1/users/me/
 Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "password": "SecurePass123!"
+}
 
 Success (204): (no content)
+
+Errors:
+- 400: Password is incorrect
 ```
 
-**Notes:** Soft-deletes the account (preserves audit trails).
+**Notes:** Re-authenticates with password before irreversible deletion. Soft-deletes
+the account (preserves audit trails).
 
 ### 14. Change Password
 
@@ -1718,6 +1773,54 @@ Success (200): (paginated) array of LedgerEntrySerializer
 }
 ```
 
+### 40b. Customer Activity
+
+- **Method / URL:** `GET /api/v1/activity/`
+- **Auth:** Bearer access token
+- **Query params:** `page`
+
+```
+GET /api/v1/activity/?page=1
+Authorization: Bearer {access_token}
+
+Success (200): (paginated) array of ActivityItemSerializer
+{
+  "count": 5,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "act-100",
+      "action_type": "offer_claimed",
+      "title": "Offer Claimed",
+      "description": "You claimed iPhone 15 Pro Max",
+      "created_at": "2026-06-04T16:00:00Z"
+    }
+  ]
+}
+```
+
+**Notes:** Returns an aggregated, human-readable timeline of the user's activity.
+
+### 40c. Customer Statement
+
+- **Method / URL:** `GET /api/v1/wallet/statement/`
+- **Auth:** Bearer access token
+
+```
+GET /api/v1/wallet/statement/
+Authorization: Bearer {access_token}
+
+Success (200):
+{
+  "total_earned": "150.50",
+  "total_withdrawn": "50.00",
+  "pending_clearance": "10.00"
+}
+```
+
+**Notes:** Returns high-level aggregate totals for the customer's wallet.
+
 ---
 
 ## Product APIs
@@ -2283,6 +2386,40 @@ Success (200): (paginated) array of resolved offers
 **Notes:** Offers are computed per requesting user (cooldown-aware). `offer_type` is
 `premium`, `fallback`, or `null`; `claimable` is false when nothing is available.
 
+### 64b. Offer Categories
+
+- **Method / URL:** `GET /api/v1/offers/categories/`
+- **Auth:** None (public)
+
+```
+GET /api/v1/offers/categories/
+
+Success (200): plain array
+[
+  "explore",
+  "food",
+  "beverages",
+  "electronics"
+]
+```
+
+**Notes:** Returns distinct categories for filtering the offer feed.
+
+### 64c. Saved Offers
+
+- **Method / URL:** `GET /api/v1/offers/saved/`
+- **Auth:** Bearer access token
+- **Query params:** `page`
+
+```
+GET /api/v1/offers/saved/?page=1
+Authorization: Bearer {access_token}
+
+Success (200): (paginated) array of resolved offers (same format as feed)
+```
+
+**Notes:** Returns only offers the caller has saved (via step 67c).
+
 ### 65. Resolve Offer by URL (public)
 
 - **Method / URL:** `GET /api/v1/offers/by-url/{token}/`
@@ -2335,6 +2472,42 @@ Errors:
 
 **Notes:** Records an offer view (source `detail`).
 
+### 67b. Get Offer Full Details
+
+- **Method / URL:** `GET /api/v1/offers/{campaign_id}/details/`
+- **Auth:** None (public)
+- **Path params:** `campaign_id` (UUID)
+
+```
+GET /api/v1/offers/camp-001/details/
+
+Success (200):
+{
+  "html": "<p>Full terms and details for this offer...</p>"
+}
+
+Errors:
+- 404: Offer not found
+```
+
+### 67c. Save Offer
+
+- **Method / URL:** `POST /api/v1/offers/{campaign_id}/save/`
+- **Auth:** Bearer access token
+- **Path params:** `campaign_id` (UUID)
+
+```
+POST /api/v1/offers/camp-001/save/
+Authorization: Bearer {access_token}
+
+Success (204): (no content)
+
+Errors:
+- 404: Offer not found
+```
+
+**Notes:** Toggles the saved state. Calling it once saves it, calling again unsaves it. Saved offers appear in the saved offers feed (step 64c).
+
 ### 68. List Bookmarks
 
 - **Method / URL:** `GET /api/v1/bookmarks/`
@@ -2344,18 +2517,23 @@ Errors:
 GET /api/v1/bookmarks/
 Authorization: Bearer {access_token}
 
-Success (200): plain array
-[
-  {
-    "id": "bm-001",
-    "kind": "product",
-    "product": "prod-001",
-    "brand": null,
-    "product_name": "iPhone 15 Pro Max",
-    "brand_name": null,
-    "created_at": "2026-06-05T10:00:00Z"
-  }
-]
+Success (200): (paginated)
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "bm-001",
+      "kind": "product",
+      "product": "prod-001",
+      "brand": null,
+      "product_name": "iPhone 15 Pro Max",
+      "brand_name": null,
+      "created_at": "2026-06-05T10:00:00Z"
+    }
+  ]
+}
 ```
 
 ### 69. Add Bookmark
@@ -2416,23 +2594,28 @@ Errors:
 GET /api/v1/reservations/?status=active
 Authorization: Bearer {access_token}
 
-Success (200): plain array
-[
-  {
-    "id": "resv-001",
-    "campaign": "camp-001",
-    "campaign_name": "Summer Promotion 2026",
-    "brand_name": "Acme Corp",
-    "product_name": "iPhone 15 Pro Max",
-    "kind": "rebate",
-    "offer_type": "premium",
-    "reward_amount": "5.00",
-    "status": "active",
-    "expires_at": "2026-06-12T10:00:00Z",
-    "redeemed_at": null,
-    "created_at": "2026-06-05T10:00:00Z"
-  }
-]
+Success (200): (paginated)
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "resv-001",
+      "campaign": "camp-001",
+      "campaign_name": "Summer Promotion 2026",
+      "brand_name": "Acme Corp",
+      "product_name": "iPhone 15 Pro Max",
+      "kind": "rebate",
+      "offer_type": "premium",
+      "reward_amount": "5.00",
+      "status": "active",
+      "expires_at": "2026-06-12T10:00:00Z",
+      "redeemed_at": null,
+      "created_at": "2026-06-05T10:00:00Z"
+    }
+  ]
+}
 ```
 
 ### 72. Create Reservation (Claim Offer)
@@ -2711,23 +2894,28 @@ Visible to admins via the fraud-flags endpoint (step 133).
 GET /api/v1/redemptions/
 Authorization: Bearer {access_token}
 
-Success (200): plain array
-[
-  {
-    "id": "redemption-001",
-    "reservation": "resv-001",
-    "receipt": "receipt-001",
-    "campaign": "camp-001",
-    "campaign_name": "Summer Promotion 2026",
-    "brand_name": "Acme Corp",
-    "user_email": "buyer@example.com",
-    "reward_amount": "5.00",
-    "fee_amount": "0.35",
-    "status": "issued",
-    "issued_at": "2026-06-04T16:00:00Z",
-    "created_at": "2026-06-04T16:00:00Z"
-  }
-]
+Success (200): (paginated)
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "redemption-001",
+      "reservation": "resv-001",
+      "receipt": "receipt-001",
+      "campaign": "camp-001",
+      "campaign_name": "Summer Promotion 2026",
+      "brand_name": "Acme Corp",
+      "user_email": "buyer@example.com",
+      "reward_amount": "5.00",
+      "fee_amount": "0.35",
+      "status": "issued",
+      "issued_at": "2026-06-04T16:00:00Z",
+      "created_at": "2026-06-04T16:00:00Z"
+    }
+  ]
+}
 ```
 
 ### 83. Get Redemption Detail
@@ -3184,6 +3372,46 @@ Authorization: Bearer {access_token}
 Success (200): plain array of the caller's ReviewSerializer
 ```
 
+### 103b. List Product Reviews (public)
+
+- **Method / URL:** `GET /api/v1/products/{product_id}/reviews/`
+- **Auth:** None (public)
+- **Path params:** `product_id` (UUID)
+- **Query params:** `page`
+
+```
+GET /api/v1/products/prod-001/reviews/?page=1
+
+Success (200): (paginated) array of ReviewSerializer
+```
+
+**Notes:** Public endpoint to view published reviews for a specific product.
+
+### 103c. Product Review Summary (public)
+
+- **Method / URL:** `GET /api/v1/products/{product_id}/review-summary/`
+- **Auth:** None (public)
+- **Path params:** `product_id` (UUID)
+
+```
+GET /api/v1/products/prod-001/review-summary/
+
+Success (200):
+{
+  "average_rating": 4.5,
+  "total_reviews": 120,
+  "rating_counts": {
+    "1": 5,
+    "2": 2,
+    "3": 10,
+    "4": 30,
+    "5": 73
+  }
+}
+```
+
+**Notes:** Returns aggregate rating data for the product detail screen.
+
 ---
 
 ## Payout APIs
@@ -3261,23 +3489,28 @@ Errors:
 GET /api/v1/withdrawals/
 Authorization: Bearer {access_token}
 
-Success (200): plain array
-[
-  {
-    "id": "wd-001",
-    "user_email": "buyer@example.com",
-    "payout_method": "pm-001",
-    "provider": "paypal",
-    "handle": "buyer@example.com",
-    "amount": "50.00",
-    "status": "pending",
-    "admin_note": "",
-    "batch": null,
-    "reviewed_at": null,
-    "paid_at": null,
-    "created_at": "2026-06-05T10:00:00Z"
-  }
-]
+Success (200): (paginated)
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "wd-001",
+      "user_email": "buyer@example.com",
+      "payout_method": "pm-001",
+      "provider": "paypal",
+      "handle": "buyer@example.com",
+      "amount": "50.00",
+      "status": "pending",
+      "admin_note": "",
+      "batch": null,
+      "reviewed_at": null,
+      "paid_at": null,
+      "created_at": "2026-06-05T10:00:00Z"
+    }
+  ]
+}
 ```
 
 **Notes:** `status` ∈ `pending`, `approved`, `processing`, `paid`, `rejected`, `flagged`.
@@ -3582,6 +3815,23 @@ Success (200): plain array
 
 **Notes:** `type` ∈ `receipt_reminder`, `review_reminder`, `rewards_waiting`,
 `new_offers`, `inactive`, `promotional`.
+
+### 120b. Unread Notification Count
+
+- **Method / URL:** `GET /api/v1/notifications/unread-count/`
+- **Auth:** Bearer access token
+
+```
+GET /api/v1/notifications/unread-count/
+Authorization: Bearer {access_token}
+
+Success (200):
+{
+  "unread_count": 3
+}
+```
+
+**Notes:** Lightweight endpoint for updating the notification badge in the UI.
 
 ### 121. Mark All Notifications Read
 
@@ -4061,6 +4311,26 @@ Errors:
 
 **Notes:** Creates a `promotional` notification for all eligible users (respecting
 their preferences).
+
+### 140. Role Statistics (admin)
+
+- **Method / URL:** `GET /api/v1/admin/role-statistics/`
+- **Auth:** Bearer admin token
+
+```
+GET /api/v1/admin/role-statistics/
+Authorization: Bearer {admin_access_token}
+
+Success (200):
+{
+  "consumers": 1250,
+  "brands": 84,
+  "admins": 4,
+  "total": 1338
+}
+```
+
+**Notes:** Returns the count of active (non-deleted) users grouped by role.
 
 ---
 

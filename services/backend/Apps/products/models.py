@@ -21,7 +21,7 @@ class Product(BaseModel):
     normalized_name = models.CharField(max_length=255, db_index=True, editable=False)
     sku = models.CharField(max_length=100, blank=True)
     description = models.TextField(blank=True)
-    image_url = models.URLField(blank=True)
+    image_url = models.ImageField(upload_to="product_images/%Y/%m/", blank=True, null=True)
     category = models.CharField(max_length=100, blank=True)
     flavor = models.CharField(max_length=100, blank=True)
     format = models.CharField(max_length=100, blank=True)

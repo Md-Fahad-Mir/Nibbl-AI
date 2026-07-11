@@ -10,9 +10,3 @@ services:
     env_file:
       - ${PROJECT_ROOT:-.}/deployment/environments/.env.production.backend
     restart: always
-
-  ai:
-    image: ${REGISTRY}/nibblai-ai:${IMAGE_TAG:-latest}
-    env_file:
-      - ${PROJECT_ROOT:-.}/deployment/environments/.env.production.ai
-    restart: always

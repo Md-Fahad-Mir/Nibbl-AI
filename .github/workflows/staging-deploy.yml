@@ -41,8 +41,8 @@ jobs:
       - name: Build and push all services (staging tag)
         run: |
           REGISTRY='${{ steps.login-ecr.outputs.registry }}'
-          # Only the backend exists today; add "ai landing admin" here as those
-          # services land in the monorepo.
+          # Only the backend exists today; add new service names here as they
+          # land in the monorepo.
           for service in backend; do
             docker build -f ./services/$service/Dockerfile --target prod \
               -t "$REGISTRY/nibblai-$service:staging" ./services/$service

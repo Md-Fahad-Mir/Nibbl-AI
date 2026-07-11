@@ -26,7 +26,6 @@ variable "state_bucket_name" {
 variable "ecr_repositories" {
   description = "ECR repositories to create (one per service)"
   type        = list(string)
-  # backend + ai are in scope now; add "nibblai-landing", "nibblai-admin"
-  # here as those services are added to the monorepo.
-  default = ["nibblai-backend", "nibblai-ai"]
+  # Add new service repositories here as those services are added to the monorepo.
+  default = ["nibblai-backend"]
 }

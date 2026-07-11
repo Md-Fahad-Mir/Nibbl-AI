@@ -23,14 +23,9 @@ scrape_configs:
 
   # ── App metrics — ENABLE after instrumenting the apps ───────────────
   # backend: add `django-prometheus` (INSTALLED_APPS + MIDDLEWARE + /metrics url)
-  # ai:      add `prometheus-fastapi-instrumentator`
   # The apps publish their ports on the host, so scrape via the docker
   # host gateway (Prometheus has extra_hosts: host.docker.internal).
   # - job_name: 'nibblai-backend'
   #   metrics_path: /metrics
   #   static_configs:
   #     - targets: ['host.docker.internal:8000']
-  # - job_name: 'nibblai-ai'
-  #   metrics_path: /metrics
-  #   static_configs:
-  #     - targets: ['host.docker.internal:8001']

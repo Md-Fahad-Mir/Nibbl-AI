@@ -51,7 +51,6 @@
     group: ubuntu
   loop:
     - backend
-    - ai
   notify: restart docker compose
 
 - name: Copy on-box deploy script (invoked by CI via SSM)

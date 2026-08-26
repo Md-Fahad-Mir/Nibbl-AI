@@ -20,13 +20,22 @@ def send_email_code(*, to_email: str, code: str, purpose_label: str) -> None:
         f"Your {purpose_label} code is: {code}\n\n"
         "It expires shortly. If you didn't request this, you can ignore it."
     )
-    send_mail(
-        subject,
-        body,
-        getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"),
-        [to_email],
-        fail_silently=False,
-    )
+    try:
+        send_mail(
+            subject,
+            body,
+            getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"),
+            [to_email],
+            fail_silently=False,
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to send %s code email to %s: %s",
+            purpose_label,
+            to_email,
+            exc,
+            exc_info=True,
+        )
 
 
 def send_sms_code(*, to_phone: str, code: str, purpose_label: str) -> None:
@@ -47,10 +56,19 @@ def send_referral_invite(
         f"{inviter_name} thinks you'll love NibblAI — upload receipts, earn cash.\n\n"
         f"Sign up with their referral code {referral_code}:\n{signup_url}\n"
     )
-    send_mail(
-        subject,
-        body,
-        getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"),
-        [to_email],
-        fail_silently=False,
-    )
+    try:
+        send_mail(
+            subject,
+            body,
+            getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"),
+            [to_email],
+            fail_silently=False,
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to send referral invite email to %s: %s",
+            to_email,
+            exc,
+            exc_info=True,
+        )
+

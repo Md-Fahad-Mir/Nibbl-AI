@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from Apps.accounts.models import SocialAccount, User, VerificationCode
+from Apps.accounts.models import PendingUser, SocialAccount, User, VerificationCode
 
 
 @admin.register(User)
@@ -57,3 +57,11 @@ class SocialAccountAdmin(admin.ModelAdmin):
     list_display = ("user", "provider", "provider_user_id", "created_at")
     list_filter = ("provider",)
     search_fields = ("user__email", "provider_user_id")
+
+
+@admin.register(PendingUser)
+class PendingUserAdmin(admin.ModelAdmin):
+    list_display = ("email", "full_name", "role", "expires_at", "created_at")
+    list_filter = ("role",)
+    search_fields = ("email", "full_name")
+    readonly_fields = ("password", "verification_code", "created_at", "updated_at")

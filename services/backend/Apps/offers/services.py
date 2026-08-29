@@ -83,7 +83,11 @@ def resolve_offer(campaign: Campaign, user=None) -> dict:
     first_product = campaign.products.first()
     product_id = str(first_product.id) if first_product else None
     product_name = first_product.name if first_product else ""
-    product_image = first_product.image_url if first_product else ""
+    product_image = (
+        first_product.image_url.url
+        if first_product and first_product.image_url
+        else ""
+    )
     product_category = first_product.category if first_product else ""
 
     return {

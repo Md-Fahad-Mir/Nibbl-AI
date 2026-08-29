@@ -28,11 +28,11 @@ def _run(func, *args, **kwargs):
 
 
 def _live_campaign_with_relations(**filters):
+    # ``products`` is a M2M (a campaign can target several) — it must be
+    # prefetched, not select_related.
     return (
-        Campaign.objects.select_related(
-            "brand", "product", "restriction", "fallback_offer"
-        )
-        .prefetch_related("tiers")
+        Campaign.objects.select_related("brand", "restriction", "fallback_offer")
+        .prefetch_related("tiers", "products")
         .filter(**filters)
         .first()
     )
@@ -115,7 +115,7 @@ class OfferCategoriesView(APIView):
             {
                 c
                 for c in active_offers().values_list(
-                    "product__category", flat=True
+                    "products__category", flat=True
                 )
                 if c
             }

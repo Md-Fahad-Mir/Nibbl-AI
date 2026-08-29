@@ -2,7 +2,7 @@
 
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import APIException, NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,11 +21,39 @@ from Apps.receipts.selectors import (
 )
 
 
+class Conflict(APIException):
+    """409 — the receipt has already been used."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This receipt has already been used."
+
+
+class Unprocessable(APIException):
+    """422 — the image was processed but is not a usable receipt."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    default_detail = "The receipt could not be read."
+
+
+class ServiceUnavailable(APIException):
+    """503 — the OCR provider is down; the claim is untouched, retry later."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "The receipt service is temporarily unavailable."
+
+
 def _run(func, *args, **kwargs):
     # Catches receipt errors *and* redemption errors raised by the
     # receipt_verified signal receiver (both subclass DomainError).
     try:
         return func(*args, **kwargs)
+    except services.DuplicateReceipt as exc:
+        # Deliberately generic: never reveal who used the receipt first.
+        raise Conflict(str(exc))
+    except services.ReceiptUnreadable as exc:
+        raise Unprocessable(str(exc))
+    except services.OCRUnavailable as exc:
+        raise ServiceUnavailable(str(exc))
     except DomainError as exc:
         raise ValidationError({"detail": str(exc)})
 
@@ -46,7 +74,15 @@ class ReceiptListCreateView(APIView):
             self, request, receipts_for_user(request.user), s.ReceiptSerializer
         )
 
-    @extend_schema(request=s.UploadReceiptSerializer, responses={201: s.ReceiptSerializer})
+    @extend_schema(
+        request=s.UploadReceiptSerializer,
+        responses={
+            201: s.ReceiptSerializer,
+            409: None,  # duplicate receipt
+            422: None,  # unreadable image
+            503: None,  # OCR provider unavailable
+        },
+    )
     def post(self, request):
         serializer = s.UploadReceiptSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -55,11 +91,7 @@ class ReceiptListCreateView(APIView):
             services.upload_receipt,
             user=request.user,
             reservation_id=data["reservation"],
-            image=data.get("image"),
-            merchant=data.get("merchant", ""),
-            purchased_at=data.get("purchased_at"),
-            total=data.get("total"),
-            items=data.get("items", []),
+            image=data["image"],
         )
         return Response(
             s.ReceiptSerializer(receipt).data, status=status.HTTP_201_CREATED

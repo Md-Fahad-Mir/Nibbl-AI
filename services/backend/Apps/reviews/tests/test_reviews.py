@@ -21,6 +21,7 @@ from Apps.reviews.models import (
 )
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import Hold, LedgerEntry
+from Apps.common.testing import RECEIPT_META, receipt_meta
 
 
 def _brand(plan_slug="starter", fund="1000.00"):
@@ -54,7 +55,7 @@ def _review_campaign(brand, product, *, daily="100.00", reward="1.00", activate=
 def _verified_receipt(brand, owner, product, *, email="c@example.com", desc=None):
     """Run a full rebate claim → verified receipt so review opportunities fire."""
     rebate_campaign = campaign_services.create_campaign(
-        brand=brand, product_id=product.id, name="Rebate", daily_budget=Decimal("100.00"),
+        brand=brand, product_ids=[product.id], name="Rebate", daily_budget=Decimal("100.00"),
     )
     campaign_services.set_tiers(
         rebate_campaign, [{"reward_amount": "5.00", "allocation_percent": "100.00"}]
@@ -65,7 +66,7 @@ def _verified_receipt(brand, owner, product, *, email="c@example.com", desc=None
         user=user, campaign_id=rebate_campaign.id
     )
     receipt = receipt_services.upload_receipt(
-        user=user, reservation_id=reservation.id,
+        user=user, reservation_id=reservation.id, **RECEIPT_META,
         items=[{"description": desc or product.name, "quantity": 1}],
     )
     return user, receipt
@@ -190,13 +191,13 @@ class OpportunityGenerationTests(APITestCase):
         before = ReviewSession.objects.filter(user=user).count()
         # Build a new receipt for `user` by reusing the rebate flow manually:
         rebate = campaign_services.create_campaign(
-            brand=brand, product_id=product.id, name="Rb2", daily_budget=Decimal("100.00")
+            brand=brand, product_ids=[product.id], name="Rb2", daily_budget=Decimal("100.00")
         )
         campaign_services.set_tiers(rebate, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
         campaign_services.activate_campaign(rebate)
         reservation = reservation_services.create_reservation(user=user, campaign_id=rebate.id)
         receipt_services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **receipt_meta("INV-TEST-0002"),
             items=[{"description": "Cola", "quantity": 1}],
         )
         after = ReviewSession.objects.filter(user=user).count()
@@ -215,14 +216,14 @@ class OpportunityGenerationTests(APITestCase):
 
         # A rebate receipt listing all 6 products.
         rebate = campaign_services.create_campaign(
-            brand=brand, product_id=products[0].id, name="Rb", daily_budget=Decimal("100.00")
+            brand=brand, product_ids=[products[0].id], name="Rb", daily_budget=Decimal("100.00")
         )
         campaign_services.set_tiers(rebate, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
         campaign_services.activate_campaign(rebate)
         user = User.objects.create_user(email="c@example.com", password="x", full_name="U")
         reservation = reservation_services.create_reservation(user=user, campaign_id=rebate.id)
         receipt_services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
             items=[{"description": p.name, "quantity": 1} for p in products],
         )
         self.assertEqual(ReviewSession.objects.filter(user=user).count(), 5)
@@ -240,14 +241,14 @@ class OpportunityGenerationTests(APITestCase):
         services.activate_review_campaign(campaign)
 
         rebate = campaign_services.create_campaign(
-            brand=brand, product_id=p1.id, name="Rb", daily_budget=Decimal("100.00")
+            brand=brand, product_ids=[p1.id], name="Rb", daily_budget=Decimal("100.00")
         )
         campaign_services.set_tiers(rebate, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
         campaign_services.activate_campaign(rebate)
         user = User.objects.create_user(email="c@example.com", password="x", full_name="U")
         reservation = reservation_services.create_reservation(user=user, campaign_id=rebate.id)
         receipt_services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
             items=[{"description": "P1", "quantity": 1}, {"description": "P2", "quantity": 1}],
         )
         # Only one fits in the daily budget (incl. fee); the other silently skipped.

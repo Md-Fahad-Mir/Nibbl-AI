@@ -40,7 +40,7 @@ class CampaignCreateTests(APITestCase):
 
     def _create(self, **overrides):
         payload = {
-            "product": str(self.product.id),
+            "product": [str(self.product.id)],
             "name": "Summer Cashback",
             "daily_budget": "100.00",
         }
@@ -89,7 +89,7 @@ class TierTests(APITestCase):
     def setUp(self):
         self.owner, self.brand, self.product = _setup_brand()
         self.campaign = services.create_campaign(
-            brand=self.brand, product_id=self.product.id,
+            brand=self.brand, product_ids=[self.product.id],
             name="C", daily_budget=Decimal("100.00"),
         )
         self.client.force_authenticate(self.owner)
@@ -145,7 +145,7 @@ class ActivationFundingTests(APITestCase):
     def setUp(self):
         self.owner, self.brand, self.product = _setup_brand()
         self.campaign = services.create_campaign(
-            brand=self.brand, product_id=self.product.id,
+            brand=self.brand, product_ids=[self.product.id],
             name="C", daily_budget=Decimal("100.00"),
         )
         services.set_tiers(
@@ -172,7 +172,7 @@ class ActivationFundingTests(APITestCase):
 
     def test_cannot_activate_without_tiers(self):
         bare = services.create_campaign(
-            brand=self.brand, product_id=self.product.id,
+            brand=self.brand, product_ids=[self.product.id],
             name="Bare", daily_budget=Decimal("10.00"),
         )
         _fund(self.brand, "1000.00")
@@ -186,7 +186,7 @@ class FundingSyncTests(APITestCase):
     def test_underfunded_active_campaign_pauses_then_resumes(self):
         owner, brand, product = _setup_brand()
         campaign = services.create_campaign(
-            brand=brand, product_id=product.id,
+            brand=brand, product_ids=[product.id],
             name="C", daily_budget=Decimal("100.00"),
         )
         services.set_tiers(
@@ -220,7 +220,7 @@ class PreviewTests(APITestCase):
     def test_preview_has_best_offer_and_no_side_effects(self):
         owner, brand, product = _setup_brand()
         campaign = services.create_campaign(
-            brand=brand, product_id=product.id,
+            brand=brand, product_ids=[product.id],
             name="C", daily_budget=Decimal("100.00"),
         )
         services.set_tiers(
@@ -247,7 +247,7 @@ class PreviewTests(APITestCase):
     def test_preview_works_on_draft(self):
         owner, brand, product = _setup_brand()
         campaign = services.create_campaign(
-            brand=brand, product_id=product.id,
+            brand=brand, product_ids=[product.id],
             name="Draft", daily_budget=Decimal("50.00"),
         )
         self.client.force_authenticate(owner)

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import datetime as dt
+
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from Apps.common.exceptions import DomainError
@@ -27,16 +29,91 @@ class ReceiptError(DomainError):
     """Expected, user-facing receipt errors (mapped to HTTP 400)."""
 
 
+class DuplicateReceipt(ReceiptError):
+    """This physical receipt has already been used (mapped to HTTP 409)."""
+
+
+class ReceiptUnreadable(ReceiptError):
+    """OCR processed the image but it isn't a usable receipt (HTTP 422)."""
+
+
+class OCRUnavailable(ReceiptError):
+    """The OCR provider is down or unconfigured (HTTP 503). Claim untouched."""
+
+
 # ---------------------------------------------------------------------------
 # Upload + processing
 # ---------------------------------------------------------------------------
-@transaction.atomic
-def upload_receipt(
-    *, user, reservation_id, image=None, merchant="", purchased_at=None,
-    total=None, items=None,
-) -> Receipt:
+def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
+    """Submit a receipt photo for an active claim.
+
+    Runs OCR, validates the receipt against the claimed campaign (shop,
+    purchase window, eligible product), fingerprints it, and — when everything
+    checks out — verifies it, which triggers reward issuance via the
+    ``receipt_verified`` signal.
+
+    ``legacy`` accepts the pre-OCR ``merchant`` / ``purchased_at`` / ``total`` /
+    ``items`` keyword arguments. They are used only when no ``image`` is given,
+    which keeps "digital receipt" submissions and the existing test-suite
+    fixtures working without a live OCR service.
+    """
+    reservation = _load_reservation(user, reservation_id)
+    campaign = reservation.campaign
+    brand = campaign.brand
+
+    extracted = _extract(image=image, legacy=legacy)
+
+    # --- Validate the receipt against the claimed campaign -----------------
+    # Hard rejections (wrong shop / wrong product / outside the campaign
+    # window) raise. Soft problems return a note that blocks auto-reward and
+    # sends the receipt to the brand's manual review queue.
+    _check_shop(extracted, brand=brand, campaign=campaign)
+    date_note = _check_purchase_window(extracted, campaign=campaign)
+    eligible_product, matched_units = _match_eligible_product(extracted, campaign=campaign)
+
+    fingerprint, number_note = _build_fingerprint(extracted, eligible_product)
+    review_note = date_note or number_note
+
+    with transaction.atomic():
+        try:
+            with transaction.atomic():
+                receipt = Receipt.objects.create(
+                    user=user,
+                    reservation=reservation,
+                    brand=brand,
+                    campaign=campaign,
+                    image=image,
+                    merchant=extracted.merchant_name,
+                    purchased_at=_aware(extracted.purchased_at),
+                    total=extracted.total,
+                    receipt_number=extracted.receipt_number[:100],
+                    fingerprint=fingerprint,
+                    status=Receipt.Status.PENDING,
+                )
+        except IntegrityError:
+            # The UNIQUE index on fingerprint is the real duplicate guard: it
+            # closes the check-then-insert race between two simultaneous
+            # submissions of the same physical receipt.
+            raise DuplicateReceipt("This receipt has already been used.")
+
+        OCRResult.objects.create(
+            receipt=receipt, provider=extracted.provider, raw=extracted.raw
+        )
+        _create_line_items(receipt, extracted)
+
+        receipt.matched = matched_units > 0
+        receipt.matched_units = matched_units
+        receipt.save(update_fields=["matched", "matched_units", "updated_at"])
+
+        _decide(receipt, matched_units=matched_units, review_note=review_note)
+
+    receipt.refresh_from_db()
+    return receipt
+
+
+def _load_reservation(user, reservation_id) -> Reservation:
     reservation = (
-        Reservation.objects.select_related("campaign", "campaign__brand", "campaign__product")
+        Reservation.objects.select_related("campaign", "campaign__brand")
         .filter(id=reservation_id, user=user)
         .first()
     )
@@ -48,98 +125,210 @@ def upload_receipt(
         raise ReceiptError("This claim is no longer active.")
     if reservation.receipts.exclude(status=Receipt.Status.REJECTED).exists():
         raise ReceiptError("A receipt has already been submitted for this claim.")
-
-    campaign = reservation.campaign
-    brand = campaign.brand
-    items = items or []
-
-    fp = ocr.fingerprint(
-        merchant=merchant, purchased_at=purchased_at, total=total,
-        items=items, image=image,
-    )
-
-    receipt = Receipt.objects.create(
-        user=user,
-        reservation=reservation,
-        brand=brand,
-        campaign=campaign,
-        image=image,
-        merchant=merchant,
-        purchased_at=purchased_at,
-        total=total,
-        fingerprint=fp,
-        status=Receipt.Status.PENDING,
-    )
-
-    ocr_data = ocr.run_ocr(
-        image=image, merchant=merchant, purchased_at=purchased_at,
-        total=total, items=items,
-    )
-    OCRResult.objects.create(receipt=receipt, provider=ocr_data["provider"], raw=ocr_data)
-
-    _create_and_match_line_items(receipt, items)
-    _evaluate_receipt(receipt, fingerprint=fp)
-    receipt.refresh_from_db()
-    return receipt
+    return reservation
 
 
-def _create_and_match_line_items(receipt: Receipt, items: list[dict]) -> None:
-    brand = receipt.brand
-    for item in items:
-        product = match_product(brand=brand, text=item["description"])
-        ReceiptLineItem.objects.create(
-            receipt=receipt,
-            description=item["description"],
-            normalized=normalize_text(item["description"]),
-            quantity=int(item.get("quantity", 1)),
-            unit_price=item.get("unit_price"),
-            matched_product=product,
-        )
+def _extract(*, image, legacy: dict) -> ocr.ExtractedReceipt:
+    """Get structured receipt data: OCR when an image is supplied, else the
+    already-structured payload the caller passed in."""
+    if image is None:
+        return _from_legacy(legacy)
+
+    try:
+        return ocr.extract_receipt(image)
+    except ocr.OCRUnreadable as exc:
+        raise ReceiptUnreadable(str(exc))
+    except ocr.OCRUnavailable as exc:
+        raise OCRUnavailable(str(exc))
 
 
-def _matched_units(receipt: Receipt) -> int:
-    targets = set(receipt.campaign.products.values_list("id", flat=True))
-    return sum(
-        li.quantity
-        for li in receipt.line_items.all()
-        if li.matched_product_id in targets
+def _from_legacy(legacy: dict) -> ocr.ExtractedReceipt:
+    purchased_at = legacy.get("purchased_at")
+    return ocr.ExtractedReceipt(
+        merchant_name=legacy.get("merchant", "") or "",
+        purchase_date=purchased_at.date() if purchased_at else None,
+        purchase_time=purchased_at.time().replace(microsecond=0) if purchased_at else None,
+        receipt_number=legacy.get("receipt_number", "") or "",
+        total=legacy.get("total"),
+        items=[
+            ocr.ExtractedItem(
+                description=i["description"],
+                quantity=int(i.get("quantity", 1) or 1),
+                unit_price=i.get("unit_price"),
+                description_with_size=i["description"],
+            )
+            for i in (legacy.get("items") or [])
+        ],
+        provider="client-supplied",
+        raw={"provider": "client-supplied", "items": legacy.get("items") or []},
     )
 
 
-def _evaluate_receipt(receipt: Receipt, *, fingerprint: str) -> None:
-    """Decide: auto-reject (duplicate), auto-verify, or route to manual review."""
-    # Duplicate detection (global): the same physical receipt can't be reused.
-    is_duplicate = (
-        Receipt.objects.filter(fingerprint=fingerprint)
-        .exclude(id=receipt.id)
-        .exclude(status=Receipt.Status.REJECTED)
-        .exists()
-    )
-    if is_duplicate:
-        FraudFlag.objects.create(
-            receipt=receipt, user=receipt.user, brand=receipt.brand,
-            reason=FraudFlag.Reason.DUPLICATE, detail="Duplicate fingerprint.",
-        )
-        _reject(receipt, reason="Duplicate receipt.")
+def _aware(value: dt.datetime | None):
+    if value is None:
+        return None
+    if timezone.is_naive(value):
+        return timezone.make_aware(value, timezone.get_current_timezone())
+    return value
+
+
+# ---------------------------------------------------------------------------
+# Validation steps
+# ---------------------------------------------------------------------------
+def _check_shop(extracted, *, brand, campaign) -> None:
+    """The receipt must come from the campaign's brand/shop.
+
+    Matched against the brand name and any product alias the brand registered,
+    reusing the existing alias mechanism rather than adding a second one.
+    Skipped when OCR read no merchant name at all — that alone is not proof of
+    a wrong shop, so it falls through to manual review via the match rules.
+    """
+    shop = normalize_text(extracted.merchant_name)
+    if not shop:
         return
 
-    matched_units = _matched_units(receipt)
-    required = getattr(receipt.campaign.restriction, "min_units", receipt.campaign.min_purchase_units)
-    receipt.matched = matched_units > 0
-    receipt.matched_units = matched_units
+    expected = normalize_text(brand.name)
+    if shop == expected:
+        return
+    # Allow the printed name to be a longer/shorter variant of the brand
+    # ("Acme" vs "Acme Superstore #12"), but only when the shared part is
+    # substantial — otherwise a 1–2 character brand name would match anything.
+    shorter, longer = sorted((shop, expected), key=len)
+    if len(shorter) >= 4 and shorter in longer:
+        return
+
+    raise ReceiptError(
+        "This receipt is from a different shop than the one this offer is for."
+    )
+
+
+def _check_purchase_window(extracted, *, campaign) -> str:
+    """Check the purchase date against the campaign's start/end window.
+
+    A date *outside* the window is a hard rejection — the purchase is provably
+    ineligible. An *unreadable* date is not: it is a limit of the scan, not
+    evidence of abuse, so it returns a note that routes the receipt to the
+    brand's manual review queue instead (and blocks auto-reward).
+    """
+    if extracted.purchase_date is None:
+        return "Purchase date could not be read."
+
+    purchased_at = _aware(extracted.purchased_at)
+    if campaign.start_at and purchased_at < campaign.start_at:
+        raise ReceiptError("This receipt predates the campaign period.")
+    if campaign.end_at and purchased_at > campaign.end_at:
+        raise ReceiptError("This receipt is dated after the campaign ended.")
+    return ""
+
+
+def _match_eligible_product(extracted, *, campaign):
+    """Find the campaign's eligible product on the receipt.
+
+    Only the claimed campaign's product needs to appear — every other line on
+    the receipt is ignored. Returns (product, matched_units).
+
+    Two different "not found" cases, deliberately handled differently:
+
+    * Some line matched a product in this brand's library, but none of them is
+      the campaign's product -> the shopper bought the wrong thing. Confident
+      rejection.
+    * Nothing on the receipt matched anything -> just as likely an alias gap
+      (the shop prints "DK CHOC BAR" and no alias exists yet) as a wrong
+      receipt. Routed to the brand's manual review queue, which is what the
+      existing add-alias-from-review flow is built on. No reward is issued
+      either way; a human decides.
+    """
+    targets = {p.id: p for p in campaign.products.all()}
+    matched_units = 0
+    eligible = None
+    matched_any = False
+
+    for item in extracted.items:
+        product = _match_item(item, brand=campaign.brand)
+        if product is None:
+            continue
+        matched_any = True
+        if product.id in targets:
+            matched_units += item.quantity
+            eligible = eligible or targets[product.id]
+
+    if eligible is None and matched_any:
+        raise ReceiptError(
+            "This receipt does not contain the product this offer is for."
+        )
+    return eligible, matched_units
+
+
+def _match_item(item, *, brand):
+    """Resolve one receipt line to a product using the existing matcher.
+
+    Tries the raw description first, then the description with the size the
+    OCR provider split into quantity/unit restored — both are exact
+    normalized/alias lookups, so no fuzzy false positives are introduced.
+    """
+    for candidate in (item.description, item.description_with_size):
+        if not candidate:
+            continue
+        product = match_product(brand=brand, text=candidate)
+        if product is not None:
+            return product
+    return None
+
+
+def _build_fingerprint(extracted, eligible_product):
+    """Build the 5-field SHA-256 fingerprint, or (None, reason) if we can't."""
+    if eligible_product is None:
+        # Nothing on the receipt was recognised, so there is no product name to
+        # anchor the fingerprint on. Manual review decides.
+        return None, "Product could not be matched."
+    if extracted.purchase_date is None:
+        # Without a date there is no stable identity to hash.
+        return None, "Purchase date could not be read."
+    if not extracted.receipt_number:
+        if not getattr(settings, "RECEIPT_ALLOW_MISSING_NUMBER", False):
+            return None, "Receipt number could not be read."
+        # Explicitly opted in: fingerprint the remaining four components. This
+        # is weaker — two different purchases of the same product at the same
+        # shop in the same minute collide — hence the opt-in.
+    return (
+        ocr.build_fingerprint(
+            product_name=eligible_product.name,
+            shop_name=extracted.merchant_name,
+            purchase_date=extracted.purchase_date,
+            purchase_time=extracted.purchase_time,
+            receipt_number=extracted.receipt_number,
+        ),
+        "",
+    )
+
+
+def _create_line_items(receipt: Receipt, extracted) -> None:
+    for item in extracted.items:
+        ReceiptLineItem.objects.create(
+            receipt=receipt,
+            description=item.description[:255],
+            normalized=normalize_text(item.description)[:255],
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            matched_product=_match_item(item, brand=receipt.brand),
+        )
+
+
+def _decide(receipt: Receipt, *, matched_units: int, review_note: str) -> None:
+    """Auto-verify, or route to the brand's manual review queue."""
+    required = getattr(
+        receipt.campaign.restriction, "min_units", receipt.campaign.min_purchase_units
+    )
 
     active_claims = Reservation.objects.filter(
         user=receipt.user, status=Reservation.Status.ACTIVE
     ).count()
     velocity = active_claims > settings.MAX_ACTIVE_CLAIMS
 
-    if matched_units >= required and not velocity:
-        receipt.save(update_fields=["matched", "matched_units", "updated_at"])
+    if matched_units >= required and not velocity and not review_note:
         _verify(receipt, reviewer=None, reason="Auto-verified.")
         return
 
-    # Otherwise, route to the brand's manual review queue with fraud signals.
-    receipt.save(update_fields=["matched", "matched_units", "updated_at"])
     if matched_units < required:
         FraudFlag.objects.create(
             receipt=receipt, user=receipt.user, brand=receipt.brand,
@@ -152,6 +341,9 @@ def _evaluate_receipt(receipt: Receipt, *, fingerprint: str) -> None:
             reason=FraudFlag.Reason.VELOCITY,
             detail=f"{active_claims} active claims.",
         )
+    if review_note:
+        receipt.decision_reason = review_note
+        receipt.save(update_fields=["decision_reason", "updated_at"])
     ManualReviewItem.objects.create(receipt=receipt, brand=receipt.brand)
 
 

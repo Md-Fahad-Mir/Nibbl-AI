@@ -50,7 +50,7 @@ def campaign_metrics(campaign: Campaign) -> dict:
 
 
 def product_metrics(product: Product) -> dict:
-    redemptions = Redemption.objects.filter(campaign__product=product)
+    redemptions = Redemption.objects.filter(campaign__products=product)
     reviews = Review.objects.filter(product=product)
     published = reviews.filter(status=Review.Status.PUBLISHED)
     avg = published.aggregate(a=Avg("rating"))["a"]

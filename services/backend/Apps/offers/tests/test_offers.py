@@ -20,7 +20,7 @@ def _active_campaign(brand_name="Acme", slug="acme", category="Beverages",
     brand = Brand.objects.create(name=brand_name, slug=slug)
     product = create_product(brand=brand, name=f"{slug} Cola", category=category)
     campaign = campaign_services.create_campaign(
-        brand=brand, product_id=product.id, name=f"{brand_name} Deal",
+        brand=brand, product_ids=[product.id], name=f"{brand_name} Deal",
         daily_budget=Decimal("100.00"),
     )
     campaign_services.set_tiers(
@@ -52,7 +52,7 @@ class FeedTests(APITestCase):
         brand2 = Brand.objects.create(name="Drafty", slug="drafty")
         p2 = create_product(brand=brand2, name="Tea")
         campaign_services.create_campaign(
-            brand=brand2, product_id=p2.id, name="Draft Deal",
+            brand=brand2, product_ids=[p2.id], name="Draft Deal",
             daily_budget=Decimal("10.00"),
         )
         resp = self.client.get(reverse("v1:offers:feed"))

@@ -1,9 +1,15 @@
 """Test settings — fast and isolated."""
 
+import tempfile
+
 from .base import *  # noqa: F401,F403
 from .base import REST_FRAMEWORK
 
 DEBUG = False
+
+# Uploaded files (receipt photos, avatars) go to a throwaway directory so the
+# suite never writes into the real media/ tree.
+MEDIA_ROOT = tempfile.mkdtemp(prefix="nibblai-test-media-")
 
 # Always use an isolated in-memory SQLite database for the test suite — never
 # touch a real database, even if DATABASE_URL is exported in the environment.

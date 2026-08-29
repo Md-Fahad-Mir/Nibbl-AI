@@ -17,6 +17,7 @@ from Apps.reviews import services as review_services
 from Apps.reviews.models import ReviewSession
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+from Apps.common.testing import RECEIPT_META, receipt_meta
 
 
 def _brand(slug="acme", plan="starter"):
@@ -32,7 +33,7 @@ def _full_flow(brand, *, email="c@example.com"):
     """Claim → verified receipt → rebate redemption + a submitted review."""
     product = create_product(brand=brand, name="Cola")
     rebate = campaign_services.create_campaign(
-        brand=brand, product_id=product.id, name="Deal", daily_budget=Decimal("100.00")
+        brand=brand, product_ids=[product.id], name="Deal", daily_budget=Decimal("100.00")
     )
     campaign_services.set_tiers(rebate, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
     campaign_services.activate_campaign(rebate)
@@ -47,7 +48,7 @@ def _full_flow(brand, *, email="c@example.com"):
     user = User.objects.create_user(email=email, password="x", full_name="U")
     reservation = reservation_services.create_reservation(user=user, campaign_id=rebate.id)
     receipt_services.upload_receipt(
-        user=user, reservation_id=reservation.id,
+        user=user, reservation_id=reservation.id, **RECEIPT_META,
         items=[{"description": "Cola", "quantity": 1}],
     )  # auto-verifies -> redemption + review opportunity
     session = ReviewSession.objects.get(user=user, product=product)

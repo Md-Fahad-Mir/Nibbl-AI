@@ -27,7 +27,10 @@ class ReservationListCreateView(APIView):
         reservations = reservations_for_user(
             request.user, status=request.query_params.get("status", "")
         )
-        return paginate(self, request, reservations, s.ReservationSerializer)
+        return paginate(
+            self, request, reservations, s.ReservationSerializer,
+            context={"request": request},
+        )
 
     @extend_schema(request=s.CreateReservationSerializer, responses={201: s.ReservationSerializer})
     def post(self, request):
@@ -41,7 +44,8 @@ class ReservationListCreateView(APIView):
         except ReservationError as exc:
             raise ValidationError({"detail": str(exc)})
         return Response(
-            s.ReservationSerializer(reservation).data, status=status.HTTP_201_CREATED
+            s.ReservationSerializer(reservation, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -54,4 +58,6 @@ class ReservationDetailView(APIView):
         reservation = get_user_reservation(request.user, reservation_id)
         if reservation is None:
             raise NotFound("Reservation not found.")
-        return Response(s.ReservationSerializer(reservation).data)
+        return Response(
+            s.ReservationSerializer(reservation, context={"request": request}).data
+        )

@@ -30,7 +30,7 @@ def _campaign(*, daily="100.00", premium="5.00", fallback=None, fallback_on=Fals
     )
     product = create_product(brand=brand, name=f"{slug} Cola")
     campaign = campaign_services.create_campaign(
-        brand=brand, product_id=product.id, name="Deal", daily_budget=Decimal(daily),
+        brand=brand, product_ids=[product.id], name="Deal", daily_budget=Decimal(daily),
     )
     campaign_services.set_tiers(
         campaign, [{"reward_amount": premium, "allocation_percent": "100.00"}]

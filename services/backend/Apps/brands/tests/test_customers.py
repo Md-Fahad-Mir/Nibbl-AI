@@ -13,6 +13,7 @@ from Apps.receipts import services as receipt_services
 from Apps.reservations import services as reservation_services
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+from Apps.common.testing import RECEIPT_META
 
 
 def _brand_with_customer(plan_slug):
@@ -21,7 +22,7 @@ def _brand_with_customer(plan_slug):
     BrandMembership.objects.create(brand=brand, user=owner, role=BrandMembership.Role.OWNER)
     product = create_product(brand=brand, name="Cola")
     campaign = campaign_services.create_campaign(
-        brand=brand, product_id=product.id, name="Deal", daily_budget=Decimal("100.00")
+        brand=brand, product_ids=[product.id], name="Deal", daily_budget=Decimal("100.00")
     )
     campaign_services.set_tiers(campaign, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
     wallet = wallet_services.get_or_create_brand_wallet(brand)
@@ -31,7 +32,7 @@ def _brand_with_customer(plan_slug):
     customer = User.objects.create_user(email="shopper@example.com", password="x", full_name="Shopper")
     reservation = reservation_services.create_reservation(user=customer, campaign_id=campaign.id)
     receipt_services.upload_receipt(
-        user=customer, reservation_id=reservation.id,
+        user=customer, reservation_id=reservation.id, **RECEIPT_META,
         items=[{"description": "Cola", "quantity": 1}],
     )
     return owner, brand, customer

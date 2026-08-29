@@ -16,6 +16,7 @@ from Apps.reservations import services as reservation_services
 from Apps.reservations.models import Reservation
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import Hold, LedgerEntry
+from Apps.common.testing import RECEIPT_META, receipt_meta
 
 
 def _world(*, reward="5.00", plan_slug="starter", fund="1000.00"):
@@ -29,7 +30,7 @@ def _world(*, reward="5.00", plan_slug="starter", fund="1000.00"):
     )
     product = create_product(brand=brand, name="Cola 12oz")
     campaign = campaign_services.create_campaign(
-        brand=brand, product_id=product.id, name="Deal", daily_budget=Decimal("100.00"),
+        brand=brand, product_ids=[product.id], name="Deal", daily_budget=Decimal("100.00"),
     )
     campaign_services.set_tiers(
         campaign, [{"reward_amount": reward, "allocation_percent": "100.00"}]
@@ -57,7 +58,7 @@ class HappyPathTests(APITestCase):
         user, reservation = _claim(campaign)
 
         receipt = receipt_services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
             items=[{"description": "Cola 12oz", "quantity": 1}],
         )
         self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
@@ -91,7 +92,7 @@ class HappyPathTests(APITestCase):
         owner, brand, product, campaign, _ = _world()
         user, reservation = _claim(campaign)
         receipt_services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
             items=[{"description": "Cola 12oz", "quantity": 1}],
         )
         self.client.force_authenticate(user)
@@ -115,7 +116,7 @@ class ManualApprovalTests(APITestCase):
         user, reservation = _claim(campaign)
         # Unmatched description -> manual review, no reward yet.
         receipt = receipt_services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
             items=[{"description": "CLA 12 OZ", "quantity": 1}],
         )
         self.assertEqual(receipt.status, Receipt.Status.PENDING)
@@ -130,12 +131,12 @@ class ManualApprovalTests(APITestCase):
         self.assertTrue(Redemption.objects.filter(reservation=reservation).exists())
 
 
-class RejectionReleasesHoldTests(APITestCase):
+class RejectionAndDuplicateTests(APITestCase):
     def test_decline_releases_hold_and_rejects_reservation(self):
         owner, brand, product, campaign, brand_wallet = _world(reward="5.00")
         user, reservation = _claim(campaign)
         receipt = receipt_services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
             items=[{"description": "Unknown Item", "quantity": 1}],
         )
         item = ManualReviewItem.objects.get(receipt=receipt)
@@ -160,25 +161,28 @@ class RejectionReleasesHoldTests(APITestCase):
         self.assertEqual(reservation.status, Reservation.Status.REJECTED)
         self.assertFalse(Redemption.objects.exists())
 
-    def test_duplicate_auto_reject_releases_hold(self):
+    def test_duplicate_is_refused_and_claim_stays_open(self):
         owner, brand, product, campaign, brand_wallet = _world(reward="5.00")
         u1, r1 = _claim(campaign, "a@example.com")
         u2, r2 = _claim(campaign, "b@example.com")
-        meta = dict(merchant="M", total=Decimal("9.99"),
+        meta = dict(merchant="Acme", total=Decimal("9.99"),
                     items=[{"description": "Cola 12oz", "quantity": 1}])
 
-        receipt_services.upload_receipt(user=u1, reservation_id=r1.id, **meta)
-        receipt_services.upload_receipt(user=u2, reservation_id=r2.id, **meta)
+        receipt_services.upload_receipt(user=u1, reservation_id=r1.id, **RECEIPT_META, **meta)
+        with self.assertRaises(receipt_services.DuplicateReceipt):
+            receipt_services.upload_receipt(user=u2, reservation_id=r2.id, **RECEIPT_META, **meta)
 
-        # u1's matching receipt auto-verified (hold captured, reward issued);
-        # u2's duplicate was rejected (hold released). No hold remains.
+        # u1's matching receipt auto-verified (hold captured, reward issued).
+        # u2's duplicate never became a receipt, so exactly one reward exists
+        # and u2's claim is still open for a receipt of their own.
         r1.refresh_from_db()
         r2.refresh_from_db()
         self.assertEqual(r1.status, Reservation.Status.REDEEMED)
-        self.assertEqual(r2.status, Reservation.Status.REJECTED)
+        self.assertEqual(r2.status, Reservation.Status.ACTIVE)
         self.assertEqual(Redemption.objects.count(), 1)
         brand_wallet.refresh_from_db()
-        self.assertEqual(brand_wallet.held_amount(), Decimal("0.00"))
+        # Only u2's still-active claim holds escrow; u1's was captured.
+        self.assertEqual(brand_wallet.held_amount(), Decimal("5.00"))
 
 
 class NoDoubleIssueTests(APITestCase):
@@ -186,7 +190,7 @@ class NoDoubleIssueTests(APITestCase):
         owner, brand, product, campaign, brand_wallet = _world(reward="5.00")
         user, reservation = _claim(campaign)
         receipt = receipt_services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
             items=[{"description": "Cola 12oz", "quantity": 1}],
         )
         # Already issued once via auto-verify. Calling again must not double-issue.
@@ -212,7 +216,7 @@ class NoFeePlanTests(APITestCase):
         )
         product = create_product(brand=brand, name="Cola 12oz")
         campaign = campaign_services.create_campaign(
-            brand=brand, product_id=product.id, name="Deal",
+            brand=brand, product_ids=[product.id], name="Deal",
             daily_budget=Decimal("100.00"),
         )
         campaign_services.set_tiers(
@@ -226,7 +230,7 @@ class NoFeePlanTests(APITestCase):
 
         user, reservation = _claim(campaign)
         receipt_services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
             items=[{"description": "Cola 12oz", "quantity": 1}],
         )
         redemption = Redemption.objects.get()

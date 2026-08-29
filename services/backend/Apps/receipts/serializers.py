@@ -29,9 +29,20 @@ class ReceiptLineItemSerializer(serializers.ModelSerializer):
 
 
 class ReceiptSerializer(serializers.ModelSerializer):
+    """Customer-facing receipt state.
+
+    Deliberately omits ``fingerprint`` — it is an internal fraud control, and
+    exposing it would let a client probe whether a given physical receipt has
+    already been used.
+    """
+
     line_items = ReceiptLineItemSerializer(many=True, read_only=True)
     campaign_name = serializers.CharField(source="campaign.name", read_only=True)
     brand_name = serializers.CharField(source="brand.name", read_only=True)
+    reward_amount = serializers.DecimalField(
+        source="reservation.reward_amount", max_digits=14, decimal_places=2,
+        read_only=True,
+    )
 
     class Meta:
         model = Receipt
@@ -44,9 +55,11 @@ class ReceiptSerializer(serializers.ModelSerializer):
             "status",
             "merchant",
             "purchased_at",
+            "receipt_number",
             "total",
             "matched",
             "matched_units",
+            "reward_amount",
             "decision_reason",
             "line_items",
             "created_at",
@@ -64,14 +77,16 @@ class LineItemInputSerializer(serializers.Serializer):
 
 
 class UploadReceiptSerializer(serializers.Serializer):
+    """Receipt submission: ``reservation`` + the receipt photo, as multipart.
+
+    The image is REQUIRED. Every identifying value (shop, date, time, receipt
+    number, line items) is read from the photo by OCR — the client cannot
+    supply them, because a client-declared receipt would be trivially forgeable
+    and is what the reward is paid against.
+    """
+
     reservation = serializers.UUIDField()
-    image = serializers.FileField(required=False)
-    merchant = serializers.CharField(required=False, allow_blank=True, default="")
-    purchased_at = serializers.DateTimeField(required=False, allow_null=True)
-    total = serializers.DecimalField(
-        max_digits=14, decimal_places=2, required=False, allow_null=True
-    )
-    items = LineItemInputSerializer(many=True, required=False, default=list)
+    image = serializers.FileField()
 
 
 class ReviewItemSerializer(serializers.ModelSerializer):

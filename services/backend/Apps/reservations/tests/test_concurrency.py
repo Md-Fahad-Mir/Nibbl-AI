@@ -31,7 +31,7 @@ class ConcurrentClaimTests(TransactionTestCase):
         product = create_product(brand=brand, name="Cola")
         # daily budget == one reward: only one claim may succeed.
         campaign = campaign_services.create_campaign(
-            brand=brand, product_id=product.id, name="Deal",
+            brand=brand, product_ids=[product.id], name="Deal",
             daily_budget=Decimal("5.00"),
         )
         campaign_services.set_tiers(

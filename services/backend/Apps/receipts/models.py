@@ -37,8 +37,21 @@ class Receipt(BaseModel):
     purchased_at = models.DateTimeField(null=True, blank=True)
     total = models.DecimalField(null=True, blank=True, **MONEY_FIELD)
 
-    # Fingerprint for duplicate detection.
-    fingerprint = models.CharField(max_length=64, db_index=True)
+    # The receipt's own identifier as printed on it (invoice/transaction no.).
+    # One of the five fingerprint components; blank when OCR could not read it.
+    receipt_number = models.CharField(max_length=100, blank=True)
+
+    # SHA-256 of the five identifying components (product, shop, date, time,
+    # receipt number). UNIQUE at the database level so two customers submitting
+    # the same physical receipt concurrently cannot both be rewarded — the
+    # loser hits an IntegrityError rather than a lost race.
+    #
+    # NULL when the fingerprint could not be built (e.g. no receipt number).
+    # NULLs are exempt from UNIQUE in both SQLite and PostgreSQL, so those
+    # receipts simply carry no duplicate protection and go to manual review.
+    fingerprint = models.CharField(
+        max_length=64, unique=True, null=True, blank=True
+    )
 
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.PENDING

@@ -19,7 +19,7 @@ def _active_campaign(category="Beverages"):
     brand = Brand.objects.create(name="Acme", slug="acme")
     product = create_product(brand=brand, name="Acme Cola", category=category)
     campaign = campaign_services.create_campaign(
-        brand=brand, product_id=product.id, name="Acme Deal",
+        brand=brand, product_ids=[product.id], name="Acme Deal",
         daily_budget=Decimal("100.00"),
     )
     campaign_services.set_tiers(

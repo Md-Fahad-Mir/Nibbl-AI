@@ -50,7 +50,7 @@ class AdminGatingTests(APITestCase):
         for brand in (brand_a, brand_b):
             product = create_product(brand=brand, name="P")
             campaign_services.create_campaign(
-                brand=brand, product_id=product.id, name="C", daily_budget=Decimal("10.00")
+                brand=brand, product_ids=[product.id], name="C", daily_budget=Decimal("10.00")
             )
         self.client.force_authenticate(_admin())
         resp = self.client.get(reverse("v1:admin_panel:campaigns"))

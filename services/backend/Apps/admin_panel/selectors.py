@@ -10,7 +10,7 @@ LIST_LIMIT = 200
 
 
 def all_campaigns(*, status: str = ""):
-    qs = Campaign.objects.select_related("brand", "product").all()
+    qs = Campaign.objects.select_related("brand").prefetch_related("products").all()
     if status:
         qs = qs.filter(status=status)
     return qs

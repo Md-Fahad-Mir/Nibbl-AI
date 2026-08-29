@@ -101,11 +101,34 @@ GOOGLE_AI_API_KEY = env("GOOGLE_AI_API_KEY", default="")
 GOOGLE_STUDIO_API_KEY = env("GOOGLE_STUDIO_API_KEY", default="")
 GOOGLE_MODEL = env("GOOGLE_MODEL", default="gemini-1.5-pro")
 
-# Internal receipt-OCR microservice (services/ai, FastAPI + Tesseract). On the
-# compose network this is http://ai:8001. Empty -> run_ocr uses the deterministic
-# mock. run_ocr also falls back to the mock if the service is unreachable.
+# Legacy name for the receipt-OCR microservice base URL. Superseded by
+# RECEIPT_OCR_API_URL below, which falls back to this so existing deployments
+# keep working; prefer setting RECEIPT_OCR_API_URL in new environments.
 AI_SERVICE_URL = env("AI_SERVICE_URL", default="")
 AI_OCR_TIMEOUT = env.float("AI_OCR_TIMEOUT", default=30.0)
+
+# ---------------------------------------------------------------------------
+# Receipt Intelligence API (the AI team's OCR service).
+# ---------------------------------------------------------------------------
+# Base URL only — never hardcode the host in source. Falls back to the legacy
+# AI_SERVICE_URL so existing deployments keep working. Empty -> the receipt
+# upload endpoint reports the OCR provider as unconfigured (HTTP 503) instead
+# of silently accepting an unverifiable receipt.
+RECEIPT_OCR_API_URL = env("RECEIPT_OCR_API_URL", default=AI_SERVICE_URL)
+# Path of the extraction endpoint on that service (see its /openapi.json).
+RECEIPT_OCR_EXTRACT_PATH = env(
+    "RECEIPT_OCR_EXTRACT_PATH", default="/api/v1/receipts/extract"
+)
+# Optional bearer token, if the AI service is put behind auth.
+RECEIPT_OCR_API_KEY = env("RECEIPT_OCR_API_KEY", default="")
+RECEIPT_OCR_TIMEOUT = env.float("RECEIPT_OCR_TIMEOUT", default=AI_OCR_TIMEOUT)
+
+# Business rule: may a receipt be auto-verified when OCR found no receipt/
+# invoice number? Without one the 5-field fingerprint loses its only
+# purchase-unique component, so two genuinely different purchases of the same
+# product at the same shop in the same minute would collide. Default False:
+# such receipts are routed to the brand's existing manual review queue.
+RECEIPT_ALLOW_MISSING_NUMBER = env.bool("RECEIPT_ALLOW_MISSING_NUMBER", default=False)
 
 
 # Payouts: minimum customer withdrawal amount.

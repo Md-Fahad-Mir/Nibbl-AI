@@ -12,8 +12,10 @@ from Apps.products.services import create_product
 from Apps.receipts import services
 from Apps.receipts.models import FraudFlag, ManualReviewItem, Receipt
 from Apps.reservations import services as reservation_services
+from Apps.reservations.models import Reservation
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+from Apps.common.testing import RECEIPT_META, receipt_meta
 
 
 def _world(*, min_units=1, product_name="Cola 12oz"):
@@ -26,7 +28,7 @@ def _world(*, min_units=1, product_name="Cola 12oz"):
     )
     product = create_product(brand=brand, name=product_name)
     campaign = campaign_services.create_campaign(
-        brand=brand, product_id=product.id, name="Deal",
+        brand=brand, product_ids=[product.id], name="Deal",
         daily_budget=Decimal("100.00"), min_purchase_units=min_units,
     )
     campaign_services.set_tiers(
@@ -54,7 +56,7 @@ class UploadAutoVerifyTests(APITestCase):
         _, brand, product, campaign = _world()
         user, reservation = _claim(campaign, "c@example.com")
         receipt = services.upload_receipt(
-            user=user, reservation_id=reservation.id, merchant="SuperMart",
+            user=user, reservation_id=reservation.id, **RECEIPT_META, merchant="Acme",
             items=[{"description": "Cola 12oz", "quantity": 1}],
         )
         self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
@@ -66,7 +68,7 @@ class UploadAutoVerifyTests(APITestCase):
         _, brand, product, campaign = _world()
         user, reservation = _claim(campaign, "c@example.com")
         receipt = services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
             items=[{"description": "Mystery Snack", "quantity": 1}],
         )
         self.assertEqual(receipt.status, Receipt.Status.PENDING)
@@ -83,7 +85,7 @@ class UploadAutoVerifyTests(APITestCase):
         _, brand, product, campaign = _world(min_units=2)
         user, reservation = _claim(campaign, "c@example.com")
         receipt = services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
             items=[{"description": "Cola 12oz", "quantity": 1}],  # need 2
         )
         self.assertEqual(receipt.status, Receipt.Status.PENDING)
@@ -95,32 +97,33 @@ class DuplicateTests(APITestCase):
         u1, r1 = _claim(campaign, "a@example.com")
         u2, r2 = _claim(campaign, "b@example.com")
         items = [{"description": "Cola 12oz", "quantity": 1}]
-        meta = dict(merchant="SuperMart", total=Decimal("9.99"), items=items)
+        meta = dict(merchant="Acme", total=Decimal("9.99"), items=items)
 
-        first = services.upload_receipt(user=u1, reservation_id=r1.id, **meta)
-        second = services.upload_receipt(user=u2, reservation_id=r2.id, **meta)
-
+        first = services.upload_receipt(user=u1, reservation_id=r1.id, **RECEIPT_META, **meta)
         self.assertEqual(first.status, Receipt.Status.VERIFIED)
-        self.assertEqual(second.status, Receipt.Status.REJECTED)
-        self.assertIn("Duplicate", second.decision_reason)
-        self.assertTrue(
-            FraudFlag.objects.filter(
-                receipt=second, reason=FraudFlag.Reason.DUPLICATE
-            ).exists()
-        )
+
+        # The same physical receipt is refused outright (HTTP 409) rather than
+        # being stored as a rejected record — u2's claim stays open so they can
+        # still submit their own receipt.
+        with self.assertRaises(services.DuplicateReceipt):
+            services.upload_receipt(user=u2, reservation_id=r2.id, **RECEIPT_META, **meta)
+
+        self.assertEqual(Receipt.objects.count(), 1)
+        r2.refresh_from_db()
+        self.assertEqual(r2.status, Reservation.Status.ACTIVE)
 
     def test_one_receipt_per_reservation(self):
         _, brand, product, campaign = _world()
         user, reservation = _claim(campaign, "c@example.com")
         services.upload_receipt(
-            user=user, reservation_id=reservation.id,
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
             items=[{"description": "Cola 12oz", "quantity": 1}],
         )
         from Apps.receipts.services import ReceiptError
 
         with self.assertRaises(ReceiptError):
             services.upload_receipt(
-                user=user, reservation_id=reservation.id,
+                user=user, reservation_id=reservation.id, **RECEIPT_META,
                 items=[{"description": "Cola 12oz", "quantity": 1}],
             )
 
@@ -131,7 +134,7 @@ class ManualReviewApiTests(APITestCase):
         self.user, self.reservation = _claim(self.campaign, "c@example.com")
         # Unmatched -> goes to review queue.
         self.receipt = services.upload_receipt(
-            user=self.user, reservation_id=self.reservation.id,
+            user=self.user, reservation_id=self.reservation.id, **RECEIPT_META,
             items=[{"description": "CLA 12 OZ", "quantity": 1}],
         )
         self.item = ManualReviewItem.objects.get(receipt=self.receipt)
@@ -225,7 +228,7 @@ class ReceiptHistoryTests(APITestCase):
         owner, brand, product, campaign = _world()
         u1, r1 = _claim(campaign, "a@example.com")
         services.upload_receipt(
-            user=u1, reservation_id=r1.id,
+            user=u1, reservation_id=r1.id, **RECEIPT_META,
             items=[{"description": "Cola 12oz", "quantity": 1}],
         )
         other = User.objects.create_user(

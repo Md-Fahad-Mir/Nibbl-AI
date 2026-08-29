@@ -80,7 +80,7 @@ class ReceiptReminderTests(APITestCase):
         BrandMembership.objects.create(brand=brand, user=owner, role=BrandMembership.Role.OWNER)
         product = create_product(brand=brand, name="Cola")
         campaign = campaign_services.create_campaign(
-            brand=brand, product_id=product.id, name="Deal", daily_budget=Decimal("100.00")
+            brand=brand, product_ids=[product.id], name="Deal", daily_budget=Decimal("100.00")
         )
         campaign_services.set_tiers(campaign, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
         wallet = wallet_services.get_or_create_brand_wallet(brand)
@@ -122,7 +122,7 @@ class ReceiptReminderTests(APITestCase):
         BrandMembership.objects.create(brand=brand, user=owner, role=BrandMembership.Role.OWNER)
         product = create_product(brand=brand, name="Cola")
         campaign = campaign_services.create_campaign(
-            brand=brand, product_id=product.id, name="Deal", daily_budget=Decimal("100.00")
+            brand=brand, product_ids=[product.id], name="Deal", daily_budget=Decimal("100.00")
         )
         campaign_services.set_tiers(campaign, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
         wallet = wallet_services.get_or_create_brand_wallet(brand)
@@ -151,7 +151,7 @@ class ReviewNotificationTests(APITestCase):
         from Apps.receipts.models import Receipt
         from Apps.reservations import services as reservation_services
         rebate = campaign_services.create_campaign(
-            brand=brand, product_id=product.id, name="Rb", daily_budget=Decimal("100.00")
+            brand=brand, product_ids=[product.id], name="Rb", daily_budget=Decimal("100.00")
         )
         campaign_services.set_tiers(rebate, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
         wallet = wallet_services.get_or_create_brand_wallet(brand)

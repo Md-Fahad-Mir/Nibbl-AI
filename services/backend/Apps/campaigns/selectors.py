@@ -4,7 +4,7 @@ from Apps.campaigns.models import Campaign
 
 
 def campaigns_for_brand(brand):
-    return Campaign.objects.filter(brand=brand).select_related("product")
+    return Campaign.objects.filter(brand=brand).prefetch_related("products")
 
 
 def get_brand_campaign(brand, campaign_id) -> Campaign | None:

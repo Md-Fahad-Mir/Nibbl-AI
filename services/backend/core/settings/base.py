@@ -400,3 +400,4 @@ if _extra_cors_headers:
 
     CORS_ALLOW_HEADERS = (*default_headers, *_extra_cors_headers)
 
+

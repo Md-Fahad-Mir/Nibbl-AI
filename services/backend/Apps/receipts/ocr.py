@@ -149,7 +149,9 @@ def extract_receipt(image) -> ExtractedReceipt:
     headers = {}
     api_key = (getattr(settings, "RECEIPT_OCR_API_KEY", "") or "").strip()
     if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+        # The provider's own auth contract (confirmed against the deployed
+        # service): a shared secret in `X-API-Key`, not a Bearer token.
+        headers["X-API-Key"] = api_key
 
     try:
         resp = httpx.post(

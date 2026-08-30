@@ -307,7 +307,7 @@ code.** Configure in `.env`:
 | `RECEIPT_OCR_API_URL` | falls back to `AI_SERVICE_URL` | Base URL of the OCR service |
 | `RECEIPT_OCR_EXTRACT_PATH` | `/api/v1/receipts/extract` | Endpoint path |
 | `RECEIPT_OCR_TIMEOUT` | `30.0` | Request timeout (seconds) |
-| `RECEIPT_OCR_API_KEY` | `""` | Optional; sent as `Authorization: Bearer …` when set |
+| `RECEIPT_OCR_API_KEY` | `""` | Sent as `X-API-Key: <value>` when set — **required** now that the OCR service is deployed with `API_KEY` enforced |
 | `RECEIPT_ALLOW_MISSING_NUMBER` | `False` | See §10 |
 
 If `RECEIPT_OCR_API_URL` is empty the upload endpoint returns **`503`** rather than
@@ -319,7 +319,7 @@ accepting an unverifiable receipt.
 |---|---|
 | **Method** | `POST` |
 | **URL** | `{RECEIPT_OCR_API_URL}{RECEIPT_OCR_EXTRACT_PATH}` |
-| **Auth** | None by default; bearer token if `RECEIPT_OCR_API_KEY` is set |
+| **Auth** | `X-API-Key: <RECEIPT_OCR_API_KEY>` — the deployed service rejects requests without it (`401 UNAUTHORIZED`) |
 | **Content-Type** | `multipart/form-data` |
 | **File field** | **`image`** (required) |
 | **Other fields** | `fixture` (optional, dev-only replay of a recorded fixture) |
@@ -1359,7 +1359,7 @@ Flagged explicitly so nothing here is mistaken for an available feature.
 | **Campaign "duration in days"** | No duration field. Windows are explicit `start_at` / `end_at` datetimes, both nullable |
 | **Automatic campaign expiry by `end_at`** | No task flips a campaign to `completed` when `end_at` passes; it stays `active` in `/offers/` until paused/archived. Receipt date validation still enforces the window |
 | **OCR retry / circuit breaker** | Single attempt, then `503`. No backoff or retry queue |
-| **`RECEIPT_OCR_API_KEY`** | Supported in code; **not currently required** by the OCR service |
+| ~~`RECEIPT_OCR_API_KEY` not required~~ | **Superseded.** The deployed service enforces `API_KEY` — every request needs `X-API-Key`, confirmed live (`401 UNAUTHORIZED` without it) |
 
 ### Deployment note
 

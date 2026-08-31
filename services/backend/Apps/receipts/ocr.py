@@ -372,9 +372,11 @@ def _read_image_bytes(image) -> bytes | None:
 # receipt is identical. This is an accepted, documented trade-off of hashing
 # the complete dataset instead of a small set of anchor fields (some of which,
 # e.g. receipt_number, are not present on every receipt). The existing
-# shop / purchase-window / product-match checks in Apps.receipts.services are
-# the complementary safety net for that case — this module does not add a
-# second, fuzzy/similarity-based duplicate check on top of the exact hash.
+# purchase-window / product-match checks in Apps.receipts.services are the
+# complementary safety net for that case — this module does not add a second,
+# fuzzy/similarity-based duplicate check on top of the exact hash. There is no
+# brand/shop check: verification depends only on the claimed product being
+# found among the receipt's OCR-extracted items.
 FINGERPRINT_VERSION = "v2"
 
 # Keys excluded from the canonical structure at any nesting depth — pipeline

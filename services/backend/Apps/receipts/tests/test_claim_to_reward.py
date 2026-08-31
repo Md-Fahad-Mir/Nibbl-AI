@@ -425,22 +425,40 @@ class SkuMatchingTests(APITestCase):
 
 
 # ---------------------------------------------------------------------------
-# Test 6 — Wrong shop
+# Test 6 — No brand/shop verification: only the product match decides
 # ---------------------------------------------------------------------------
-class WrongShopTests(APITestCase):
-    def test_receipt_from_another_shop_is_rejected(self):
+# Brand/shop matching was deliberately removed from verification. A receipt
+# is verified purely on whether the claimed product is found among the
+# OCR-extracted items — the merchant name is recorded (Receipt.merchant) but
+# never checked against the campaign's brand.
+class NoShopVerificationTests(APITestCase):
+    def test_receipt_from_a_different_shop_still_verifies_and_pays(self):
         _, brand, product, campaign = build_world()
         user, reservation = claim(campaign, "a@example.com")
 
         with ocr_returning(payload(shop="Some Other Grocery")):
-            with self.assertRaises(services.ReceiptError) as ctx:
-                services.upload_receipt(
-                    user=user, reservation_id=reservation.id, image=image()
-                )
+            receipt = services.upload_receipt(
+                user=user, reservation_id=reservation.id, image=image()
+            )
 
-        self.assertIn("different shop", str(ctx.exception))
-        self.assertFalse(Receipt.objects.exists())
-        self.assertEqual(balance(user), Decimal("0.00"))
+        # The mismatched merchant name is still recorded, informationally —
+        # it just never blocks verification.
+        self.assertEqual(receipt.merchant, "Some Other Grocery")
+        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+        self.assertEqual(Redemption.objects.count(), 1)
+        self.assertEqual(balance(user), Decimal("2.00"))
+
+    def test_receipt_with_no_merchant_name_at_all_still_verifies_and_pays(self):
+        _, brand, product, campaign = build_world()
+        user, reservation = claim(campaign, "a@example.com")
+
+        with ocr_returning(payload(shop="")):
+            receipt = services.upload_receipt(
+                user=user, reservation_id=reservation.id, image=image()
+            )
+
+        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+        self.assertEqual(Redemption.objects.count(), 1)
 
 
 # ---------------------------------------------------------------------------

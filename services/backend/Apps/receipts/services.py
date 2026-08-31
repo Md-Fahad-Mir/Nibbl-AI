@@ -53,8 +53,13 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
 
         OCR -> normalize ALL extracted data -> full receipt fingerprint
             -> duplicate lookup (fast path)
-            -> shop / purchase-window / eligible-product checks
+            -> purchase-window / eligible-product checks
             -> verify (or route to manual review) -> reward via signal
+
+    Verification depends only on whether the claimed campaign's product is
+    found among the receipt's OCR-extracted items — there is no brand/shop
+    matching anywhere in this flow (a receipt is never rejected for being
+    from "the wrong shop").
 
     ``legacy`` accepts the pre-OCR ``merchant`` / ``purchased_at`` / ``total`` /
     ``items`` keyword arguments. They are used only when no ``image`` is given,
@@ -81,10 +86,11 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
         raise DuplicateReceipt("This receipt has already been used.")
 
     # --- Validate the receipt against the claimed campaign -----------------
-    # Hard rejections (wrong shop / wrong product / outside the campaign
-    # window) raise. Soft problems return a note that blocks auto-reward and
-    # sends the receipt to the brand's manual review queue.
-    _check_shop(extracted, brand=brand, campaign=campaign)
+    # Hard rejections (wrong product / outside the campaign window) raise.
+    # Soft problems return a note that blocks auto-reward and sends the
+    # receipt to the brand's manual review queue. No shop/merchant check: the
+    # claimed product being found among the OCR-extracted items is the only
+    # verification gate.
     date_note = _check_purchase_window(extracted, campaign=campaign)
     eligible_product, matched_units = _match_eligible_product(extracted, campaign=campaign)
 
@@ -246,33 +252,6 @@ def _aware(value: dt.datetime | None):
 # ---------------------------------------------------------------------------
 # Validation steps
 # ---------------------------------------------------------------------------
-def _check_shop(extracted, *, brand, campaign) -> None:
-    """The receipt must come from the campaign's brand/shop.
-
-    Matched against the brand name and any product alias the brand registered,
-    reusing the existing alias mechanism rather than adding a second one.
-    Skipped when OCR read no merchant name at all — that alone is not proof of
-    a wrong shop, so it falls through to manual review via the match rules.
-    """
-    shop = normalize_text(extracted.merchant_name)
-    if not shop:
-        return
-
-    expected = normalize_text(brand.name)
-    if shop == expected:
-        return
-    # Allow the printed name to be a longer/shorter variant of the brand
-    # ("Acme" vs "Acme Superstore #12"), but only when the shared part is
-    # substantial — otherwise a 1–2 character brand name would match anything.
-    shorter, longer = sorted((shop, expected), key=len)
-    if len(shorter) >= 4 and shorter in longer:
-        return
-
-    raise ReceiptError(
-        "This receipt is from a different shop than the one this offer is for."
-    )
-
-
 def _check_purchase_window(extracted, *, campaign) -> str:
     """Check the purchase date against the campaign's start/end window.
 

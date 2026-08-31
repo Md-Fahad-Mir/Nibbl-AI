@@ -160,7 +160,7 @@ class ReviewNotificationTests(APITestCase):
         reservation = reservation_services.create_reservation(user=user, campaign_id=rebate.id)
         receipt = Receipt.objects.create(
             user=user, reservation=reservation, brand=brand, campaign=rebate,
-            fingerprint="fp", status=Receipt.Status.VERIFIED,
+            full_fingerprint="fp", status=Receipt.Status.VERIFIED,
         )
         session = ReviewSession.objects.create(
             review_campaign=rc, product=product, user=user, receipt=receipt,

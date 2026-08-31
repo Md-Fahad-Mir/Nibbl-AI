@@ -37,7 +37,9 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import json
 import logging
+import re
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 
@@ -46,10 +48,6 @@ from django.conf import settings
 from Apps.common.text import normalize_text
 
 logger = logging.getLogger(__name__)
-
-# Fingerprint scheme version. Bump only if the canonical string changes, so
-# old and new hashes can never be confused for one another.
-FINGERPRINT_VERSION = "v1"
 
 # Units that mean "package size", not "how many were bought". The provider
 # parses "Dark Chocolate Bar 100g" into description="Dark Chocolate Bar",
@@ -83,6 +81,9 @@ class ExtractedItem:
     quantity: int
     unit: str = ""
     unit_price: Decimal | None = None
+    # Product code as printed/scanned, when the provider reads one. Checked
+    # before any text matching — see products.selectors.match_product.
+    sku: str = ""
     # The description with the size the provider split off restored, e.g.
     # "Dark Chocolate Bar" + 100 + "G" -> "Dark Chocolate Bar 100G". Used as an
     # extra exact-match candidate against the product library.
@@ -275,6 +276,7 @@ def _map_item(item: dict) -> ExtractedItem:
         quantity=max(quantity, 1),
         unit=unit,
         unit_price=_to_decimal(item.get("unit_price")),
+        sku=_clean(item.get("sku")),
         description_with_size=(
             f"{description} {size_suffix}".strip() if size_suffix else description
         ),
@@ -346,34 +348,221 @@ def _read_image_bytes(image) -> bytes | None:
 # ---------------------------------------------------------------------------
 # Receipt fingerprint (the duplicate-detection identity)
 # ---------------------------------------------------------------------------
-def build_fingerprint(
-    *,
-    product_name: str,
-    shop_name: str,
-    purchase_date: dt.date,
-    purchase_time: dt.time | None,
-    receipt_number: str,
-) -> str:
-    """SHA-256 over the five components that identify a physical receipt.
+# The fingerprint hashes the COMPLETE normalized receipt data the provider
+# extracted (merchant, transaction, every item, totals, payment, ...) rather
+# than a handful of anchor fields. Two uploads of the same physical receipt
+# must canonicalize to the same structure regardless of: JSON key order,
+# incidental whitespace, currency symbols / trailing zeros on money values, or
+# the order OCR happened to read line items in.
+#
+# Deliberately excluded, wherever they occur in the payload:
+#   * pipeline/processing metadata: request_id, processing_time_ms, the
+#     success/warnings/errors/processing envelope itself (never printed on
+#     the receipt; changes on every reprocessing run of the same image);
+#   * the OCR engine's own judgments about the extraction: confidence,
+#     validation, review (can shift slightly between runs of the exact same
+#     image without anything on the receipt changing);
+#   * schema_version / document_type (describe the response format, not
+#     receipt content) and line_index (OCR's row bookkeeping, not something
+#     printed on the paper).
+#
+# A different full fingerprint does NOT prove two receipts are genuinely
+# different — an OCR misread on any included field (one digit of a total, one
+# character of an item description) changes the hash even though the physical
+# receipt is identical. This is an accepted, documented trade-off of hashing
+# the complete dataset instead of a small set of anchor fields (some of which,
+# e.g. receipt_number, are not present on every receipt). The existing
+# shop / purchase-window / product-match checks in Apps.receipts.services are
+# the complementary safety net for that case — this module does not add a
+# second, fuzzy/similarity-based duplicate check on top of the exact hash.
+FINGERPRINT_VERSION = "v2"
 
-    The same physical receipt must hash identically no matter who photographs
-    it, so every component is normalized first and nothing photo-specific (image
-    bytes, upload time, user) may take part.
+# Keys excluded from the canonical structure at any nesting depth — pipeline
+# judgments and bookkeeping, not receipt content (see block comment above).
+_EXCLUDED_KEYS = {
+    "confidence", "validation", "review", "schema_version", "document_type",
+    "line_index",
+}
 
-    ``product_name`` is the *campaign's* product name as stored in the product
-    library — not the raw OCR text. Two photos of one receipt can OCR the same
-    line slightly differently ("Dark Chocolate Bar" vs "Dark Chocolate Bar
-    100g"); both resolve to the same Product, so anchoring on the library name
-    keeps the fingerprint stable.
+# Keys whose value is an identifier/code: normalized as text (case/whitespace
+# only), never parsed as a number. Preserves leading zeros and exact digit
+# sequences that give these fields their identity (e.g. card_last_4="0042",
+# store_id="007") — a generic "looks numeric -> normalize as money" rule
+# would otherwise collapse "007" and "7" into the same value.
+_TEXT_ONLY_KEYS = {
+    "transaction_id", "receipt_number", "sku", "store_id", "register_id",
+    "card_last_4", "card_last4", "authorization_code", "phone", "cashier",
+}
+
+_DATE_KEYS = {"date"}
+_TIME_KEYS = {"time"}
+_DATETIME_KEYS = {"datetime"}
+
+_DECIMAL_SHAPE = re.compile(r"^[+-]?\d+(\.\d+)?$")
+
+
+def _as_decimal_text(text: str) -> Decimal | None:
+    """Parse a money/quantity-looking string, else None.
+
+    Strips a leading currency symbol and/or trailing percent sign and
+    thousands separators first, so "$65.77", "65.77%" and "65,077.00" are all
+    candidates. A strict shape check (rather than trusting ``Decimal()``
+    directly) keeps oddities like "NaN", "Infinity" or exponent notation from
+    being treated as numbers — anything that isn't a plain decimal falls
+    through to text normalization instead.
     """
-    canonical = "|".join(
-        [
-            FINGERPRINT_VERSION,
-            normalize_text(product_name),
-            normalize_text(shop_name),
-            purchase_date.isoformat(),
-            (purchase_time or dt.time.min).replace(microsecond=0).isoformat(),
-            normalize_text(receipt_number),
-        ]
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    stripped = text.strip().rstrip("%").strip()
+    for symbol in ("$", "€", "£", "¥"):
+        if stripped.startswith(symbol):
+            stripped = stripped[len(symbol):].strip()
+            break
+    stripped = stripped.replace(",", "")
+    if not stripped or not _DECIMAL_SHAPE.match(stripped):
+        return None
+    try:
+        return Decimal(stripped)
+    except InvalidOperation:
+        return None
+
+
+def _format_decimal(value: Decimal) -> str:
+    """Render a Decimal without scientific notation, trailing zeros trimmed.
+
+    "65.77", "$65.77" and "65.770" must all render identically; "100" must
+    render as "100" — not "1E+2" (what ``Decimal.normalize()`` alone would
+    produce for a round number) or "100.00".
+    """
+    text = format(value.normalize(), "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _normalize_scalar(key: str, value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float, Decimal)):
+        return _format_decimal(Decimal(str(value)))
+    if not isinstance(value, str):
+        return None  # unexpected shape; never let it silently reach json.dumps
+
+    text = value.strip()
+    if not text:
+        return None
+
+    if key in _DATE_KEYS:
+        parsed = _parse_date(text)
+        return parsed.isoformat() if parsed else normalize_text(text)
+    if key in _TIME_KEYS:
+        parsed = _parse_time(text)
+        return parsed.isoformat() if parsed else normalize_text(text)
+    if key in _DATETIME_KEYS:
+        date_part, _, time_part = text.partition("T")
+        parsed_date = _parse_date(date_part)
+        parsed_time = _parse_time(time_part) if time_part else None
+        if parsed_date:
+            return f"{parsed_date.isoformat()}T{(parsed_time or dt.time.min).isoformat()}"
+        return normalize_text(text)
+    if key in _TEXT_ONLY_KEYS:
+        return normalize_text(text)
+
+    numeric = _as_decimal_text(text)
+    if numeric is not None:
+        return _format_decimal(numeric)
+    return normalize_text(text)
+
+
+def _canonicalize(value, key: str = ""):
+    """Recursively normalize provider data into a deterministic structure.
+
+    * dict: excluded keys dropped; remaining values normalized (key order is
+      handled at serialization time via ``json.dumps(sort_keys=True)``).
+    * list: each element normalized, empty/null elements dropped, then sorted
+      by its own canonical JSON — so OCR line-order jitter between two scans
+      of the same physical receipt can't change the fingerprint.
+    * scalar: see ``_normalize_scalar``.
+
+    A branch that normalizes to nothing (empty dict/list, blank/null scalar)
+    is dropped rather than kept as ``{}`` / ``[]`` / ``null``, so "field
+    absent" and "field present but empty" always canonicalize identically.
+    """
+    if isinstance(value, dict):
+        result = {}
+        for k, v in value.items():
+            if k in _EXCLUDED_KEYS:
+                continue
+            normalized = _canonicalize(v, key=k)
+            if normalized is not None:
+                result[k] = normalized
+        return result or None
+
+    if isinstance(value, list):
+        items = [_canonicalize(v) for v in value]
+        items = [i for i in items if i is not None]
+        if not items:
+            return None
+        items.sort(key=lambda i: json.dumps(i, sort_keys=True, default=str))
+        return items
+
+    return _normalize_scalar(key, value)
+
+
+def _receipt_content(raw: dict) -> dict:
+    """The structured receipt fields inside a stored OCR ``.raw`` payload.
+
+    ``.raw`` holds the full provider envelope for a live OCR call (``data``
+    plus the ``success``/``warnings``/``errors``/``processing`` wrapper) or a
+    small ``{"provider": ..., "items": [...]}`` shape for a legacy
+    client-supplied submission (no image; see ``services._from_legacy``).
+    Either way, only the actual receipt content should reach the fingerprint.
+    """
+    if isinstance(raw, dict) and isinstance(raw.get("data"), dict):
+        return raw["data"]
+    if isinstance(raw, dict):
+        return {k: v for k, v in raw.items() if k != "provider"}
+    return {}
+
+
+def canonicalize_receipt_data(raw: dict) -> dict:
+    """Deterministic, order-independent structure built from a ``.raw`` OCR
+    payload. Safe to ``json.dumps(..., sort_keys=True)`` for hashing, and
+    useful on its own for audit/debugging — stored on ``OCRResult``."""
+    return _canonicalize(_receipt_content(raw)) or {}
+
+
+def hash_canonical_data(canonical: dict) -> str | None:
+    """SHA-256 over an already-canonicalized receipt structure.
+
+    Returns None when nothing usable was extracted at all (a blank/empty OCR
+    result) — that receipt gets no duplicate protection rather than colliding
+    with every other unreadable receipt, the same posture as before.
+    """
+    if not canonical:
+        return None
+    canonical_json = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
+    payload = f"{FINGERPRINT_VERSION}|{canonical_json}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def build_full_fingerprint(raw: dict) -> str | None:
+    """Convenience wrapper: canonicalize + hash a ``.raw`` OCR payload directly."""
+    return hash_canonical_data(canonicalize_receipt_data(raw))
+
+
+def extract_confidence(raw: dict) -> float | None:
+    """The provider's own extraction-confidence score (``data.confidence.overall``),
+    when present. Captured for audit/support visibility; not currently wired
+    into any accept/reject decision (see FraudFlag/ManualReviewItem for those
+    rules) — see the module-level fingerprint comment for why this project
+    does not use it as a second duplicate-detection signal.
+    """
+    data = raw.get("data") if isinstance(raw, dict) else None
+    if not isinstance(data, dict):
+        return None
+    confidence = data.get("confidence")
+    if not isinstance(confidence, dict):
+        return None
+    overall = confidence.get("overall")
+    return float(overall) if isinstance(overall, (int, float)) else None

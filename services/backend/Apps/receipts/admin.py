@@ -19,14 +19,14 @@ class ReceiptLineItemInline(admin.TabularInline):
 class ReceiptAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "brand", "campaign", "status", "matched_units", "created_at")
     list_filter = ("status", "matched")
-    search_fields = ("user__email", "brand__name", "fingerprint")
-    readonly_fields = ("fingerprint", "reviewed_by", "reviewed_at", "created_at", "updated_at")
+    search_fields = ("user__email", "brand__name", "full_fingerprint")
+    readonly_fields = ("full_fingerprint", "matched_product", "reviewed_by", "reviewed_at", "created_at", "updated_at")
     inlines = [ReceiptLineItemInline]
 
 
 @admin.register(OCRResult)
 class OCRResultAdmin(admin.ModelAdmin):
-    list_display = ("receipt", "provider", "created_at")
+    list_display = ("receipt", "provider", "confidence", "created_at")
 
 
 @admin.register(FraudFlag)

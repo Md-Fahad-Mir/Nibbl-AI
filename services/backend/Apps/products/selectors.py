@@ -12,12 +12,22 @@ def get_brand_product(brand, product_id) -> Product | None:
     return Product.objects.filter(brand=brand, id=product_id).first()
 
 
-def match_product(*, brand, text: str) -> Product | None:
-    """Resolve receipt text to one of the brand's active products.
+def match_product(*, brand, text: str = "", sku: str = "") -> Product | None:
+    """Resolve a receipt line to one of the brand's active products.
 
-    Looks at aliases first (indexed), then the product's normalized name.
-    Returns None on no match — callers (M8) treat this as "needs review".
+    Preferred order: SKU/product code (exact, case-insensitive — unambiguous
+    when the OCR provider reads one) -> alias (indexed) -> normalized product
+    name. Returns None on no match — callers (M8) treat this as "needs
+    review".
     """
+    cleaned_sku = (sku or "").strip()
+    if cleaned_sku:
+        by_sku = Product.objects.filter(
+            brand=brand, is_active=True, sku__iexact=cleaned_sku
+        ).first()
+        if by_sku is not None:
+            return by_sku
+
     norm = normalize_text(text)
     if not norm:
         return None

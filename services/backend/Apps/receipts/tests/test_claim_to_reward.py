@@ -2,8 +2,14 @@
 
 The OCR provider is stubbed at the HTTP boundary (``httpx.post``) with payloads
 shaped exactly like the real Receipt Intelligence API response, so the mapping
-layer, the five-field fingerprint, and every validation rule are exercised for
+layer, the full-data fingerprint, and every validation rule are exercised for
 real — only the network call is faked.
+
+Pure unit coverage of the canonicalization/hashing engine itself (key order,
+whitespace, money formats, excluded fields, ...) lives in
+``test_fingerprint.py``, next to this file — it needs no database and runs
+fast; the tests here focus on how fingerprinting behaves as part of the full
+upload flow (duplicate detection, manual review routing, reward issuance).
 """
 
 import datetime as dt
@@ -172,8 +178,15 @@ class ValidReceiptTests(APITestCase):
         self.assertEqual(receipt.matched_units, 1)
 
         self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
-        self.assertIsNotNone(receipt.fingerprint)
-        self.assertEqual(len(receipt.fingerprint), 64)
+        self.assertIsNotNone(receipt.full_fingerprint)
+        self.assertEqual(len(receipt.full_fingerprint), 64)
+        self.assertEqual(receipt.matched_product_id, product.id)
+
+        # The exact canonicalized structure that was hashed is kept for audit.
+        ocr_result = receipt.ocr_result
+        self.assertTrue(ocr_result.canonical_data)
+        self.assertIn("merchant", ocr_result.canonical_data)
+        self.assertNotIn("confidence", ocr_result.canonical_data)
 
         # Reward issued: claim redeemed, ledger entry written, wallet credited.
         reservation.refresh_from_db()
@@ -284,32 +297,25 @@ class DifferentReceiptTests(APITestCase):
         self.assertEqual(Redemption.objects.count(), 2)
         self.assertEqual(balance(u2), Decimal("2.00"))
 
-    def test_fingerprint_changes_with_each_of_the_five_components(self):
-        base = dict(
-            product_name=PRODUCT, shop_name=SHOP,
-            purchase_date=dt.date(2026, 8, 29),
-            purchase_time=dt.time(14, 30), receipt_number="INV-12345",
-        )
-        original = ocr.build_fingerprint(**base)
+    def test_receipt_number_alone_is_not_the_identity_other_fields_still_are(self):
+        """The fingerprint hashes the complete payload now, not five anchor
+        fields — changing *any* participating field (not just receipt_number)
+        must change it. Unit-level coverage of the canonicalization rules
+        themselves (key order, whitespace, money formats, ...) lives in
+        test_fingerprint.py."""
+        _, brand, product, campaign = build_world()
+        u1, r1 = claim(campaign, "a@example.com")
+        u2, r2 = claim(campaign, "b@example.com")
 
-        for field, changed in [
-            ("product_name", "Milk Chocolate Bar 100g"),
-            ("shop_name", "Other Shop"),
-            ("purchase_date", dt.date(2026, 8, 30)),
-            ("purchase_time", dt.time(16, 45)),
-            ("receipt_number", "INV-12346"),
-        ]:
-            with self.subTest(field=field):
-                self.assertNotEqual(
-                    original, ocr.build_fingerprint(**{**base, field: changed})
-                )
+        with ocr_returning(payload(number="INV-12345")):
+            first = services.upload_receipt(user=u1, reservation_id=r1.id, image=image())
 
-        # Deterministic and case/whitespace insensitive: the same physical
-        # receipt read slightly differently still collides.
-        self.assertEqual(
-            original,
-            ocr.build_fingerprint(**{**base, "shop_name": "  FAHAD CHOCOLATE SHOP "}),
-        )
+        # Only the total differs (a field the old 5-field scheme never looked
+        # at) — still a different fingerprint under the full-data scheme.
+        with ocr_returning(payload(number="INV-12346", total="99.00")):
+            second = services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
+
+        self.assertNotEqual(first.full_fingerprint, second.full_fingerprint)
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +362,66 @@ class WrongProductTests(APITestCase):
         self.assertTrue(ManualReviewItem.objects.filter(receipt=receipt).exists())
         self.assertEqual(Redemption.objects.count(), 0)
         self.assertEqual(balance(user), Decimal("0.00"))
+
+
+# ---------------------------------------------------------------------------
+# SKU-first product matching (spec §6/§7 preferred order: SKU before text)
+# ---------------------------------------------------------------------------
+class SkuMatchingTests(APITestCase):
+    def test_sku_match_wins_even_when_the_printed_description_would_not_match(self):
+        """The OCR description is nothing like the product's name/aliases,
+        but the SKU is an exact match — SKU must be checked first and win,
+        per the preferred matching order."""
+        _, brand, product, campaign = build_world(product_name="Dark Chocolate Bar 100g")
+        product.sku = "SKU-DCB-100"
+        product.save(update_fields=["sku"])
+        user, reservation = claim(campaign, "a@example.com")
+
+        body = payload(items=[
+            {"description": "MISC ITEM 4821", "sku": "SKU-DCB-100",
+             "quantity": "1", "unit": None, "unit_price": "1.00", "total_price": "1.00"},
+        ])
+        with ocr_returning(body):
+            receipt = services.upload_receipt(
+                user=user, reservation_id=reservation.id, image=image()
+            )
+
+        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+        self.assertEqual(receipt.matched_product_id, product.id)
+        self.assertEqual(Redemption.objects.count(), 1)
+
+    def test_sku_match_is_case_insensitive(self):
+        _, brand, product, campaign = build_world(product_name="Dark Chocolate Bar 100g")
+        product.sku = "SKU-DCB-100"
+        product.save(update_fields=["sku"])
+        user, reservation = claim(campaign, "a@example.com")
+
+        body = payload(items=[
+            {"description": "MISC ITEM", "sku": "sku-dcb-100",
+             "quantity": "1", "unit": None, "unit_price": "1.00", "total_price": "1.00"},
+        ])
+        with ocr_returning(body):
+            receipt = services.upload_receipt(
+                user=user, reservation_id=reservation.id, image=image()
+            )
+        self.assertEqual(receipt.matched_product_id, product.id)
+
+    def test_wrong_sku_falls_back_to_text_matching(self):
+        """A SKU that matches nothing in this brand's library must not block
+        the existing text/alias fallback from still finding the product."""
+        _, brand, product, campaign = build_world()
+        user, reservation = claim(campaign, "a@example.com")
+
+        body = payload(items=[
+            {"description": "Dark Chocolate Bar", "sku": "NOT-A-REAL-SKU",
+             "quantity": "100", "unit": "G", "unit_price": "1.00", "total_price": "10.00"},
+        ])
+        with ocr_returning(body):
+            receipt = services.upload_receipt(
+                user=user, reservation_id=reservation.id, image=image()
+            )
+        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+        self.assertEqual(receipt.matched_product_id, product.id)
 
 
 # ---------------------------------------------------------------------------
@@ -419,10 +485,17 @@ class CampaignWindowTests(APITestCase):
 
 
 # ---------------------------------------------------------------------------
-# Test 8 — Missing receipt number
+# Test 8 — Missing receipt number / missing date-time (spec §5, §13 Tests 5-6)
 # ---------------------------------------------------------------------------
-class MissingReceiptNumberTests(APITestCase):
-    def test_missing_number_goes_to_manual_review_and_pays_nothing(self):
+# The fingerprint no longer depends on any single field, receipt_number
+# included — it hashes whatever the OCR provider actually returned. A missing
+# receipt_number therefore no longer blocks fingerprinting *or* auto-reward on
+# its own (RECEIPT_ALLOW_MISSING_NUMBER is retired: see core/settings/base.py).
+# A missing purchase date still routes to manual review, but for its own
+# reason (the campaign purchase-window check in Apps.receipts.services can't
+# evaluate an unreadable date) — independent of fingerprinting.
+class MissingFieldsTests(APITestCase):
+    def test_missing_receipt_number_can_still_verify_and_pay(self):
         _, brand, product, campaign = build_world()
         user, reservation = claim(campaign, "a@example.com")
 
@@ -431,38 +504,93 @@ class MissingReceiptNumberTests(APITestCase):
                 user=user, reservation_id=reservation.id, image=image()
             )
 
-        # No fingerprint could be built, so no duplicate protection exists ->
-        # never auto-verified.
-        self.assertIsNone(receipt.fingerprint)
-        self.assertEqual(receipt.status, Receipt.Status.PENDING)
-        self.assertIn("Receipt number", receipt.decision_reason)
-        self.assertTrue(ManualReviewItem.objects.filter(receipt=receipt).exists())
-        self.assertEqual(Redemption.objects.count(), 0)
-        self.assertEqual(balance(user), Decimal("0.00"))
+        # Merchant + date/time + items were still readable, so the fingerprint
+        # is built from those — receipt_number is simply absent from it.
+        self.assertIsNotNone(receipt.full_fingerprint)
+        self.assertEqual(receipt.receipt_number, "")
+        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+        self.assertEqual(Redemption.objects.count(), 1)
+        self.assertEqual(balance(user), Decimal("2.00"))
 
-    def test_several_numberless_receipts_do_not_collide(self):
-        """NULL fingerprints are exempt from the UNIQUE index, so unrelated
-        unreadable receipts must not be mistaken for duplicates."""
+    def test_two_numberless_receipts_that_differ_do_not_collide(self):
+        """Two genuinely different purchases, neither with a receipt number,
+        must not be mistaken for one another just because both lack the same
+        field — the *rest* of their data still differs."""
+        _, brand, product, campaign = build_world()
+        u1, r1 = claim(campaign, "a@example.com")
+        u2, r2 = claim(campaign, "b@example.com")
+
+        with ocr_returning(payload(number=None, time="14:30:00")):
+            first = services.upload_receipt(user=u1, reservation_id=r1.id, image=image())
+        with ocr_returning(payload(number=None, time="16:45:00")):
+            second = services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
+
+        self.assertNotEqual(first.full_fingerprint, second.full_fingerprint)
+        self.assertEqual(Redemption.objects.count(), 2)
+
+    def test_two_numberless_receipts_that_are_identical_are_flagged_duplicate(self):
+        """The flip side: if nothing at all distinguishes them (both missing
+        a number, everything else identical), they genuinely are the same
+        receipt and must be caught as a duplicate — not waved through just
+        because the number is absent."""
         _, brand, product, campaign = build_world()
         u1, r1 = claim(campaign, "a@example.com")
         u2, r2 = claim(campaign, "b@example.com")
 
         with ocr_returning(payload(number=None)):
             services.upload_receipt(user=u1, reservation_id=r1.id, image=image())
-            services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
+        with ocr_returning(payload(number=None)):
+            with self.assertRaises(services.DuplicateReceipt):
+                services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
 
-        self.assertEqual(Receipt.objects.filter(fingerprint__isnull=True).count(), 2)
+        self.assertEqual(Redemption.objects.count(), 1)
 
-    def test_opt_in_setting_allows_four_field_fingerprint(self):
+    def test_missing_date_still_fingerprints_but_goes_to_manual_review(self):
+        """No date/time is readable at all — the fingerprint still builds
+        from merchant + items + receipt number, but the campaign's purchase-
+        window check can't evaluate a date it doesn't have, so this still
+        routes to manual review (a separate, pre-existing rule, not a
+        fingerprinting concern)."""
         _, brand, product, campaign = build_world()
         user, reservation = claim(campaign, "a@example.com")
-        with self.settings(RECEIPT_ALLOW_MISSING_NUMBER=True):
-            with ocr_returning(payload(number=None)):
-                receipt = services.upload_receipt(
-                    user=user, reservation_id=reservation.id, image=image()
-                )
-        self.assertIsNotNone(receipt.fingerprint)
-        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+
+        with ocr_returning(payload(date=None, time=None)):
+            receipt = services.upload_receipt(
+                user=user, reservation_id=reservation.id, image=image()
+            )
+
+        self.assertIsNotNone(receipt.full_fingerprint)
+        self.assertEqual(receipt.status, Receipt.Status.PENDING)
+        self.assertIn("Purchase date", receipt.decision_reason)
+        self.assertTrue(ManualReviewItem.objects.filter(receipt=receipt).exists())
+        self.assertEqual(Redemption.objects.count(), 0)
+        self.assertEqual(balance(user), Decimal("0.00"))
+
+    def test_entirely_unreadable_receipt_gets_no_fingerprint_and_no_collision(self):
+        """When OCR returns essentially nothing usable, no fingerprint can be
+        built at all (same graceful-degradation posture as before) — and two
+        such unrelated receipts must not collide with each other under a
+        shared NULL/empty identity."""
+        _, brand, product, campaign = build_world()
+        u1, r1 = claim(campaign, "a@example.com")
+        u2, r2 = claim(campaign, "b@example.com")
+
+        blank = {
+            "success": True,
+            "data": {"merchant": {}, "transaction": {}, "items": [],
+                     "receipt_number": None, "total": None},
+            "warnings": [], "errors": [], "processing": {"request_id": "x"},
+        }
+        with ocr_returning(blank):
+            r1_receipt = services.upload_receipt(user=u1, reservation_id=r1.id, image=image())
+        with ocr_returning(blank):
+            r2_receipt = services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
+
+        self.assertIsNone(r1_receipt.full_fingerprint)
+        self.assertIsNone(r2_receipt.full_fingerprint)
+        self.assertEqual(
+            Receipt.objects.filter(full_fingerprint__isnull=True).count(), 2
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -637,6 +765,17 @@ class PayloadMappingTests(APITestCase):
         body["data"]["receipt_number"] = None
         body["data"]["transaction"]["transaction_id"] = "TXN-999"
         self.assertEqual(ocr.map_payload(body).receipt_number, "TXN-999")
+
+    def test_sku_is_read_from_each_item(self):
+        body = payload(items=[
+            {"description": "Dark Chocolate Bar", "sku": "SKU-1", "quantity": "1",
+             "unit": None, "unit_price": "1.00", "total_price": "1.00"},
+            {"description": "Coca Cola", "sku": None, "quantity": "1",
+             "unit": None, "unit_price": "1.00", "total_price": "1.00"},
+        ])
+        items = ocr.map_payload(body).items
+        self.assertEqual(items[0].sku, "SKU-1")
+        self.assertEqual(items[1].sku, "")
 
     def test_measurement_units_are_not_counted_as_purchased_quantity(self):
         items = ocr.map_payload(payload()).items

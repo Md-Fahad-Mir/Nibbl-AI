@@ -123,11 +123,11 @@ RECEIPT_OCR_EXTRACT_PATH = env(
 RECEIPT_OCR_API_KEY = env("RECEIPT_OCR_API_KEY", default="")
 RECEIPT_OCR_TIMEOUT = env.float("RECEIPT_OCR_TIMEOUT", default=AI_OCR_TIMEOUT)
 
-# Business rule: may a receipt be auto-verified when OCR found no receipt/
-# invoice number? Without one the 5-field fingerprint loses its only
-# purchase-unique component, so two genuinely different purchases of the same
-# product at the same shop in the same minute would collide. Default False:
-# such receipts are routed to the brand's existing manual review queue.
+# Not currently read by the fingerprint logic: the receipt fingerprint now
+# hashes the complete normalized OCR payload (Apps.receipts.ocr), so it no
+# longer depends on any single field such as the receipt/invoice number being
+# present. Left defined (rather than removed) so an existing deployment's
+# .env keeps loading cleanly; safe to remove once no environment sets it.
 RECEIPT_ALLOW_MISSING_NUMBER = env.bool("RECEIPT_ALLOW_MISSING_NUMBER", default=False)
 
 

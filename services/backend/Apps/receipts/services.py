@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -47,10 +48,13 @@ class OCRUnavailable(ReceiptError):
 def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
     """Submit a receipt photo for an active claim.
 
-    Runs OCR, validates the receipt against the claimed campaign (shop,
-    purchase window, eligible product), fingerprints it, and — when everything
-    checks out — verifies it, which triggers reward issuance via the
-    ``receipt_verified`` signal.
+    Flow (matches the fast-path duplicate check first, then the more
+    expensive per-item product matching):
+
+        OCR -> normalize ALL extracted data -> full receipt fingerprint
+            -> duplicate lookup (fast path)
+            -> shop / purchase-window / eligible-product checks
+            -> verify (or route to manual review) -> reward via signal
 
     ``legacy`` accepts the pre-OCR ``merchant`` / ``purchased_at`` / ``total`` /
     ``items`` keyword arguments. They are used only when no ``image`` is given,
@@ -63,6 +67,19 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
 
     extracted = _extract(image=image, legacy=legacy)
 
+    # --- Fingerprint + fast duplicate path ----------------------------------
+    # Computed from the COMPLETE normalized OCR data, independent of which
+    # product/campaign/user is involved, before any per-item product matching
+    # runs. This lookup is an optimization (skip expensive matching for a
+    # receipt we already know is a duplicate); the UNIQUE constraint hit at
+    # INSERT time below is the actual race-safe guard — see there.
+    canonical_data = ocr.canonicalize_receipt_data(extracted.raw)
+    full_fingerprint = ocr.hash_canonical_data(canonical_data)
+    if full_fingerprint and Receipt.objects.filter(
+        full_fingerprint=full_fingerprint
+    ).exists():
+        raise DuplicateReceipt("This receipt has already been used.")
+
     # --- Validate the receipt against the claimed campaign -----------------
     # Hard rejections (wrong shop / wrong product / outside the campaign
     # window) raise. Soft problems return a note that blocks auto-reward and
@@ -71,8 +88,10 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
     date_note = _check_purchase_window(extracted, campaign=campaign)
     eligible_product, matched_units = _match_eligible_product(extracted, campaign=campaign)
 
-    fingerprint, number_note = _build_fingerprint(extracted, eligible_product)
-    review_note = date_note or number_note
+    fingerprint_note = (
+        "" if full_fingerprint else "Receipt data could not be read clearly enough to fingerprint."
+    )
+    review_note = date_note or fingerprint_note
 
     with transaction.atomic():
         try:
@@ -87,17 +106,23 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
                     purchased_at=_aware(extracted.purchased_at),
                     total=extracted.total,
                     receipt_number=extracted.receipt_number[:100],
-                    fingerprint=fingerprint,
+                    full_fingerprint=full_fingerprint,
+                    matched_product=eligible_product,
                     status=Receipt.Status.PENDING,
                 )
         except IntegrityError:
-            # The UNIQUE index on fingerprint is the real duplicate guard: it
-            # closes the check-then-insert race between two simultaneous
-            # submissions of the same physical receipt.
+            # The UNIQUE index on full_fingerprint is the real duplicate
+            # guard: it closes the check-then-insert race between two
+            # simultaneous submissions of the same physical receipt that both
+            # passed the fast-path lookup above before either had inserted.
             raise DuplicateReceipt("This receipt has already been used.")
 
         OCRResult.objects.create(
-            receipt=receipt, provider=extracted.provider, raw=extracted.raw
+            receipt=receipt,
+            provider=extracted.provider,
+            raw=extracted.raw,
+            canonical_data=canonical_data,
+            confidence=ocr.extract_confidence(extracted.raw),
         )
         _create_line_items(receipt, extracted)
 
@@ -142,25 +167,71 @@ def _extract(*, image, legacy: dict) -> ocr.ExtractedReceipt:
         raise OCRUnavailable(str(exc))
 
 
+def _json_safe(value):
+    """Best-effort JSON-safe copy (``Decimal`` -> ``str``, recursively).
+
+    Real OCR responses are already plain JSON. Only the Python-side legacy
+    kwargs path (test fixtures / digital-receipt submissions) can carry
+    ``Decimal`` objects (e.g. ``total=Decimal("9.99")``) — those would
+    otherwise crash ``OCRResult.raw``'s plain ``JSONField`` encoder, which
+    (unlike DRF's) does not know how to serialize ``Decimal``.
+    """
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 def _from_legacy(legacy: dict) -> ocr.ExtractedReceipt:
+    """Build an ExtractedReceipt from pre-OCR kwargs (test/fixture use only —
+    the real HTTP API always supplies an image; see ``upload_receipt``).
+
+    ``raw`` is shaped like the real provider envelope (a ``data`` key holding
+    merchant/transaction/items/receipt_number/total) so it fingerprints the
+    same way a live OCR response would — merchant, date/time and receipt
+    number all participate, not just the items list.
+    """
     purchased_at = legacy.get("purchased_at")
+    merchant = legacy.get("merchant", "") or ""
+    receipt_number = legacy.get("receipt_number", "") or ""
+    items = legacy.get("items") or []
     return ocr.ExtractedReceipt(
-        merchant_name=legacy.get("merchant", "") or "",
+        merchant_name=merchant,
         purchase_date=purchased_at.date() if purchased_at else None,
         purchase_time=purchased_at.time().replace(microsecond=0) if purchased_at else None,
-        receipt_number=legacy.get("receipt_number", "") or "",
+        receipt_number=receipt_number,
         total=legacy.get("total"),
         items=[
             ocr.ExtractedItem(
                 description=i["description"],
                 quantity=int(i.get("quantity", 1) or 1),
                 unit_price=i.get("unit_price"),
+                sku=i.get("sku", "") or "",
                 description_with_size=i["description"],
             )
-            for i in (legacy.get("items") or [])
+            for i in items
         ],
         provider="client-supplied",
-        raw={"provider": "client-supplied", "items": legacy.get("items") or []},
+        raw={
+            "provider": "client-supplied",
+            "data": {
+                "merchant": {"name": merchant},
+                "transaction": {
+                    "date": purchased_at.date().isoformat() if purchased_at else None,
+                    "time": (
+                        purchased_at.time().replace(microsecond=0).isoformat()
+                        if purchased_at
+                        else None
+                    ),
+                },
+                "items": _json_safe(items),
+                "receipt_number": receipt_number,
+                "total": _json_safe(legacy.get("total")),
+            },
+        },
     )
 
 
@@ -260,12 +331,17 @@ def _match_eligible_product(extracted, *, campaign):
 
 
 def _match_item(item, *, brand):
-    """Resolve one receipt line to a product using the existing matcher.
+    """Resolve one receipt line to a product.
 
-    Tries the raw description first, then the description with the size the
-    OCR provider split into quantity/unit restored — both are exact
+    Preferred order: SKU/product code first (unambiguous when the provider
+    reads one), then the raw description, then the description with the size
+    OCR split into quantity/unit restored. The text candidates are exact
     normalized/alias lookups, so no fuzzy false positives are introduced.
     """
+    if item.sku:
+        product = match_product(brand=brand, sku=item.sku)
+        if product is not None:
+            return product
     for candidate in (item.description, item.description_with_size):
         if not candidate:
             continue
@@ -273,33 +349,6 @@ def _match_item(item, *, brand):
         if product is not None:
             return product
     return None
-
-
-def _build_fingerprint(extracted, eligible_product):
-    """Build the 5-field SHA-256 fingerprint, or (None, reason) if we can't."""
-    if eligible_product is None:
-        # Nothing on the receipt was recognised, so there is no product name to
-        # anchor the fingerprint on. Manual review decides.
-        return None, "Product could not be matched."
-    if extracted.purchase_date is None:
-        # Without a date there is no stable identity to hash.
-        return None, "Purchase date could not be read."
-    if not extracted.receipt_number:
-        if not getattr(settings, "RECEIPT_ALLOW_MISSING_NUMBER", False):
-            return None, "Receipt number could not be read."
-        # Explicitly opted in: fingerprint the remaining four components. This
-        # is weaker — two different purchases of the same product at the same
-        # shop in the same minute collide — hence the opt-in.
-    return (
-        ocr.build_fingerprint(
-            product_name=eligible_product.name,
-            shop_name=extracted.merchant_name,
-            purchase_date=extracted.purchase_date,
-            purchase_time=extracted.purchase_time,
-            receipt_number=extracted.receipt_number,
-        ),
-        "",
-    )
 
 
 def _create_line_items(receipt: Receipt, extracted) -> None:

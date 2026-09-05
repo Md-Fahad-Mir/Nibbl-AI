@@ -378,7 +378,45 @@ def _decide(receipt: Receipt, *, matched_units: int, review_note: str) -> None:
 # ---------------------------------------------------------------------------
 # Decision helpers
 # ---------------------------------------------------------------------------
+def _assert_single_use(receipt: Receipt) -> None:
+    """One physical receipt may be verified exactly once, platform-wide.
+
+    Enforced here, at the single choke point every verification path goes
+    through (auto-verification *and* brand approval from the review queue),
+    so no route to a reward can bypass it:
+
+    * **The receipt must be identifiable.** With no fingerprint the platform
+      cannot tell this physical receipt apart from any other, so it cannot
+      honour the single-use rule for it. Two unreadable receipts are both
+      NULL-fingerprinted, are both exempt from the UNIQUE index, and would
+      otherwise each be approvable — paying twice for what may well be the
+      same piece of paper. Verification is refused instead; the reviewer
+      declines and asks for a clearer photo.
+    * **No other receipt with this fingerprint may already be verified.**
+      The UNIQUE index on ``full_fingerprint`` means a second row normally
+      cannot exist at all, so this is defence in depth: it keeps the
+      invariant true even if a row is ever created by another code path.
+    """
+    if not receipt.full_fingerprint:
+        raise ReceiptError(
+            "This receipt could not be read clearly enough to confirm it has "
+            "not already been used. Ask the customer to upload a clearer photo."
+        )
+
+    already_used = (
+        Receipt.objects.filter(
+            full_fingerprint=receipt.full_fingerprint,
+            status=Receipt.Status.VERIFIED,
+        )
+        .exclude(pk=receipt.pk)
+        .exists()
+    )
+    if already_used:
+        raise DuplicateReceipt("This receipt has already been used.")
+
+
 def _verify(receipt: Receipt, *, reviewer, reason: str) -> Receipt:
+    _assert_single_use(receipt)
     receipt.status = Receipt.Status.VERIFIED
     receipt.decision_reason = reason
     receipt.reviewed_by = reviewer

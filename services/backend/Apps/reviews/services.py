@@ -4,6 +4,7 @@ reward issuance, and moderation."""
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from decimal import Decimal
 
 from django.conf import settings
@@ -14,7 +15,7 @@ from Apps.billing import services as billing_services
 from Apps.common.exceptions import DomainError
 from Apps.common.money import ZERO, to_money
 from Apps.products.models import Product
-from Apps.reviews import ai
+from Apps.reviews import ai, review_writer
 from Apps.reviews.models import (
     Review,
     ReviewCampaign,
@@ -24,6 +25,8 @@ from Apps.reviews.models import (
 )
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import Hold, LedgerEntry
+
+logger = logging.getLogger(__name__)
 
 
 class ReviewError(DomainError):
@@ -284,7 +287,56 @@ def generate_opportunities(receipt) -> list[ReviewSession]:
 # ---------------------------------------------------------------------------
 # Chat + submission
 # ---------------------------------------------------------------------------
+def _qa_pairs(messages: list[dict], prompts: list[ReviewPrompt]) -> list[tuple[str, str]]:
+    """Pair each asked question with the answer that followed it.
+
+    The first prompt is put to the reviewer up front by the client (from
+    ``ReviewSessionSerializer.prompts``) and is never itself written to
+    ``messages`` — only the reviewer's replies and the follow-up prompts are.
+    So the first user message answers ``prompts[0]``, and every later user
+    message answers whichever assistant message came right before it.
+    """
+    pairs: list[tuple[str, str]] = []
+    pending_question = prompts[0].text if prompts else None
+    for message in messages:
+        role = message.get("role")
+        if role == "user" and pending_question is not None:
+            pairs.append((pending_question, message.get("content", "")))
+            pending_question = None
+        elif role == "assistant":
+            pending_question = message.get("content")
+    return pairs
+
+
+def _write_ai_review(session: ReviewSession, qa_pairs: list[tuple[str, str]]) -> str:
+    """Turn the reviewer's Q&A into review prose via the AI writing service.
+
+    Falls back to the reviewer's own answers, stitched together, if that
+    service is unreachable or unconfigured — the flow must not dead-end on an
+    external call.
+    """
+    try:
+        result = review_writer.write_review(
+            product_name=session.product.name,
+            product_context=session.review_campaign.product_context,
+            qa_pairs=qa_pairs,
+        )
+        return result["body"]
+    except review_writer.ReviewWriterUnavailable:
+        logger.warning(
+            "AI review writer unavailable for session %s; using answers as-is.", session.id
+        )
+        return " ".join(answer.strip() for _, answer in qa_pairs if answer and answer.strip())
+
+
 def append_message(session: ReviewSession, *, text) -> dict:
+    """Record one answer and either return the next prompt or the AI review.
+
+    A deliberately simple Q&A, not a free-form chatbot: the campaign's fixed
+    4-6 prompts are asked one at a time, and once the last is answered the
+    reviewer's answers are handed to the AI writer and the finished review
+    comes back in the same response ("thank you -- here's your review").
+    """
     if session.status != ReviewSession.Status.ACTIVE:
         raise ReviewError("This review session is no longer active.")
     prompts = list(session.review_campaign.prompts.all())
@@ -295,8 +347,13 @@ def append_message(session: ReviewSession, *, text) -> dict:
     next_prompt = prompts[next_index].text if next_index < len(prompts) else None
     if next_prompt:
         session.messages.append({"role": "assistant", "content": next_prompt})
-    session.save(update_fields=["messages", "updated_at"])
-    return {"next_prompt": next_prompt, "done": next_prompt is None}
+        session.save(update_fields=["messages", "updated_at"])
+        return {"next_prompt": next_prompt, "done": False, "review": None}
+
+    review_text = _write_ai_review(session, _qa_pairs(session.messages, prompts))
+    session.ai_review_content = review_text
+    session.save(update_fields=["messages", "ai_review_content", "updated_at"])
+    return {"next_prompt": None, "done": True, "review": review_text}
 
 
 @transaction.atomic
@@ -307,6 +364,10 @@ def submit_review(session: ReviewSession, *, rating, content="") -> Review:
         raise ReviewError("This review opportunity has expired.")
     if not (1 <= int(rating) <= 5):
         raise ReviewError("Rating must be between 1 and 5.")
+
+    # An explicit `content` (the reviewer editing the AI draft) wins; otherwise
+    # publish the AI-written review from the Q&A as-is.
+    final_content = content.strip() if content and content.strip() else session.ai_review_content
 
     # Reward is issued regardless of rating (spec 2.6).
     _issue_review_reward(session)
@@ -319,7 +380,7 @@ def submit_review(session: ReviewSession, *, rating, content="") -> Review:
         user=session.user,
         session=session,
         rating=int(rating),
-        content=content,
+        content=final_content,
         status=Review.Status.PUBLISHED if auto_publish else Review.Status.HELD,
         published_at=now if auto_publish else None,
     )

@@ -105,6 +105,7 @@ class ReviewSessionSerializer(serializers.ModelSerializer):
             "expires_at",
             "messages",
             "prompts",
+            "ai_review_content",
             "created_at",
         ]
         read_only_fields = fields
@@ -116,6 +117,14 @@ class ReviewSessionSerializer(serializers.ModelSerializer):
 
 class AnswerSerializer(serializers.Serializer):
     text = serializers.CharField()
+
+
+class AnswerResultSerializer(serializers.Serializer):
+    next_prompt = serializers.CharField(allow_null=True)
+    done = serializers.BooleanField()
+    #: Set only when `done` -- the AI-written review from all Q&A answers.
+    #: The reviewer sees this straight after "thank you", ready to submit.
+    review = serializers.CharField(allow_null=True)
 
 
 class SubmitReviewSerializer(serializers.Serializer):

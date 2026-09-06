@@ -353,6 +353,89 @@ class ConsumerApiTests(APITestCase):
         self.assertEqual(len(history.data), 1)
 
 
+class QnAReviewFlowTests(APITestCase):
+    """Sequential Q&A -> AI-written review, not a free-form chatbot."""
+
+    def _session(self):
+        owner, brand, wallet = _brand()
+        product = create_product(brand=brand, name="Cola")
+        campaign = _review_campaign(brand, product)
+        user, receipt = _verified_receipt(brand, owner, product)
+        session = ReviewSession.objects.get(user=user, product=product)
+        return user, campaign, session
+
+    def test_questions_are_asked_one_at_a_time_then_review_is_written(self):
+        user, campaign, session = self._session()
+        prompts = list(campaign.prompts.all())
+        self.assertEqual(len(prompts), 4)
+
+        self.client.force_authenticate(user)
+        answer_url = reverse("v1:reviews:session-answer", args=[session.id])
+
+        # First three answers each just surface the next prompt.
+        for prompt in prompts[1:]:
+            resp = self.client.post(answer_url, {"text": "It's fine."}, format="json")
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            self.assertEqual(resp.data["next_prompt"], prompt.text)
+            self.assertFalse(resp.data["done"])
+            self.assertIsNone(resp.data["review"])
+
+        # The final answer completes the Q&A and comes back with a review,
+        # written from the answers (no AI service configured in tests, so the
+        # fallback stitches the answers together rather than blocking).
+        final = self.client.post(answer_url, {"text": "Would buy again."}, format="json")
+        self.assertEqual(final.status_code, status.HTTP_200_OK)
+        self.assertIsNone(final.data["next_prompt"])
+        self.assertTrue(final.data["done"])
+        self.assertIn("Would buy again.", final.data["review"])
+
+        session.refresh_from_db()
+        self.assertEqual(session.ai_review_content, final.data["review"])
+
+    def test_ai_writer_output_is_used_when_configured(self):
+        from unittest.mock import patch
+
+        user, campaign, session = self._session()
+        prompts = list(campaign.prompts.all())
+
+        self.client.force_authenticate(user)
+        answer_url = reverse("v1:reviews:session-answer", args=[session.id])
+        for _ in prompts[1:]:
+            self.client.post(answer_url, {"text": "Good."}, format="json")
+
+        with patch(
+            "Apps.reviews.review_writer.write_review",
+            return_value={"title": "Great", "body": "A genuinely useful product.", "rating": 4},
+        ) as mock_write:
+            final = self.client.post(answer_url, {"text": "Yes, again."}, format="json")
+
+        self.assertTrue(mock_write.called)
+        self.assertEqual(final.data["review"], "A genuinely useful product.")
+
+        # Submitting without `content` publishes the AI-written draft as-is.
+        submit = self.client.post(
+            reverse("v1:reviews:session-submit", args=[session.id]),
+            {"rating": 5},
+            format="json",
+        )
+        self.assertEqual(submit.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(submit.data["content"], "A genuinely useful product.")
+
+    def test_submit_content_override_wins_over_ai_draft(self):
+        user, campaign, session = self._session()
+        session.ai_review_content = "AI draft text."
+        session.save(update_fields=["ai_review_content"])
+
+        self.client.force_authenticate(user)
+        submit = self.client.post(
+            reverse("v1:reviews:session-submit", args=[session.id]),
+            {"rating": 5, "content": "My own words."},
+            format="json",
+        )
+        self.assertEqual(submit.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(submit.data["content"], "My own words.")
+
+
 class ReviewCampaignApiTests(APITestCase):
     def test_create_requires_products_and_prompts_to_activate(self):
         owner, brand, wallet = _brand()

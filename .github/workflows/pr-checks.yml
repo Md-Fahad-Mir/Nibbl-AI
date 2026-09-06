@@ -7,15 +7,16 @@ on:
       - staging
 
 jobs:
-  lint-and-test:
-    name: Lint & Test
+  # Independent jobs so a failure in one service's checks never blocks or
+  # skips another's -- each area's status reflects only its own code.
+  backend:
+    name: Backend
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ─── Backend ──────────────────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -48,13 +49,19 @@ jobs:
           cd services/backend
           python manage.py test --settings=core.settings.test
 
-      # ─── Docker Lint ──────────────────────────────────────────────
       - name: Validate backend Dockerfile
         run: |
           set -o pipefail
           docker build --no-cache --target builder -f services/backend/Dockerfile ./services/backend 2>&1 | tail -5
 
-      # ─── AI service ───────────────────────────────────────────────
+  ai:
+    name: AI Service
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Python for AI
         uses: actions/setup-python@v5
         with:
@@ -71,6 +78,14 @@ jobs:
 
       - name: Validate AI Compose file
         run: docker compose -f services/ai/docker-compose.yml config --quiet
+
+  infra:
+    name: Infra Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       # ─── Compose Validation ───────────────────────────────────────
       - name: Validate docker-compose files

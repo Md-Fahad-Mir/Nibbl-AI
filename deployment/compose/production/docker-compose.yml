@@ -18,6 +18,12 @@ services:
     # Defaults to the backend release tag. A rollback can select a separately
     # known-compatible AI release through AI_IMAGE_TAG.
     image: ${REGISTRY}/nibblai-ai:${AI_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    # LLM/vision provider keys and model choices -- see .env.production.ai.
+    # Values below still win over the file for anything security- or
+    # infra-load-bearing (auth, port, logging), since Compose applies
+    # `environment:` after `env_file:` for the same key.
+    env_file:
+      - ../environments/.env.production.ai
     environment:
       APP_ENV: production
       PORT: "8001"
@@ -29,10 +35,13 @@ services:
       ROOT_PATH: /ai
       API_KEY: ${AI_API_KEY:?AI_API_KEY must be set in the runtime .env}
       WEB_CONCURRENCY: ${AI_WEB_CONCURRENCY:-1}
-      OCR_PROVIDER: tesseract
       OCR_LANGUAGES: ${AI_OCR_LANGUAGES:-eng}
       OCR_TIMEOUT_SECONDS: "30"
       MAX_FILE_SIZE_MB: ${AI_MAX_FILE_SIZE_MB:-10}
+      # .env.production.ai is a copy of a Windows dev machine's .env and
+      # carries a Windows tesseract path; force it back to "resolve from
+      # PATH" so it doesn't break OCR on this Linux image.
+      TESSERACT_CMD: ""
       ENABLE_RAW_OCR_STORAGE: "false"
       LOG_DOCUMENT_CONTENT: "false"
       REDACT_SENSITIVE_TEXT: "true"

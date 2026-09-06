@@ -155,22 +155,42 @@ class SingleUseAcrossThePlatformTests(APITestCase):
 
     def test_block_survives_after_the_first_receipt_is_declined(self):
         """A receipt that reached the review queue and was declined still holds
-        its identity: the same physical receipt cannot be recycled by anyone."""
+        its identity: the same physical receipt cannot be recycled by anyone.
+
+        Uses an unmatched item (an alias gap) rather than a missing date to
+        route the first submission to manual review: under the new
+        merchant/date/time/product identity, a missing date or time means
+        no complete identity exists at all (see
+        test_missing_date_still_reads_merchant_but_goes_to_manual_review in
+        test_claim_to_reward.py) — there would be nothing for a resubmission
+        to collide with. A full, readable identity that simply didn't
+        auto-verify is the scenario this test is about.
+        """
         _, brand, product, campaign = build_world()
         owner = brand.memberships.first().user
         a, r_a = claim(campaign, "a@example.com")
         b, r_b = claim(campaign, "b@example.com")
 
-        # Unreadable date -> manual review rather than auto-verify.
-        with ocr_returning(payload(date=None, time=None)):
+        unmatched = payload(items=[
+            {"description": "MYSTERY SNACK", "quantity": "1", "unit": None,
+             "unit_price": "3.00", "total_price": "3.00"},
+        ])
+        with ocr_returning(unmatched):
             first = services.upload_receipt(user=a, reservation_id=r_a.id, image=image())
         item = ManualReviewItem.objects.get(receipt=first)
         services.decline_review(item=item, reviewer=owner, reason="Not eligible.")
 
-        with ocr_returning(payload(date=None, time=None)):
-            with self.assertRaises(services.DuplicateReceipt):
-                services.upload_receipt(user=b, reservation_id=r_b.id, image=image())
+        with ocr_returning(unmatched):
+            second = services.upload_receipt(user=b, reservation_id=r_b.id, image=image())
 
+        # Neither claimed a product (alias gap, unresolved) -- no reward
+        # either way -- but the second lands in review too, not auto-blocked:
+        # with no product_description_hash on either, there is no complete
+        # receipt+product identity to compare (Apps.receipts.services.
+        # _assert_single_use). Approving *both* into a reward is what remains
+        # blocked -- see test_unidentifiable_receipts_cannot_be_approved_into_a_reward
+        # for the platform's actual defence against that.
+        self.assertEqual(second.status, Receipt.Status.PENDING)
         self.assertEqual(Redemption.objects.count(), 0)
         self.assertEqual(reward_credits().count(), 0)
 
@@ -203,10 +223,11 @@ class SingleUseThroughManualApprovalTests(APITestCase):
         with ocr_returning(self._unreadable_payload()):
             second = services.upload_receipt(user=b, reservation_id=r_b.id, image=image())
 
-        # Neither could be fingerprinted, so neither is protected by the
-        # UNIQUE index — both exist side by side in the review queue.
-        self.assertIsNone(first.full_fingerprint)
-        self.assertIsNone(second.full_fingerprint)
+        # Neither has a readable purchase date, so neither has an identity —
+        # both exist side by side in the review queue, unprotected by the
+        # UNIQUE constraint.
+        self.assertIsNone(first.purchase_date_hash)
+        self.assertIsNone(second.purchase_date_hash)
 
         for receipt in (first, second):
             with self.subTest(receipt=receipt.id):
@@ -260,13 +281,43 @@ class SingleUseThroughManualApprovalTests(APITestCase):
         with ocr_returning(unknown_item):
             receipt = services.upload_receipt(user=a, reservation_id=r_a.id, image=image())
 
-        self.assertIsNotNone(receipt.full_fingerprint)
+        # Merchant/date/time were all readable (only the item is unmatched),
+        # so the receipt is identifiable even though it has no claimed
+        # product yet -- see Apps.receipts.services._assert_single_use.
+        self.assertIsNotNone(receipt.merchant_hash)
+        self.assertIsNotNone(receipt.purchase_date_hash)
+        self.assertIsNone(receipt.product_description_hash)
         item = ManualReviewItem.objects.get(receipt=receipt)
         approved = services.approve_review(item=item, reviewer=owner)
 
         self.assertEqual(approved.status, Receipt.Status.VERIFIED)
         self.assertEqual(Redemption.objects.count(), 1)
         self.assertEqual(reward_credits().count(), 1)
+
+    def test_a_missing_purchase_date_blocks_approval_even_with_a_known_merchant(self):
+        """Merchant alone is never enough: without a readable purchase date
+        the platform cannot tell this receipt apart from any other well
+        enough to honour single-use for it, so approval is refused even
+        though the merchant (and the claimed product) are known."""
+        _, brand, product, campaign = build_world()
+        owner = brand.memberships.first().user
+        a, r_a = claim(campaign, "a@example.com")
+
+        with ocr_returning(payload(date=None, time=None)):
+            receipt = services.upload_receipt(user=a, reservation_id=r_a.id, image=image())
+
+        self.assertIsNotNone(receipt.merchant_hash)
+        self.assertIsNotNone(receipt.product_description_hash)
+        self.assertIsNone(receipt.purchase_date_hash)
+
+        item = ManualReviewItem.objects.get(receipt=receipt)
+        with self.assertRaises(services.ReceiptError):
+            services.approve_review(item=item, reviewer=owner)
+
+        item.refresh_from_db()
+        self.assertEqual(item.status, ManualReviewItem.Status.OPEN)
+        self.assertEqual(Redemption.objects.count(), 0)
+        self.assertEqual(reward_credits().count(), 0)
 
 
 class ConcurrentSingleUseTests(TransactionTestCase):

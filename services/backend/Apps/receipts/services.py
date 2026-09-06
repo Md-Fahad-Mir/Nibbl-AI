@@ -51,15 +51,17 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
     Flow (matches the fast-path duplicate check first, then the more
     expensive per-item product matching):
 
-        OCR -> normalize ALL extracted data -> full receipt fingerprint
-            -> duplicate lookup (fast path)
-            -> purchase-window / eligible-product checks
+        OCR -> normalize merchant/date/time/items -> identity hashes
+            -> duplicate lookup (fast path, receipt + claimed product)
+            -> merchant / purchase-window / eligible-product checks
             -> verify (or route to manual review) -> reward via signal
 
-    Verification depends only on whether the claimed campaign's product is
-    found among the receipt's OCR-extracted items — there is no brand/shop
-    matching anywhere in this flow (a receipt is never rejected for being
-    from "the wrong shop").
+    Verification depends on the claimed campaign's product being found among
+    the receipt's OCR-extracted items, the purchase date/time falling inside
+    the campaign window, and (only for campaigns that opt in via
+    ``Campaign.allowed_merchants``) the merchant matching. By default no
+    campaign restricts merchants — a receipt is never rejected for being from
+    "the wrong shop" unless a brand has explicitly configured one.
 
     ``legacy`` accepts the pre-OCR ``merchant`` / ``purchased_at`` / ``total`` /
     ``items`` keyword arguments. They are used only when no ``image`` is given,
@@ -72,32 +74,49 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
 
     extracted = _extract(image=image, legacy=legacy)
 
-    # --- Fingerprint + fast duplicate path ----------------------------------
-    # Computed from the COMPLETE normalized OCR data, independent of which
-    # product/campaign/user is involved, before any per-item product matching
-    # runs. This lookup is an optimization (skip expensive matching for a
-    # receipt we already know is a duplicate); the UNIQUE constraint hit at
-    # INSERT time below is the actual race-safe guard — see there.
+    # --- Identity hashes -----------------------------------------------------
+    # Merchant name / purchase date / purchase time, hashed separately
+    # (Apps.receipts.ocr.hash_text/hash_date/hash_time) — never SKU, price,
+    # quantity, tax, payment data, or the complete OCR payload.
+    merchant_hash = ocr.hash_text(extracted.merchant_name)
+    date_hash = ocr.hash_date(extracted.purchase_date)
+    time_hash = ocr.hash_time(extracted.purchase_time)
+    # Audit-only normalized view of the full payload; not used for any
+    # accept/reject/duplicate decision (see Apps.receipts.ocr).
     canonical_data = ocr.canonicalize_receipt_data(extracted.raw)
-    full_fingerprint = ocr.hash_canonical_data(canonical_data)
-    if full_fingerprint and Receipt.objects.filter(
-        full_fingerprint=full_fingerprint
-    ).exists():
-        raise DuplicateReceipt("This receipt has already been used.")
 
     # --- Validate the receipt against the claimed campaign -----------------
-    # Hard rejections (wrong product / outside the campaign window) raise.
-    # Soft problems return a note that blocks auto-reward and sends the
-    # receipt to the brand's manual review queue. No shop/merchant check: the
-    # claimed product being found among the OCR-extracted items is the only
-    # verification gate.
+    # Hard rejections (unaccepted merchant / wrong product / outside the
+    # campaign window) raise. Soft problems return a note that blocks
+    # auto-reward and sends the receipt to the brand's manual review queue.
+    merchant_note = _check_merchant(extracted, campaign=campaign)
     date_note = _check_purchase_window(extracted, campaign=campaign)
-    eligible_product, matched_units = _match_eligible_product(extracted, campaign=campaign)
-
-    fingerprint_note = (
-        "" if full_fingerprint else "Receipt data could not be read clearly enough to fingerprint."
+    eligible_product, matched_units, eligible_description = _match_eligible_product(
+        extracted, campaign=campaign
     )
-    review_note = date_note or fingerprint_note
+    # The specific line's description that satisfied the claim — this, not
+    # the whole receipt, is what "claimed product" identifies for duplicate
+    # detection (a receipt with several eligible products can fund one
+    # reward per distinct product, but not the same product twice).
+    description_hash = ocr.hash_text(eligible_description) if eligible_description else None
+
+    review_note = merchant_note or date_note
+
+    # --- Fast duplicate path (receipt + claimed product) --------------------
+    # Only meaningful once merchant, date, time AND the claimed product are
+    # all known — a receipt missing any one of them simply has no complete
+    # identity to compare and falls through to manual review instead (see
+    # _assert_single_use). This lookup is an optimization (skip expensive
+    # matching for a receipt already known to be a duplicate); the UNIQUE
+    # constraint hit at INSERT time below is the actual race-safe guard.
+    identity_ready = bool(merchant_hash and date_hash and time_hash and description_hash)
+    if identity_ready and Receipt.objects.filter(
+        merchant_hash=merchant_hash,
+        purchase_date_hash=date_hash,
+        purchase_time_hash=time_hash,
+        product_description_hash=description_hash,
+    ).exists():
+        raise DuplicateReceipt("This receipt has already been used to claim this product.")
 
     with transaction.atomic():
         try:
@@ -112,16 +131,19 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
                     purchased_at=_aware(extracted.purchased_at),
                     total=extracted.total,
                     receipt_number=extracted.receipt_number[:100],
-                    full_fingerprint=full_fingerprint,
+                    merchant_hash=merchant_hash,
+                    purchase_date_hash=date_hash,
+                    purchase_time_hash=time_hash,
+                    product_description_hash=description_hash,
                     matched_product=eligible_product,
                     status=Receipt.Status.PENDING,
                 )
         except IntegrityError:
-            # The UNIQUE index on full_fingerprint is the real duplicate
-            # guard: it closes the check-then-insert race between two
-            # simultaneous submissions of the same physical receipt that both
-            # passed the fast-path lookup above before either had inserted.
-            raise DuplicateReceipt("This receipt has already been used.")
+            # The UNIQUE constraint is the real duplicate guard: it closes
+            # the check-then-insert race between two simultaneous submissions
+            # of the same physical receipt claiming the same product that
+            # both passed the fast-path lookup above before either inserted.
+            raise DuplicateReceipt("This receipt has already been used to claim this product.")
 
         OCRResult.objects.create(
             receipt=receipt,
@@ -252,6 +274,38 @@ def _aware(value: dt.datetime | None):
 # ---------------------------------------------------------------------------
 # Validation steps
 # ---------------------------------------------------------------------------
+def _allowed_merchants(campaign) -> list[str]:
+    raw = campaign.allowed_merchants or ""
+    return [normalize_text(m) for m in raw.split(",") if m.strip()]
+
+
+def _check_merchant(extracted, *, campaign) -> str:
+    """Check the OCR-extracted merchant against the campaign's restriction,
+    when one is configured.
+
+    ``campaign.allowed_merchants`` is blank by default and on every campaign
+    that existed before this field was added — that means no restriction,
+    preserving the platform's "any shop" model (a receipt is never rejected
+    for being from the wrong shop unless a brand explicitly opts in). An
+    *unreadable* merchant when a restriction IS configured is a limit of the
+    scan, not evidence of ineligibility, so it returns a note that routes to
+    manual review instead of raising — the same posture as an unreadable
+    purchase date.
+    """
+    allowed = _allowed_merchants(campaign)
+    if not allowed:
+        return ""
+
+    merchant_norm = normalize_text(extracted.merchant_name)
+    if not merchant_norm:
+        return "Merchant could not be read."
+    if any(a in merchant_norm or merchant_norm in a for a in allowed):
+        return ""
+    raise ReceiptError(
+        "This receipt is not from a merchant accepted for this campaign."
+    )
+
+
 def _check_purchase_window(extracted, *, campaign) -> str:
     """Check the purchase date against the campaign's start/end window.
 
@@ -275,7 +329,14 @@ def _match_eligible_product(extracted, *, campaign):
     """Find the campaign's eligible product on the receipt.
 
     Only the claimed campaign's product needs to appear — every other line on
-    the receipt is ignored. Returns (product, matched_units).
+    the receipt is ignored. Returns (product, matched_units, description):
+    ``description`` is the exact text of the specific line that satisfied the
+    campaign's product, used to build the duplicate-detection identity
+    (Apps.receipts.ocr.hash_text) — empty when no eligible product matched.
+    A receipt with several campaign-eligible products on it (this brand runs
+    more than one campaign) can therefore fund a separate claim per distinct
+    product; only the specific (receipt, product) pair repeating is a
+    duplicate — see Receipt.product_description_hash.
 
     Two different "not found" cases, deliberately handled differently:
 
@@ -291,6 +352,7 @@ def _match_eligible_product(extracted, *, campaign):
     targets = {p.id: p for p in campaign.products.all()}
     matched_units = 0
     eligible = None
+    eligible_description = ""
     matched_any = False
 
     for item in extracted.items:
@@ -300,13 +362,15 @@ def _match_eligible_product(extracted, *, campaign):
         matched_any = True
         if product.id in targets:
             matched_units += item.quantity
-            eligible = eligible or targets[product.id]
+            if eligible is None:
+                eligible = targets[product.id]
+                eligible_description = item.description
 
     if eligible is None and matched_any:
         raise ReceiptError(
             "This receipt does not contain the product this offer is for."
         )
-    return eligible, matched_units
+    return eligible, matched_units, eligible_description
 
 
 def _match_item(item, *, brand):
@@ -336,6 +400,7 @@ def _create_line_items(receipt: Receipt, extracted) -> None:
             receipt=receipt,
             description=item.description[:255],
             normalized=normalize_text(item.description)[:255],
+            description_hash=ocr.hash_text(item.description),
             quantity=item.quantity,
             unit_price=item.unit_price,
             matched_product=_match_item(item, brand=receipt.brand),
@@ -379,40 +444,55 @@ def _decide(receipt: Receipt, *, matched_units: int, review_note: str) -> None:
 # Decision helpers
 # ---------------------------------------------------------------------------
 def _assert_single_use(receipt: Receipt) -> None:
-    """One physical receipt may be verified exactly once, platform-wide.
+    """A verified (receipt identity, claimed product) pair may exist exactly
+    once, platform-wide.
 
     Enforced here, at the single choke point every verification path goes
     through (auto-verification *and* brand approval from the review queue),
     so no route to a reward can bypass it:
 
-    * **The receipt must be identifiable.** With no fingerprint the platform
-      cannot tell this physical receipt apart from any other, so it cannot
-      honour the single-use rule for it. Two unreadable receipts are both
-      NULL-fingerprinted, are both exempt from the UNIQUE index, and would
-      otherwise each be approvable — paying twice for what may well be the
-      same piece of paper. Verification is refused instead; the reviewer
-      declines and asks for a clearer photo.
-    * **No other receipt with this fingerprint may already be verified.**
-      The UNIQUE index on ``full_fingerprint`` means a second row normally
-      cannot exist at all, so this is defence in depth: it keeps the
-      invariant true even if a row is ever created by another code path.
+    * **The receipt must be identifiable.** Without a readable purchase date
+      the platform cannot tell this physical receipt apart from any other
+      well enough to honour the single-use rule for it — the same posture
+      the campaign purchase-window check already takes on this exact field.
+      Two unreadable receipts would otherwise each be approvable, paying
+      twice for what may well be the same piece of paper. Verification is
+      refused instead; the reviewer declines and asks for a clearer photo.
+    * **Merchant and product are best-effort, never blocking.** A blank
+      merchant never blocks verification (no campaign requires one unless it
+      opts in via ``allowed_merchants``, checked earlier in ``upload_receipt``)
+      and a receipt whose product was resolved manually from the review
+      queue (e.g. an alias gap) has no ``product_description_hash`` to
+      compare. Either way there is no complete receipt+product identity to
+      protect, so the duplicate check below is skipped rather than blocking
+      the reviewer's own decision.
+    * **No other VERIFIED receipt may already have this exact identity.**
+      The UNIQUE constraint on the four identity hashes means a second row
+      normally cannot exist at all, so this is defence in depth: it keeps
+      the invariant true even if a row is ever created by another code path.
     """
-    if not receipt.full_fingerprint:
+    if not receipt.purchase_date_hash:
         raise ReceiptError(
             "This receipt could not be read clearly enough to confirm it has "
             "not already been used. Ask the customer to upload a clearer photo."
         )
 
+    if not (receipt.merchant_hash and receipt.purchase_time_hash and receipt.product_description_hash):
+        return
+
     already_used = (
         Receipt.objects.filter(
-            full_fingerprint=receipt.full_fingerprint,
+            merchant_hash=receipt.merchant_hash,
+            purchase_date_hash=receipt.purchase_date_hash,
+            purchase_time_hash=receipt.purchase_time_hash,
+            product_description_hash=receipt.product_description_hash,
             status=Receipt.Status.VERIFIED,
         )
         .exclude(pk=receipt.pk)
         .exists()
     )
     if already_used:
-        raise DuplicateReceipt("This receipt has already been used.")
+        raise DuplicateReceipt("This receipt has already been used to claim this product.")
 
 
 def _verify(receipt: Receipt, *, reviewer, reason: str) -> Receipt:

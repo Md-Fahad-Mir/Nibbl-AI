@@ -1,9 +1,12 @@
-"""OCR provider seam + the receipt fingerprint.
+"""OCR provider seam + the receipt identity hashes.
 
-Talks to the Receipt Intelligence API (the AI team's FastAPI service) and maps
-its response onto the small, stable shape the rest of the app consumes. The
-base URL and endpoint path come from settings (``RECEIPT_OCR_API_URL`` /
-``RECEIPT_OCR_EXTRACT_PATH``) — never hardcoded here.
+Talks to the Receipt Intelligence API (the AI team's FastAPI service, deployed
+independently at ``https://api.joinnibbl.com/ai`` in production) and maps its
+response onto the small, stable shape the rest of the app consumes. The base
+URL and endpoint path come from settings (``RECEIPT_OCR_API_URL`` /
+``RECEIPT_OCR_EXTRACT_PATH``) — never hardcoded here. This module only
+consumes that service's documented response shape; it has no knowledge of,
+and makes no changes to, the AI service's own code or deployment.
 
 The provider's contract (``GET {base}/openapi.json``) is::
 
@@ -346,8 +349,51 @@ def _read_image_bytes(image) -> bytes | None:
 
 
 # ---------------------------------------------------------------------------
-# Receipt fingerprint (the duplicate-detection identity)
+# Identity hashes (the duplicate-detection identity)
 # ---------------------------------------------------------------------------
+# Duplicate detection hashes only four specific, separately-identifiable
+# values -- merchant name, purchase date, purchase time, and (per claim) the
+# matched line's description -- never the complete OCR payload. SKU, price,
+# quantity, tax and payment data never participate: two uploads of the same
+# physical receipt claiming the same product must match on these alone,
+# regardless of what else the provider read. See Apps.receipts.services for
+# how these combine into the actual duplicate check.
+def hash_text(value: str | None) -> str | None:
+    """SHA-256 of ``normalize_text(value)``; None when nothing normalizes.
+
+    Used for the merchant name and each item description. Reusing
+    ``normalize_text`` means this hash-equals-hash comparison is exactly
+    equivalent to the normalized-text comparison already used elsewhere
+    (e.g. ``Apps.products.selectors.match_product``'s exact-name fallback).
+    """
+    normalized = normalize_text(value or "")
+    if not normalized:
+        return None
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def hash_date(value: dt.date | None) -> str | None:
+    """SHA-256 of an ISO date; None when the date could not be read."""
+    if value is None:
+        return None
+    return hashlib.sha256(value.isoformat().encode("utf-8")).hexdigest()
+
+
+def hash_time(value: dt.time | None) -> str | None:
+    """SHA-256 of an ISO time; None when the time could not be read."""
+    if value is None:
+        return None
+    return hashlib.sha256(value.isoformat().encode("utf-8")).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Full-document canonicalization (audit trail only)
+# ---------------------------------------------------------------------------
+# Retained for OCRResult.canonical_data -- a normalized, human/audit-readable
+# view of everything the provider extracted for a given receipt. NOT used for
+# duplicate detection (see the identity hashes above); nothing here gates any
+# accept/reject/duplicate decision.
+#
 # The fingerprint hashes the COMPLETE normalized receipt data the provider
 # extracted (merchant, transaction, every item, totals, payment, ...) rather
 # than a handful of anchor fields. Two uploads of the same physical receipt

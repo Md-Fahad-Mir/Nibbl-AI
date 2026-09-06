@@ -31,9 +31,10 @@ class ReceiptLineItemSerializer(serializers.ModelSerializer):
 class ReceiptSerializer(serializers.ModelSerializer):
     """Customer-facing receipt state.
 
-    Deliberately omits ``full_fingerprint`` — it is an internal fraud control,
-    and exposing it would let a client probe whether a given physical receipt
-    has already been used.
+    Deliberately omits the identity hashes (``merchant_hash``,
+    ``purchase_date_hash``, ``purchase_time_hash``, ``product_description_hash``)
+    — they are an internal fraud control, and exposing them would let a
+    client probe whether a given physical receipt has already been used.
     """
 
     line_items = ReceiptLineItemSerializer(many=True, read_only=True)

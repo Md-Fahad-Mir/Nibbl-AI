@@ -46,6 +46,15 @@ class Campaign(BaseModel):
     start_at = models.DateTimeField(null=True, blank=True)
     end_at = models.DateTimeField(null=True, blank=True)
 
+    # Optional merchant/store restriction (comma-separated, matched
+    # case/punctuation-insensitively against the receipt's OCR merchant
+    # name). Blank -- the default, and every campaign before this field
+    # existed -- means no restriction: the platform's long-standing "any
+    # shop" model (spec: receipts are verified by product match only, never
+    # by shop) is unaffected unless a brand opts in. See
+    # Apps.receipts.services._check_merchant.
+    allowed_merchants = models.TextField(blank=True)
+
     # True when paused automatically due to insufficient wallet funds, so the
     # funding sync can safely resume it (vs a manual pause).
     auto_paused = models.BooleanField(default=False)

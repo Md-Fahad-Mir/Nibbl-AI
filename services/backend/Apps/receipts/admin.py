@@ -19,8 +19,12 @@ class ReceiptLineItemInline(admin.TabularInline):
 class ReceiptAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "brand", "campaign", "status", "matched_units", "created_at")
     list_filter = ("status", "matched")
-    search_fields = ("user__email", "brand__name", "full_fingerprint")
-    readonly_fields = ("full_fingerprint", "matched_product", "reviewed_by", "reviewed_at", "created_at", "updated_at")
+    search_fields = ("user__email", "brand__name", "merchant_hash", "product_description_hash")
+    readonly_fields = (
+        "merchant_hash", "purchase_date_hash", "purchase_time_hash",
+        "product_description_hash", "matched_product", "reviewed_by",
+        "reviewed_at", "created_at", "updated_at",
+    )
     inlines = [ReceiptLineItemInline]
 
 

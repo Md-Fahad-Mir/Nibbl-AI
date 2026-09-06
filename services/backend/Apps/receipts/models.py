@@ -38,25 +38,40 @@ class Receipt(BaseModel):
     total = models.DecimalField(null=True, blank=True, **MONEY_FIELD)
 
     # The receipt's own identifier as printed on it (invoice/transaction no.),
-    # when OCR could read one — not every receipt has one (see full_fingerprint
-    # below, which no longer depends on it).
+    # when OCR could read one — not every receipt has one, and it plays no
+    # part in the identity hashes below (see Apps.receipts.ocr).
     receipt_number = models.CharField(max_length=100, blank=True)
 
-    # SHA-256 of the COMPLETE normalized receipt data OCR extracted (merchant,
-    # transaction, every item, totals, payment, ...) — not just a handful of
-    # anchor fields. See Apps.receipts.ocr for the canonicalization rules.
-    # UNIQUE at the database level so two customers submitting the same
-    # physical receipt concurrently cannot both be rewarded — the loser hits
-    # an IntegrityError rather than a lost race (Apps.receipts.services also
-    # does a fast pre-check lookup on this column before the more expensive
-    # product-matching work, but the UNIQUE constraint is the actual guard).
+    # --- Identity hashes (duplicate detection) ------------------------------
+    # SHA-256 of the normalized merchant name / purchase date / purchase time
+    # (Apps.receipts.ocr.hash_text/hash_date/hash_time) — never the complete
+    # OCR payload, and never SKU/price/quantity/tax/payment data. Each is NULL
+    # when that value could not be read.
+    merchant_hash = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    purchase_date_hash = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    purchase_time_hash = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+
+    # SHA-256 of the normalized description of the specific receipt line that
+    # satisfied this claim's campaign product (see
+    # Apps.receipts.services._match_eligible_product). NULL when no eligible
+    # product was matched at upload time (receipt went to manual review).
     #
-    # NULL when the fingerprint could not be built at all (OCR returned
-    # essentially no usable data). NULLs are exempt from UNIQUE in both
-    # SQLite and PostgreSQL, so those receipts simply carry no duplicate
-    # protection and go to manual review.
-    full_fingerprint = models.CharField(
-        max_length=64, unique=True, null=True, blank=True, db_index=True
+    # Together with the three hashes above, this is the receipt's duplicate-
+    # detection identity: (merchant, date, time, claimed product) must be
+    # UNIQUE — see Meta.constraints. A receipt with several campaign-eligible
+    # products on it can therefore fund one reward per distinct product, but
+    # the same product cannot be claimed twice off the same physical receipt.
+    #
+    # UNIQUE at the database level so two customers submitting the same
+    # physical receipt for the same product concurrently cannot both be
+    # rewarded — the loser hits an IntegrityError rather than a lost race
+    # (Apps.receipts.services also does a fast pre-check lookup before the
+    # more expensive product-matching work, but the UNIQUE constraint is the
+    # actual guard). NULLs are exempt from UNIQUE in both SQLite and
+    # PostgreSQL, so a receipt missing any one of the four hashes simply
+    # carries no automated duplicate protection and goes to manual review.
+    product_description_hash = models.CharField(
+        max_length=64, null=True, blank=True, db_index=True
     )
 
     # The campaign product this receipt was found to satisfy (see
@@ -93,6 +108,17 @@ class Receipt(BaseModel):
             models.Index(fields=["brand", "status"]),
             models.Index(fields=["user", "status"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "merchant_hash",
+                    "purchase_date_hash",
+                    "purchase_time_hash",
+                    "product_description_hash",
+                ],
+                name="uniq_receipt_identity_per_product",
+            ),
+        ]
 
     def __str__(self):
         return f"Receipt {self.id} ({self.status})"
@@ -107,13 +133,12 @@ class OCRResult(BaseModel):
     provider = models.CharField(max_length=50, default="mock")
     raw = models.JSONField(default=dict, blank=True)
 
-    # The exact canonicalized structure that was hashed into
-    # Receipt.full_fingerprint (Apps.receipts.ocr.canonicalize_receipt_data).
-    # Kept alongside `raw` for audit/support: `raw` mixes in pipeline
-    # metadata the fingerprint deliberately excludes, so reconstructing "what
-    # was actually hashed" from `raw` alone requires re-running the
-    # normalizer. Also insulates historical records if the normalization
-    # rules change later.
+    # A deterministic, order-independent normalization of everything the
+    # provider extracted (Apps.receipts.ocr.canonicalize_receipt_data). Kept
+    # alongside `raw` for audit/support only — `raw` mixes in pipeline
+    # metadata this normalization deliberately excludes. Not used by any
+    # accept/reject/duplicate decision; see Receipt's identity hashes for
+    # that.
     canonical_data = models.JSONField(default=dict, blank=True)
 
     # The provider's own extraction-confidence score (data.confidence.overall),
@@ -133,6 +158,10 @@ class ReceiptLineItem(BaseModel):
     )
     description = models.CharField(max_length=255)
     normalized = models.CharField(max_length=255, blank=True)
+    # SHA-256 of `normalized` (Apps.receipts.ocr.hash_text) — the same hash
+    # stored on Receipt.product_description_hash when this is the line that
+    # satisfied the claim. NULL when the description normalized to nothing.
+    description_hash = models.CharField(max_length=64, null=True, blank=True, db_index=True)
     quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(null=True, blank=True, **MONEY_FIELD)
     matched_product = models.ForeignKey(

@@ -19,7 +19,7 @@ from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
-from django.test import TransactionTestCase
+from django.test import TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -178,8 +178,14 @@ class ValidReceiptTests(APITestCase):
         self.assertEqual(receipt.matched_units, 1)
 
         self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
-        self.assertIsNotNone(receipt.full_fingerprint)
-        self.assertEqual(len(receipt.full_fingerprint), 64)
+        for identity_hash in (
+            receipt.merchant_hash,
+            receipt.purchase_date_hash,
+            receipt.purchase_time_hash,
+            receipt.product_description_hash,
+        ):
+            self.assertIsNotNone(identity_hash)
+            self.assertEqual(len(identity_hash), 64)
         self.assertEqual(receipt.matched_product_id, product.id)
 
         # The exact canonicalized structure that was hashed is kept for audit.
@@ -297,25 +303,25 @@ class DifferentReceiptTests(APITestCase):
         self.assertEqual(Redemption.objects.count(), 2)
         self.assertEqual(balance(u2), Decimal("2.00"))
 
-    def test_receipt_number_alone_is_not_the_identity_other_fields_still_are(self):
-        """The fingerprint hashes the complete payload now, not five anchor
-        fields — changing *any* participating field (not just receipt_number)
-        must change it. Unit-level coverage of the canonicalization rules
-        themselves (key order, whitespace, money formats, ...) lives in
-        test_fingerprint.py."""
+    def test_receipt_number_and_total_do_not_affect_duplicate_identity(self):
+        """The identity hashes are merchant + date + time + claimed product
+        only (spec: never SKU, price, quantity, tax, payment, or the receipt
+        number). Two submissions differing *only* in receipt_number/total are
+        therefore the same identity — a duplicate — not two different
+        receipts as the old full-payload hash would have treated them."""
         _, brand, product, campaign = build_world()
         u1, r1 = claim(campaign, "a@example.com")
         u2, r2 = claim(campaign, "b@example.com")
 
         with ocr_returning(payload(number="INV-12345")):
-            first = services.upload_receipt(user=u1, reservation_id=r1.id, image=image())
+            services.upload_receipt(user=u1, reservation_id=r1.id, image=image())
 
-        # Only the total differs (a field the old 5-field scheme never looked
-        # at) — still a different fingerprint under the full-data scheme.
         with ocr_returning(payload(number="INV-12346", total="99.00")):
-            second = services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
+            with self.assertRaises(services.DuplicateReceipt):
+                services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
 
-        self.assertNotEqual(first.full_fingerprint, second.full_fingerprint)
+        self.assertEqual(Redemption.objects.count(), 1)
+        self.assertEqual(balance(u2), Decimal("0.00"))
 
 
 # ---------------------------------------------------------------------------
@@ -505,13 +511,13 @@ class CampaignWindowTests(APITestCase):
 # ---------------------------------------------------------------------------
 # Test 8 — Missing receipt number / missing date-time (spec §5, §13 Tests 5-6)
 # ---------------------------------------------------------------------------
-# The fingerprint no longer depends on any single field, receipt_number
-# included — it hashes whatever the OCR provider actually returned. A missing
-# receipt_number therefore no longer blocks fingerprinting *or* auto-reward on
-# its own (RECEIPT_ALLOW_MISSING_NUMBER is retired: see core/settings/base.py).
+# The identity hashes never depend on receipt_number at all — it plays no
+# part in merchant/date/time/product-description hashing. A missing
+# receipt_number therefore never blocks identity or auto-reward on its own
+# (RECEIPT_ALLOW_MISSING_NUMBER is retired: see core/settings/base.py).
 # A missing purchase date still routes to manual review, but for its own
 # reason (the campaign purchase-window check in Apps.receipts.services can't
-# evaluate an unreadable date) — independent of fingerprinting.
+# evaluate an unreadable date) — independent of identity hashing.
 class MissingFieldsTests(APITestCase):
     def test_missing_receipt_number_can_still_verify_and_pay(self):
         _, brand, product, campaign = build_world()
@@ -522,9 +528,12 @@ class MissingFieldsTests(APITestCase):
                 user=user, reservation_id=reservation.id, image=image()
             )
 
-        # Merchant + date/time + items were still readable, so the fingerprint
-        # is built from those — receipt_number is simply absent from it.
-        self.assertIsNotNone(receipt.full_fingerprint)
+        # Merchant + date/time + the claimed product were still readable, so
+        # every identity hash is built — receipt_number never participates.
+        self.assertIsNotNone(receipt.merchant_hash)
+        self.assertIsNotNone(receipt.purchase_date_hash)
+        self.assertIsNotNone(receipt.purchase_time_hash)
+        self.assertIsNotNone(receipt.product_description_hash)
         self.assertEqual(receipt.receipt_number, "")
         self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
         self.assertEqual(Redemption.objects.count(), 1)
@@ -532,8 +541,8 @@ class MissingFieldsTests(APITestCase):
 
     def test_two_numberless_receipts_that_differ_do_not_collide(self):
         """Two genuinely different purchases, neither with a receipt number,
-        must not be mistaken for one another just because both lack the same
-        field — the *rest* of their data still differs."""
+        must not be mistaken for one another — they differ in purchase time,
+        which does participate in the identity (unlike receipt_number)."""
         _, brand, product, campaign = build_world()
         u1, r1 = claim(campaign, "a@example.com")
         u2, r2 = claim(campaign, "b@example.com")
@@ -543,7 +552,7 @@ class MissingFieldsTests(APITestCase):
         with ocr_returning(payload(number=None, time="16:45:00")):
             second = services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
 
-        self.assertNotEqual(first.full_fingerprint, second.full_fingerprint)
+        self.assertNotEqual(first.purchase_time_hash, second.purchase_time_hash)
         self.assertEqual(Redemption.objects.count(), 2)
 
     def test_two_numberless_receipts_that_are_identical_are_flagged_duplicate(self):
@@ -563,12 +572,14 @@ class MissingFieldsTests(APITestCase):
 
         self.assertEqual(Redemption.objects.count(), 1)
 
-    def test_missing_date_still_fingerprints_but_goes_to_manual_review(self):
-        """No date/time is readable at all — the fingerprint still builds
-        from merchant + items + receipt number, but the campaign's purchase-
-        window check can't evaluate a date it doesn't have, so this still
-        routes to manual review (a separate, pre-existing rule, not a
-        fingerprinting concern)."""
+    def test_missing_date_still_reads_merchant_but_goes_to_manual_review(self):
+        """No date/time is readable at all — merchant and product are still
+        hashed, but the campaign's purchase-window check can't evaluate a
+        date it doesn't have, so this routes to manual review. Without a
+        readable date the receipt also can't be auto-deduplicated or later
+        approved at all (Apps.receipts.services._assert_single_use) — see
+        test_single_use_receipt.SingleUseThroughManualApprovalTests
+        .test_a_missing_purchase_date_blocks_approval_even_with_a_known_merchant."""
         _, brand, product, campaign = build_world()
         user, reservation = claim(campaign, "a@example.com")
 
@@ -577,17 +588,19 @@ class MissingFieldsTests(APITestCase):
                 user=user, reservation_id=reservation.id, image=image()
             )
 
-        self.assertIsNotNone(receipt.full_fingerprint)
+        self.assertIsNotNone(receipt.merchant_hash)
+        self.assertIsNone(receipt.purchase_date_hash)
+        self.assertIsNone(receipt.purchase_time_hash)
         self.assertEqual(receipt.status, Receipt.Status.PENDING)
         self.assertIn("Purchase date", receipt.decision_reason)
         self.assertTrue(ManualReviewItem.objects.filter(receipt=receipt).exists())
         self.assertEqual(Redemption.objects.count(), 0)
         self.assertEqual(balance(user), Decimal("0.00"))
 
-    def test_entirely_unreadable_receipt_gets_no_fingerprint_and_no_collision(self):
-        """When OCR returns essentially nothing usable, no fingerprint can be
-        built at all (same graceful-degradation posture as before) — and two
-        such unrelated receipts must not collide with each other under a
+    def test_entirely_unreadable_receipt_gets_no_identity_and_no_collision(self):
+        """When OCR returns essentially nothing usable, no identity hash can
+        be built at all (same graceful-degradation posture as before) — and
+        two such unrelated receipts must not collide with each other under a
         shared NULL/empty identity."""
         _, brand, product, campaign = build_world()
         u1, r1 = claim(campaign, "a@example.com")
@@ -604,10 +617,10 @@ class MissingFieldsTests(APITestCase):
         with ocr_returning(blank):
             r2_receipt = services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
 
-        self.assertIsNone(r1_receipt.full_fingerprint)
-        self.assertIsNone(r2_receipt.full_fingerprint)
+        self.assertIsNone(r1_receipt.merchant_hash)
+        self.assertIsNone(r2_receipt.merchant_hash)
         self.assertEqual(
-            Receipt.objects.filter(full_fingerprint__isnull=True).count(), 2
+            Receipt.objects.filter(merchant_hash__isnull=True).count(), 2
         )
 
 
@@ -819,3 +832,239 @@ class PayloadMappingTests(APITestCase):
         matched = receipt.line_items.exclude(matched_product=None).first()
         self.assertIsNotNone(matched)
         self.assertEqual(matched.matched_product_id, product.id)
+
+
+# ---------------------------------------------------------------------------
+# Merchant restriction (opt-in per campaign; blank = no restriction)
+# ---------------------------------------------------------------------------
+# Campaign.allowed_merchants is blank by default and on every campaign that
+# existed before this field was added — NoShopVerificationTests above proves
+# that default keeps the platform's "any shop" model. These tests cover a
+# campaign that opts in.
+class MerchantRestrictionTests(APITestCase):
+    def test_merchant_matching_the_restriction_is_accepted(self):
+        _, brand, product, campaign = build_world()
+        campaign.allowed_merchants = "Fahad Chocolate Shop, Corner Store"
+        campaign.save(update_fields=["allowed_merchants"])
+        user, reservation = claim(campaign, "a@example.com")
+
+        with ocr_returning(payload(shop=SHOP)):
+            receipt = services.upload_receipt(
+                user=user, reservation_id=reservation.id, image=image()
+            )
+        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+
+    def test_merchant_not_matching_the_restriction_is_rejected(self):
+        _, brand, product, campaign = build_world()
+        campaign.allowed_merchants = "Walmart, Target"
+        campaign.save(update_fields=["allowed_merchants"])
+        user, reservation = claim(campaign, "a@example.com")
+
+        with ocr_returning(payload(shop="Some Other Grocery")):
+            with self.assertRaises(services.ReceiptError) as ctx:
+                services.upload_receipt(
+                    user=user, reservation_id=reservation.id, image=image()
+                )
+        self.assertIn("not from a merchant accepted", str(ctx.exception))
+        self.assertFalse(Receipt.objects.exists())
+        self.assertEqual(balance(user), Decimal("0.00"))
+
+    def test_unreadable_merchant_with_a_restriction_goes_to_manual_review(self):
+        """A restriction is configured but OCR couldn't read a merchant at
+        all — a limit of the scan, not proof of ineligibility, so this is a
+        soft note (manual review), not a hard rejection."""
+        _, brand, product, campaign = build_world()
+        campaign.allowed_merchants = "Walmart"
+        campaign.save(update_fields=["allowed_merchants"])
+        user, reservation = claim(campaign, "a@example.com")
+
+        with ocr_returning(payload(shop="")):
+            receipt = services.upload_receipt(
+                user=user, reservation_id=reservation.id, image=image()
+            )
+        self.assertEqual(receipt.status, Receipt.Status.PENDING)
+        self.assertIn("Merchant could not be read", receipt.decision_reason)
+        self.assertEqual(Redemption.objects.count(), 0)
+
+
+# ---------------------------------------------------------------------------
+# Multiple products on one receipt / duplicate product claim
+# ---------------------------------------------------------------------------
+class MultipleProductsOnOneReceiptTests(APITestCase):
+    """A receipt can list several campaign-eligible products. Each distinct
+    product may fund its own separate claim off the same physical receipt,
+    but the same product cannot be claimed twice off it — the dedup key is
+    (receipt identity, claimed product), not the receipt alone."""
+
+    def _two_campaigns(self):
+        """Dark Chocolate Bar and Coca Cola both appear on the default
+        payload() -- one campaign per product, same brand."""
+        _, brand, choc, choc_campaign = build_world()
+        cola = create_product(brand=brand, name="Coca Cola")
+        cola_campaign = campaign_services.create_campaign(
+            brand=brand, product_ids=[cola.id], name="Cola Reward",
+            daily_budget=Decimal("100.00"), min_purchase_units=1,
+        )
+        campaign_services.set_tiers(
+            cola_campaign, [{"reward_amount": "1.50", "allocation_percent": "100.00"}]
+        )
+        campaign_services.activate_campaign(cola_campaign)
+        return brand, choc_campaign, cola_campaign
+
+    def test_two_distinct_products_on_the_same_receipt_each_fund_a_reward(self):
+        brand, choc_campaign, cola_campaign = self._two_campaigns()
+        u1, r1 = claim(choc_campaign, "a@example.com")
+        u2, r2 = claim(cola_campaign, "b@example.com")
+
+        with ocr_returning(payload()):
+            choc_receipt = services.upload_receipt(
+                user=u1, reservation_id=r1.id, image=image()
+            )
+        with ocr_returning(payload()):
+            cola_receipt = services.upload_receipt(
+                user=u2, reservation_id=r2.id, image=image()
+            )
+
+        self.assertEqual(choc_receipt.status, Receipt.Status.VERIFIED)
+        self.assertEqual(cola_receipt.status, Receipt.Status.VERIFIED)
+        # Same physical receipt: the merchant/date/time identity matches...
+        self.assertEqual(choc_receipt.merchant_hash, cola_receipt.merchant_hash)
+        self.assertEqual(choc_receipt.purchase_date_hash, cola_receipt.purchase_date_hash)
+        self.assertEqual(choc_receipt.purchase_time_hash, cola_receipt.purchase_time_hash)
+        # ...but the claimed product differs, so both are funded.
+        self.assertNotEqual(
+            choc_receipt.product_description_hash, cola_receipt.product_description_hash
+        )
+        self.assertEqual(Redemption.objects.count(), 2)
+        self.assertEqual(balance(u1), Decimal("2.00"))
+        self.assertEqual(balance(u2), Decimal("1.50"))
+
+    def test_the_same_product_claimed_twice_off_the_same_receipt_is_blocked(self):
+        brand, choc_campaign, _cola_campaign = self._two_campaigns()
+        u1, r1 = claim(choc_campaign, "a@example.com")
+        u2, r2 = claim(choc_campaign, "b@example.com")
+
+        with ocr_returning(payload()):
+            services.upload_receipt(user=u1, reservation_id=r1.id, image=image())
+        with ocr_returning(payload()):
+            with self.assertRaises(services.DuplicateReceipt):
+                services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
+
+        self.assertEqual(Redemption.objects.count(), 1)
+        self.assertEqual(balance(u2), Decimal("0.00"))
+
+
+# ---------------------------------------------------------------------------
+# Product-description matching
+# ---------------------------------------------------------------------------
+class ProductDescriptionMatchingTests(APITestCase):
+    """The claimed product is identified by the specific receipt line's
+    description hash, not the receipt as a whole."""
+
+    def test_claimed_product_hash_matches_only_its_own_line_not_others(self):
+        _, brand, product, campaign = build_world()
+        user, reservation = claim(campaign, "a@example.com")
+        with ocr_returning(payload()):
+            receipt = services.upload_receipt(
+                user=user, reservation_id=reservation.id, image=image()
+            )
+        choc_line = receipt.line_items.get(description="Dark Chocolate Bar")
+        cola_line = receipt.line_items.get(description="Coca Cola")
+
+        self.assertEqual(receipt.product_description_hash, choc_line.description_hash)
+        self.assertNotEqual(receipt.product_description_hash, cola_line.description_hash)
+
+    def test_normalized_product_name_hash_equals_matching_description_hash(self):
+        """hash_text(name) == hash_text(description) whenever normalize_text
+        would already consider them the same string — the exact-name path
+        Apps.products.selectors.match_product falls back to when no alias
+        exists."""
+        self.assertEqual(ocr.hash_text("Coca Cola"), ocr.hash_text("COCA   cola"))
+        self.assertEqual(ocr.hash_text("Coca Cola"), ocr.hash_text("  coca cola  "))
+        self.assertNotEqual(ocr.hash_text("Coca Cola"), ocr.hash_text("Pepsi"))
+        self.assertIsNone(ocr.hash_text(""))
+        self.assertIsNone(ocr.hash_text(None))
+
+
+# ---------------------------------------------------------------------------
+# Campaign datetime validation (integration with the new identity hashes)
+# ---------------------------------------------------------------------------
+# Unit coverage of the window comparison itself lives in CampaignWindowTests
+# above (unchanged by this feature); these confirm the same extracted
+# date/time that feeds that check is what gets hashed.
+class CampaignDatetimeValidationTests(APITestCase):
+    def _bounded_campaign(self):
+        start = timezone.make_aware(dt.datetime(2026, 8, 1))
+        end = timezone.make_aware(dt.datetime(2026, 8, 30, 23, 59))
+        return build_world(start_at=start, end_at=end)
+
+    def test_purchase_datetime_used_for_the_window_check_matches_the_hashed_values(self):
+        _, brand, product, campaign = self._bounded_campaign()
+        user, reservation = claim(campaign, "a@example.com")
+
+        with ocr_returning(payload(date="2026-08-15", time="09:00:00")):
+            receipt = services.upload_receipt(
+                user=user, reservation_id=reservation.id, image=image()
+            )
+        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+        self.assertEqual(receipt.purchase_date_hash, ocr.hash_date(dt.date(2026, 8, 15)))
+        self.assertEqual(receipt.purchase_time_hash, ocr.hash_time(dt.time(9, 0)))
+
+    def test_boundary_instant_exactly_at_campaign_end_is_accepted(self):
+        _, brand, product, campaign = self._bounded_campaign()
+        user, reservation = claim(campaign, "a@example.com")
+        with ocr_returning(payload(date="2026-08-30", time="23:59:00")):
+            receipt = services.upload_receipt(
+                user=user, reservation_id=reservation.id, image=image()
+            )
+        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+
+
+# ---------------------------------------------------------------------------
+# AI service integration
+# ---------------------------------------------------------------------------
+# The AI service is deployed and versioned independently
+# (https://api.joinnibbl.com/ai in production); nothing here touches its
+# code, API, or deployment — only how the backend is configured to call it
+# (RECEIPT_OCR_API_URL / RECEIPT_OCR_API_KEY / RECEIPT_OCR_EXTRACT_PATH).
+class AIServiceIntegrationTests(APITestCase):
+    @override_settings(
+        RECEIPT_OCR_API_URL="https://api.joinnibbl.com/ai",
+        RECEIPT_OCR_API_KEY="prod-shared-secret",
+    )
+    def test_extract_request_targets_the_public_ai_service_url(self):
+        captured = {}
+
+        def fake_post(url, **kwargs):
+            captured["url"] = url
+            captured["headers"] = kwargs.get("headers")
+            return _Resp(payload())
+
+        with patch("httpx.post", side_effect=fake_post):
+            ocr.extract_receipt(image())
+
+        self.assertEqual(
+            captured["url"], "https://api.joinnibbl.com/ai/api/v1/receipts/extract"
+        )
+        self.assertEqual(captured["headers"]["X-API-Key"], "prod-shared-secret")
+
+    @override_settings(RECEIPT_OCR_API_URL="https://api.joinnibbl.com/ai/")
+    def test_trailing_slash_on_the_configured_url_does_not_double_up(self):
+        captured = {}
+
+        def fake_post(url, **kwargs):
+            captured["url"] = url
+            return _Resp(payload())
+
+        with patch("httpx.post", side_effect=fake_post):
+            ocr.extract_receipt(image())
+
+        self.assertEqual(
+            captured["url"], "https://api.joinnibbl.com/ai/api/v1/receipts/extract"
+        )
+
+    @override_settings(RECEIPT_OCR_API_URL="")
+    def test_blank_url_is_treated_as_not_configured(self):
+        self.assertFalse(ocr.is_configured())
+        with self.assertRaises(ocr.OCRUnavailable):
+            ocr.extract_receipt(image())

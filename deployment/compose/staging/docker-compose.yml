@@ -8,4 +8,28 @@ services:
   backend:
     image: ${REGISTRY}/nibblai-backend:staging
     env_file:
-      - ${PROJECT_ROOT:-.}/deployment/environments/.env.staging.backend
+      - ../environments/.env.staging.backend
+    environment:
+      RECEIPT_OCR_API_URL: http://ai:8001
+      RECEIPT_OCR_API_KEY: ${AI_API_KEY:?AI_API_KEY must be set in the runtime .env}
+
+  ai:
+    # Allow an explicit AI tag for staging rollback/testing; normal staging
+    # deployments continue to use the mutable staging tag.
+    image: ${REGISTRY}/nibblai-ai:${AI_IMAGE_TAG:-staging}
+    environment:
+      APP_ENV: staging
+      PORT: "8001"
+      LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      LOG_FORMAT: json
+      ROOT_PATH: /ai
+      API_KEY: ${AI_API_KEY:?AI_API_KEY must be set in the runtime .env}
+      WEB_CONCURRENCY: ${AI_WEB_CONCURRENCY:-1}
+      OCR_PROVIDER: tesseract
+      OCR_LANGUAGES: ${AI_OCR_LANGUAGES:-eng}
+      OCR_TIMEOUT_SECONDS: "30"
+      MAX_FILE_SIZE_MB: ${AI_MAX_FILE_SIZE_MB:-10}
+      ENABLE_RAW_OCR_STORAGE: "false"
+      LOG_DOCUMENT_CONTENT: "false"
+      REDACT_SENSITIVE_TEXT: "true"
+      DEBUG_ERRORS: "false"

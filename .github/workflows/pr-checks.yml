@@ -44,7 +44,26 @@ jobs:
       # ─── Docker Lint ──────────────────────────────────────────────
       - name: Validate backend Dockerfile
         run: |
+          set -o pipefail
           docker build --no-cache --target builder -f services/backend/Dockerfile ./services/backend 2>&1 | tail -5
+
+      # ─── AI service ───────────────────────────────────────────────
+      - name: Set up Python for AI
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run AI checks
+        working-directory: services/ai
+        run: uv run --frozen --extra dev make check
+
+      - name: Validate AI Dockerfile
+        run: |
+          set -o pipefail
+          docker build --no-cache --target runtime -f services/ai/Dockerfile ./services/ai 2>&1 | tail -5
+
+      - name: Validate AI Compose file
+        run: docker compose -f services/ai/docker-compose.yml config --quiet
 
       # ─── Compose Validation ───────────────────────────────────────
       - name: Validate docker-compose files

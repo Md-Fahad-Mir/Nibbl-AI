@@ -38,16 +38,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push all services (staging tag)
+      - name: Build and push staging images
         run: |
           REGISTRY='${{ steps.login-ecr.outputs.registry }}'
-          # Only the backend exists today; add new service names here as they
-          # land in the monorepo.
-          for service in backend; do
-            docker build -f ./services/$service/Dockerfile --target prod \
-              -t "$REGISTRY/nibblai-$service:staging" ./services/$service
-            docker push "$REGISTRY/nibblai-$service:staging"
-          done
+
+          docker build -f ./services/backend/Dockerfile --target prod \
+            -t "$REGISTRY/nibblai-backend:staging" ./services/backend
+          docker push "$REGISTRY/nibblai-backend:staging"
+
+          # The AI Dockerfile's production stage is named `runtime`.
+          docker build -f ./services/ai/Dockerfile --target runtime \
+            -t "$REGISTRY/nibblai-ai:staging" ./services/ai
+          docker push "$REGISTRY/nibblai-ai:staging"
 
   deploy:
     name: Deploy to Staging EC2
@@ -72,7 +74,7 @@ jobs:
             aws ecr get-login-password --region us-west-1 \
               | docker login --username AWS --password-stdin "$REGISTRY"
 
-            COMPOSE="docker compose \
+            COMPOSE="docker compose --env-file .env \
               -f deployment/compose/docker-compose.base.yml \
               -f deployment/compose/staging/docker-compose.yml"
 

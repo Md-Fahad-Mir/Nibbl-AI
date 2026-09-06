@@ -21,6 +21,25 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+    depends_on:
+      ai:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  ai:
+    <<: *common-env
+    container_name: ${PROJECT_NAME:-nibblai}-ai
+    # Keep OCR private to the EC2 host by default. The backend reaches it over
+    # app-network at ai:8001; use an HTTPS reverse proxy for public access.
+    ports:
+      - "${AI_BIND_ADDRESS:-127.0.0.1}:${AI_PORT:-8001}:8001"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8001/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - app-network
 

@@ -1,12 +1,40 @@
 # ─── Production Compose ───────────────────────────────────────────────
 # Usage: docker compose -f ../docker-compose.base.yml -f docker-compose.yml up -d
 #
-# Pulls pre-built images from Docker Hub (pushed by CI/CD).
+# Pulls pre-built images from Amazon ECR (pushed by CI/CD).
 
 services:
 
   backend:
     image: ${REGISTRY}/nibblai-backend:${IMAGE_TAG:-latest}
     env_file:
-      - ${PROJECT_ROOT:-.}/deployment/environments/.env.production.backend
+      - ../environments/.env.production.backend
+    environment:
+      RECEIPT_OCR_API_URL: http://ai:8001
+      RECEIPT_OCR_API_KEY: ${AI_API_KEY:?AI_API_KEY must be set in the runtime .env}
+    restart: always
+
+  ai:
+    # Defaults to the backend release tag. A rollback can select a separately
+    # known-compatible AI release through AI_IMAGE_TAG.
+    image: ${REGISTRY}/nibblai-ai:${AI_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    environment:
+      APP_ENV: production
+      PORT: "8001"
+      LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      LOG_FORMAT: json
+      # Nginx serves this service under /ai/ (see infrastructure/ansible
+      # nginx template) and strips the prefix before forwarding here, so this
+      # only needs to be reflected back into the OpenAPI schema and docs UI.
+      ROOT_PATH: /ai
+      API_KEY: ${AI_API_KEY:?AI_API_KEY must be set in the runtime .env}
+      WEB_CONCURRENCY: ${AI_WEB_CONCURRENCY:-1}
+      OCR_PROVIDER: tesseract
+      OCR_LANGUAGES: ${AI_OCR_LANGUAGES:-eng}
+      OCR_TIMEOUT_SECONDS: "30"
+      MAX_FILE_SIZE_MB: ${AI_MAX_FILE_SIZE_MB:-10}
+      ENABLE_RAW_OCR_STORAGE: "false"
+      LOG_DOCUMENT_CONTENT: "false"
+      REDACT_SENSITIVE_TEXT: "true"
+      DEBUG_ERRORS: "false"
     restart: always

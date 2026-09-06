@@ -53,6 +53,47 @@
     - backend
   notify: restart docker compose
 
+- name: Fetch AI API key from AWS Secrets Manager
+  shell: |
+    aws secretsmanager get-secret-value \
+      --secret-id "{{ project_name }}/{{ env }}/ai-api-key" \
+      --region "{{ aws_region }}" \
+      --query 'SecretString' \
+      --output text
+  register: ai_api_key_secret
+  no_log: true
+  changed_when: false
+  ignore_errors: true
+
+- name: Select the fetched AI API key or bootstrap fallback
+  set_fact:
+    ai_api_key_final: "{{ ai_api_key_secret.stdout | default(ai_api_key, true) | trim }}"
+  no_log: true
+
+- name: Require an AI API key before starting the production stack
+  assert:
+    that:
+      - ai_api_key_final | length > 0
+      - ai_api_key_final is not search('[\r\n]')
+    fail_msg: >-
+      Create {{ project_name }}/{{ env }}/ai-api-key in AWS Secrets Manager,
+      or provide AI_API_KEY only for a controlled bootstrap.
+  no_log: true
+
+- name: Write the Compose runtime environment
+  copy:
+    dest: "{{ project_path }}/.env"
+    # Docker Compose interpolates unquoted dotenv values. Single quotes retain
+    # a literal API key containing $, #, or spaces; an embedded quote is escaped
+    # according to Compose dotenv syntax.
+    content: |
+      AI_API_KEY='{{ ai_api_key_final | replace("'", "\'") }}'
+    mode: '0600'
+    owner: ubuntu
+    group: ubuntu
+  no_log: true
+  notify: restart docker compose
+
 - name: Copy on-box deploy script (invoked by CI via SSM)
   copy:
     src: "{{ playbook_dir }}/../../../deployment/scripts/server-deploy.sh"

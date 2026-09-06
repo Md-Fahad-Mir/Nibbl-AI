@@ -37,7 +37,7 @@ help:
 	@echo "  Deploy:"
 	@echo "    make deploy-prod      Full production deploy"
 	@echo "    make deploy-staging   Full staging deploy"
-	@echo "    make rollback TAG=<sha>  Rollback to image tag"
+	@echo "    make rollback TAG=<backend-sha> [AI_IMAGE_TAG=<ai-sha>]  Rollback images"
 	@echo ""
 	@echo "  Monitoring:"
 	@echo "    make monitoring-up    Start monitoring stack"
@@ -65,13 +65,13 @@ logs:
 
 # ─── Remote Compose ───────────────────────────────────────────────────
 up-staging:
-	docker compose \
+	docker compose --env-file .env \
 		-f deployment/compose/docker-compose.base.yml \
 		-f deployment/compose/staging/docker-compose.yml \
 		up -d
 
 up-prod:
-	docker compose \
+	docker compose --env-file .env \
 		-f deployment/compose/docker-compose.base.yml \
 		-f deployment/compose/production/docker-compose.yml \
 		up -d

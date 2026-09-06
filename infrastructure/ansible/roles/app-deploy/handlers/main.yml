@@ -7,8 +7,8 @@
   shell: |
     /usr/local/bin/aws ecr get-login-password --region {{ aws_region }} \
       | docker login --username AWS --password-stdin {{ ecr_registry }} || true
-    docker compose -f {{ compose_base }} -f {{ compose_override }} pull || true
-    docker compose -f {{ compose_base }} -f {{ compose_override }} up -d --force-recreate --remove-orphans || true
+    docker compose --env-file {{ project_path }}/.env -f {{ compose_base }} -f {{ compose_override }} pull || true
+    docker compose --env-file {{ project_path }}/.env -f {{ compose_base }} -f {{ compose_override }} up -d --force-recreate --remove-orphans || true
   args:
     chdir: "{{ project_path }}"
   become_user: ubuntu

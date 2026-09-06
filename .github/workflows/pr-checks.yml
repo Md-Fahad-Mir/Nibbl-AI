@@ -7,15 +7,16 @@ on:
       - staging
 
 jobs:
-  lint-and-test:
-    name: Lint & Test
+  # Independent jobs so a failure in one service's checks never blocks or
+  # skips another's -- each area's status reflects only its own code.
+  backend:
+    name: Backend
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ─── Backend ──────────────────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -37,14 +38,59 @@ jobs:
           python manage.py check --settings=core.settings.test
 
       - name: Run backend tests
+        env:
+          # Tests mock the outbound httpx.post call itself; this just needs to
+          # be non-empty so the "OCR not configured" guard doesn't short-circuit
+          # the happy-path tests (a dedicated test covers the empty case via
+          # @override_settings).
+          RECEIPT_OCR_API_URL: http://localhost:8001
+          RECEIPT_OCR_API_KEY: test-key
         run: |
           cd services/backend
           python manage.py test --settings=core.settings.test
 
-      # ─── Docker Lint ──────────────────────────────────────────────
       - name: Validate backend Dockerfile
         run: |
+          set -o pipefail
           docker build --no-cache --target builder -f services/backend/Dockerfile ./services/backend 2>&1 | tail -5
+
+  ai:
+    name: AI Service
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python for AI
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.11.12"
+
+      - name: Run AI checks
+        working-directory: services/ai
+        run: uv run --frozen --extra dev make check
+
+      - name: Validate AI Dockerfile
+        run: |
+          set -o pipefail
+          docker build --no-cache --target runtime -f services/ai/Dockerfile ./services/ai 2>&1 | tail -5
+
+      - name: Validate AI Compose file
+        run: docker compose -f services/ai/docker-compose.yml config --quiet
+
+  infra:
+    name: Infra Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       # ─── Compose Validation ───────────────────────────────────────
       - name: Validate docker-compose files

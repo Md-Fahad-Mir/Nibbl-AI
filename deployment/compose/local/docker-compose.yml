@@ -1,7 +1,7 @@
 # ─── Local Development Compose ────────────────────────────────────────
 # Usage: docker compose -f ../docker-compose.base.yml -f docker-compose.yml up
 #
-# Builds from source with hot-reload volumes mounted.
+# Builds both services from source with hot-reload volumes mounted.
 
 services:
 
@@ -12,7 +12,8 @@ services:
       # Hot-reloading dev image (Django runserver), not the gunicorn prod stage.
       target: dev
     env_file:
-      - ${PROJECT_ROOT:-.}/deployment/environments/.env.local.backend
+      - path: ../environments/.env.local.backend
+        required: false
     volumes:
       # Live source for autoreload...
       - ../../services/backend:/app
@@ -21,3 +22,36 @@ services:
       - /app/.venv
     environment:
       DEBUG: "True"
+      # Use the AI service over the shared Compose network, never a host-only
+      # development endpoint.
+      RECEIPT_OCR_API_URL: http://ai:8001
+      # Local AI authentication is deliberately disabled below.
+      RECEIPT_OCR_API_KEY: ""
+
+  ai:
+    build:
+      context: ../../services/ai
+      dockerfile: Dockerfile
+      target: runtime
+    image: nibblai-ai:local
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: DEBUG
+      LOG_FORMAT: console
+      PORT: "8001"
+      OCR_PROVIDER: tesseract
+      OCR_LANGUAGES: eng
+      DEBUG_ERRORS: "true"
+      # Make local behaviour deterministic even if the developer environment
+      # happens to define an API_KEY for another deployment.
+      API_KEY: ""
+    volumes:
+      - ../../services/ai/app:/app/app:ro
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+      - --reload

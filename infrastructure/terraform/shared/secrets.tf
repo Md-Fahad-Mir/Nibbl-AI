@@ -1,5 +1,5 @@
 # ─── Secrets Manager ──────────────────────────────────────────────
-# Stores sensitive credentials (Grafana admin password) per environment.
+# Stores sensitive credentials (Grafana and AI API keys) per environment.
 #
 # To initially create/update the secret, use the AWS CLI:
 #   aws secretsmanager create-secret \

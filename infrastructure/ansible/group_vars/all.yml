@@ -29,6 +29,10 @@ aws_region: "{{ lookup('env', 'AWS_REGION') | default('us-west-1', true) }}"
 #   GRAFANA_PASSWORD=my-password make ansible-staging
 grafana_password: "{{ lookup('env', 'GRAFANA_PASSWORD') | default('', true) }}"
 
+# OCR clients authenticate with this value. In AWS it is fetched from Secrets
+# Manager; the environment fallback is useful only for a controlled bootstrap.
+ai_api_key: "{{ lookup('env', 'AI_API_KEY') | default('', true) }}"
+
 # Nginx config name
 nginx_site_name: "nibblai"
 

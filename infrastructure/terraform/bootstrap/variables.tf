@@ -27,5 +27,5 @@ variable "ecr_repositories" {
   description = "ECR repositories to create (one per service)"
   type        = list(string)
   # Add new service repositories here as those services are added to the monorepo.
-  default = ["nibblai-backend"]
+  default = ["nibblai-backend", "nibblai-ai"]
 }

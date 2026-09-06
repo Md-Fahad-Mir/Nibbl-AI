@@ -60,8 +60,8 @@ resource "aws_iam_role_policy" "ec2_s3_media" {
   })
 }
 
-# Secrets Manager: retrieve the Grafana admin password at deploy time.
-# The production.yml Ansible playbook reads this secret via aws secretsmanager cli.
+# Secrets Manager: retrieve the Grafana password and the shared OCR AI API key
+# at deploy time. The Ansible roles read only these environment-scoped secrets.
 resource "aws_iam_role_policy" "ec2_secrets_manager" {
   name = "${var.project_name}-${var.environment}-secrets-manager"
   role = aws_iam_role.ec2.id
@@ -70,10 +70,13 @@ resource "aws_iam_role_policy" "ec2_secrets_manager" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "ReadGrafanaSecret"
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/grafana-password-*"
+        Sid    = "ReadDeploymentSecrets"
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/grafana-password-*",
+          "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/ai-api-key-*",
+        ]
       }
     ]
   })

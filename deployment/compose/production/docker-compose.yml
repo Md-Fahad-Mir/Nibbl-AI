@@ -10,7 +10,12 @@ services:
     env_file:
       - ../environments/.env.production.backend
     environment:
-      RECEIPT_OCR_API_URL: http://ai:8001
+      # Deliberately routed through the public URL (nginx -> TLS -> back into
+      # this same box) rather than the private app-network at http://ai:8001.
+      # Combined with RECEIPT_OCR_EXTRACT_PATH's default
+      # (/api/v1/receipts/extract), this hits exactly
+      # https://api.joinnibbl.com/ai/api/v1/receipts/extract.
+      RECEIPT_OCR_API_URL: https://api.joinnibbl.com/ai
       RECEIPT_OCR_API_KEY: ${AI_API_KEY:?AI_API_KEY must be set in the runtime .env}
     restart: always
 

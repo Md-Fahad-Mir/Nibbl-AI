@@ -123,6 +123,16 @@ RECEIPT_OCR_EXTRACT_PATH = env(
 RECEIPT_OCR_API_KEY = env("RECEIPT_OCR_API_KEY", default="")
 RECEIPT_OCR_TIMEOUT = env.float("RECEIPT_OCR_TIMEOUT", default=AI_OCR_TIMEOUT)
 
+# Same service also writes reviews from a reviewer's Q&A answers. Defaults to
+# the same host/key as the OCR seam above; override only if review-writing is
+# split onto a different deployment.
+REVIEW_AI_API_URL = env("REVIEW_AI_API_URL", default=RECEIPT_OCR_API_URL)
+REVIEW_AI_GENERATE_PATH = env(
+    "REVIEW_AI_GENERATE_PATH", default="/api/v1/reviews/generate"
+)
+REVIEW_AI_API_KEY = env("REVIEW_AI_API_KEY", default=RECEIPT_OCR_API_KEY)
+REVIEW_AI_TIMEOUT = env.float("REVIEW_AI_TIMEOUT", default=AI_OCR_TIMEOUT)
+
 # Not currently read by the fingerprint logic: the receipt fingerprint now
 # hashes the complete normalized OCR payload (Apps.receipts.ocr), so it no
 # longer depends on any single field such as the receipt/invoice number being

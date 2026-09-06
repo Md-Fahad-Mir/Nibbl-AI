@@ -109,6 +109,10 @@ class ReviewSession(BaseModel):
     )
     expires_at = models.DateTimeField()
     messages = models.JSONField(default=list, blank=True)
+    # Written by the AI review service from the Q&A above once every prompt is
+    # answered. Shown to the reviewer straight after "thank you"; submitting
+    # without edits publishes this text as-is.
+    ai_review_content = models.TextField(blank=True)
 
     class Meta:
         ordering = ["-created_at"]

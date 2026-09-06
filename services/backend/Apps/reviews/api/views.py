@@ -253,7 +253,7 @@ class ReviewSessionDetailView(APIView):
 class ReviewSessionAnswerView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(request=s.AnswerSerializer, responses={200: None})
+    @extend_schema(request=s.AnswerSerializer, responses={200: s.AnswerResultSerializer})
     def post(self, request, session_id):
         session = get_user_session(request.user, session_id)
         if session is None:

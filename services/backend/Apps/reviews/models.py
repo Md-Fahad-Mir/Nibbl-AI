@@ -1,185 +1,64 @@
-"""Reviews module: AI chat-based review collection with budget, rules & moderation.
+"""Reviews module: AI-generated product reviews + flat per-review reward.
 
-Flow: a verified receipt unlocks review *opportunities* (ReviewSession) for the
-eligible products on it (rules engine). Each session reserves the reward + fee
-on the brand wallet (budget includes fee). The user completes a chat-based
-session and submits a rating + text; the reward is issued regardless of rating,
-then moderation publishes (3★+) or holds (1–2★) the review.
+Flow: the frontend calls the AI service's own /reviews/questions endpoint
+directly to get questions for a product, collects the user's answers, and
+posts product + questions + answers to this app. This app sends that to the
+AI service's /reviews/generate endpoint, saves the result as a Review, and
+pays a flat reward from the product's brand wallet to the reviewer -- once
+per (user, product), idempotently (Apps.reviews.services).
 """
 
 from django.conf import settings
 from django.db import models
 
 from Apps.common.models import BaseModel
-from Apps.common.money import MONEY_FIELD
 
 
-class ReviewCampaign(BaseModel):
-    class Status(models.TextChoices):
-        DRAFT = "draft", "Draft"
-        ACTIVE = "active", "Active"
-        PAUSED = "paused", "Paused"
-        COMPLETED = "completed", "Completed"
-        ARCHIVED = "archived", "Archived"
+class Review(BaseModel):
+    """An AI-generated review of a product, written from a user's own Q&A."""
 
-    brand = models.ForeignKey(
-        "brands.Brand", on_delete=models.CASCADE, related_name="review_campaigns"
-    )
-    name = models.CharField(max_length=255)
-    products = models.ManyToManyField(
-        "products.Product", related_name="review_campaigns"
-    )
-    # Brand-supplied context the AI uses to generate prompts.
-    product_context = models.TextField(blank=True)
-
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.DRAFT
-    )
-    daily_budget = models.DecimalField(**MONEY_FIELD)
-    reward_amount = models.DecimalField(**MONEY_FIELD)
-    auto_paused = models.BooleanField(default=False)
-
-    class Meta:
-        ordering = ["-created_at"]
-        indexes = [models.Index(fields=["brand", "status"])]
-
-    def __str__(self):
-        return self.name
-
-    @property
-    def is_live(self) -> bool:
-        return self.status == self.Status.ACTIVE
-
-
-class ReviewPrompt(BaseModel):
-    class Source(models.TextChoices):
-        AI = "ai", "AI-generated"
-        CUSTOM = "custom", "Brand custom"
-
-    review_campaign = models.ForeignKey(
-        ReviewCampaign, on_delete=models.CASCADE, related_name="prompts"
-    )
-    text = models.CharField(max_length=500)
-    order = models.PositiveIntegerField(default=0)
-    source = models.CharField(max_length=10, choices=Source.choices, default=Source.AI)
-
-    class Meta:
-        ordering = ["order", "created_at"]
-
-    def __str__(self):
-        return self.text
-
-
-class ReviewSession(BaseModel):
-    """A reserved review opportunity + the chat container.
-
-    Acts as the review's reservation: it holds the escrowed reward+fee and
-    expires in 7 days (expiry does not restore budget).
-    """
-
-    class Status(models.TextChoices):
-        ACTIVE = "active", "Active"
-        COMPLETED = "completed", "Completed"
-        EXPIRED = "expired", "Expired"
-
-    BUDGET_CONSUMING = (Status.ACTIVE, Status.COMPLETED, Status.EXPIRED)
-
-    review_campaign = models.ForeignKey(
-        ReviewCampaign, on_delete=models.PROTECT, related_name="sessions"
-    )
     product = models.ForeignKey(
-        "products.Product", on_delete=models.PROTECT, related_name="review_sessions"
+        "products.Product", on_delete=models.PROTECT, related_name="reviews"
+    )
+    # Denormalized for tenant-scoped brand queries and the reward's wallet
+    # lookup, matching Apps.receipts.models.Receipt's convention.
+    brand = models.ForeignKey(
+        "brands.Brand", on_delete=models.CASCADE, related_name="reviews"
     )
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="review_sessions"
-    )
-    receipt = models.ForeignKey(
-        "receipts.Receipt", on_delete=models.CASCADE, related_name="review_sessions"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews"
     )
 
-    reward_amount = models.DecimalField(**MONEY_FIELD)
-    fee_amount = models.DecimalField(**MONEY_FIELD)
-    hold = models.ForeignKey(
-        "wallets.Hold", null=True, blank=True, on_delete=models.SET_NULL,
-        related_name="review_session",
-    )
+    title = models.CharField(max_length=255, blank=True)
+    content = models.TextField(blank=True)
+    rating = models.PositiveSmallIntegerField()
 
-    status = models.CharField(
-        max_length=10, choices=Status.choices, default=Status.ACTIVE
-    )
-    expires_at = models.DateTimeField()
-    messages = models.JSONField(default=list, blank=True)
-    # Written by the AI review service from the Q&A above once every prompt is
-    # answered. Shown to the reviewer straight after "thank you"; submitting
-    # without edits publishes this text as-is.
-    ai_review_content = models.TextField(blank=True)
+    # The AI service's own disclosure of whether this text was invented
+    # (no answers) or grounded in the user's stated experience (answers
+    # supplied -- always true here, since answers are required to submit).
+    # See services/ai's app/schemas/review.py:GeneratedReview.
+    ai_generated = models.BooleanField(default=True)
+    disclosure = models.CharField(max_length=255, blank=True)
+
+    # The exact (question, answer) pairs submitted -- audit trail and lets
+    # the review be re-displayed alongside the Q&A that produced it.
+    questions_and_answers = models.JSONField(default=list, blank=True)
+    # The AI service's complete response envelope for this generation call.
+    # Kept alongside the parsed fields above for audit/support, same
+    # rationale as Apps.receipts.models.OCRResult.raw.
+    ai_raw_response = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "product", "receipt"],
-                name="uniq_review_session_per_receipt_product",
-            )
+                fields=["user", "product"], name="uniq_review_per_user_product"
+            ),
         ]
         indexes = [
-            models.Index(fields=["user", "status"]),
-            models.Index(fields=["review_campaign", "status"]),
+            models.Index(fields=["product"]),
+            models.Index(fields=["brand"]),
         ]
 
     def __str__(self):
-        return f"ReviewSession {self.id} ({self.status})"
-
-
-class Review(BaseModel):
-    class Status(models.TextChoices):
-        PUBLISHED = "published", "Published"
-        HELD = "held", "Held"
-        REMOVED = "removed", "Removed"
-
-    review_campaign = models.ForeignKey(
-        ReviewCampaign, on_delete=models.PROTECT, related_name="reviews"
-    )
-    product = models.ForeignKey(
-        "products.Product", on_delete=models.PROTECT, related_name="reviews"
-    )
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews"
-    )
-    session = models.OneToOneField(
-        ReviewSession, on_delete=models.PROTECT, related_name="review"
-    )
-    rating = models.PositiveSmallIntegerField()
-    content = models.TextField(blank=True)
-    status = models.CharField(max_length=10, choices=Status.choices)
-    published_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(fields=["product", "status"]),
-            models.Index(fields=["user", "product"]),
-        ]
-
-    def __str__(self):
-        return f"{self.rating}★ review of {self.product_id} ({self.status})"
-
-
-class ReviewModeration(BaseModel):
-    """Moderation detail/audit for a review (1–2★ hold, brand removal)."""
-
-    review = models.OneToOneField(
-        Review, on_delete=models.CASCADE, related_name="moderation"
-    )
-    auto_published = models.BooleanField(default=False)
-    held_until = models.DateTimeField(null=True, blank=True)
-    released_at = models.DateTimeField(null=True, blank=True)
-    removed = models.BooleanField(default=False)
-    removed_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="removed_reviews",
-    )
-    removal_reason = models.CharField(max_length=255, blank=True)
-
-    def __str__(self):
-        return f"Moderation for {self.review_id}"
+        return f"{self.rating}★ review of {self.product_id} by {self.user_id}"

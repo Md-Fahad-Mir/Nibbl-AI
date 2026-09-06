@@ -12,7 +12,6 @@ from Apps.admin_panel import services
 from Apps.admin_panel.services import AdminError
 from Apps.brands.access import get_brand_or_404
 from Apps.common.permissions import IsPlatformAdmin
-from Apps.reviews.models import Review
 
 
 def _run(func, *args, **kwargs):
@@ -170,32 +169,6 @@ class AdminTransactionListView(APIView):
         entries = selectors.all_transactions(category=request.query_params.get("category", ""))
         return Response(s.AdminLedgerEntrySerializer(entries, many=True).data)
 
-
-# ---------------------------------------------------------------------------
-# Review moderation
-# ---------------------------------------------------------------------------
-@extend_schema(tags=["admin"])
-class AdminHeldReviewListView(APIView):
-    permission_classes = [IsPlatformAdmin]
-
-    @extend_schema(responses={200: s.HeldReviewSerializer(many=True)})
-    def get(self, request):
-        return Response(s.HeldReviewSerializer(selectors.held_reviews(), many=True).data)
-
-
-@extend_schema(tags=["admin"])
-class AdminRemoveReviewView(APIView):
-    permission_classes = [IsPlatformAdmin]
-
-    @extend_schema(request=s.SuspendUserSerializer, responses={200: None})
-    def post(self, request, review_id):
-        review = Review.objects.filter(id=review_id).first()
-        if review is None:
-            raise NotFound("Review not found.")
-        serializer = s.SuspendUserSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        _run(services.remove_review, review=review, admin=request.user, reason=serializer.validated_data.get("reason", ""))
-        return Response({"detail": "Review removed."})
 
 
 # ---------------------------------------------------------------------------

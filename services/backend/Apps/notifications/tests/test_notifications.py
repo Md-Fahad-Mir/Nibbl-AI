@@ -17,7 +17,6 @@ from Apps.notifications.models import (
 )
 from Apps.products.services import create_product
 from Apps.reservations.models import Reservation
-from Apps.reviews.models import ReviewCampaign, ReviewSession
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
 
@@ -132,64 +131,6 @@ class ReceiptReminderTests(APITestCase):
         reservation_services.create_reservation(user=_user("b@example.com"), campaign_id=campaign.id)
 
         self.assertEqual(services.generate_receipt_reminders(), 0)
-
-
-class ReviewNotificationTests(APITestCase):
-    def _session(self, *, age_hours=0):
-        owner = _user("owner@example.com")
-        brand = Brand.objects.create(name="Acme", slug="acme")
-        product = create_product(brand=brand, name="Cola")
-        rc = ReviewCampaign.objects.create(
-            brand=brand, name="R", status=ReviewCampaign.Status.ACTIVE,
-            daily_budget=Decimal("100.00"), reward_amount=Decimal("1.00"),
-        )
-        rc.products.add(product)
-        user = _user("c@example.com")
-        # Need a receipt FK; create a minimal verified-like receipt via the flow is heavy,
-        # so use a placeholder receipt through the rebate path is overkill — instead allow
-        # nullable? ReviewSession.receipt is required, so build a tiny receipt.
-        from Apps.receipts.models import Receipt
-        from Apps.reservations import services as reservation_services
-        rebate = campaign_services.create_campaign(
-            brand=brand, product_ids=[product.id], name="Rb", daily_budget=Decimal("100.00")
-        )
-        campaign_services.set_tiers(rebate, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
-        wallet = wallet_services.get_or_create_brand_wallet(brand)
-        wallet_services.credit(wallet=wallet, amount=Decimal("100.00"), category=LedgerEntry.Category.FUNDING)
-        campaign_services.activate_campaign(rebate)
-        reservation = reservation_services.create_reservation(user=user, campaign_id=rebate.id)
-        receipt = Receipt.objects.create(
-            user=user, reservation=reservation, brand=brand, campaign=rebate,
-            merchant_hash="fp", status=Receipt.Status.VERIFIED,
-        )
-        session = ReviewSession.objects.create(
-            review_campaign=rc, product=product, user=user, receipt=receipt,
-            reward_amount=Decimal("1.00"), fee_amount=Decimal("0.30"),
-            expires_at=timezone.now() + dt.timedelta(days=7),
-        )
-        if age_hours:
-            ReviewSession.objects.filter(id=session.id).update(
-                created_at=timezone.now() - dt.timedelta(hours=age_hours)
-            )
-        return user, session
-
-    def test_fresh_session_yields_rewards_waiting(self):
-        user, session = self._session(age_hours=0)
-        services.generate_review_notifications()
-        self.assertTrue(
-            Notification.objects.filter(
-                user=user, type=NotificationType.REWARDS_WAITING
-            ).exists()
-        )
-
-    def test_aging_session_yields_review_reminder(self):
-        user, session = self._session(age_hours=48)
-        services.generate_review_notifications()
-        self.assertTrue(
-            Notification.objects.filter(
-                user=user, type=NotificationType.REVIEW_REMINDER
-            ).exists()
-        )
 
 
 class InactivityTests(APITestCase):

@@ -14,7 +14,6 @@ from Apps.products.services import create_product
 from Apps.receipts import services as receipt_services
 from Apps.reservations import services as reservation_services
 from Apps.reviews import services as review_services
-from Apps.reviews.models import ReviewSession
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
 from Apps.common.testing import RECEIPT_META, receipt_meta
@@ -29,8 +28,25 @@ def _brand(slug="acme", plan="starter"):
     return owner, brand, wallet
 
 
+def _generated_review_response():
+    """A canned AI-service /reviews/generate response for httpx.post to return."""
+    from unittest.mock import Mock
+
+    resp = Mock(status_code=200)
+    resp.json.return_value = {
+        "success": True,
+        "data": {
+            "title": "Great", "body": "Great product overall.", "rating": 5,
+            "ai_generated": False, "disclosure": "",
+        },
+    }
+    return resp
+
+
 def _full_flow(brand, *, email="c@example.com"):
     """Claim → verified receipt → rebate redemption + a submitted review."""
+    from unittest.mock import patch
+
     product = create_product(brand=brand, name="Cola")
     rebate = campaign_services.create_campaign(
         brand=brand, product_ids=[product.id], name="Deal", daily_budget=Decimal("100.00")
@@ -38,27 +54,24 @@ def _full_flow(brand, *, email="c@example.com"):
     campaign_services.set_tiers(rebate, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
     campaign_services.activate_campaign(rebate)
 
-    review_campaign = review_services.create_review_campaign(
-        brand=brand, name="R", daily_budget=Decimal("100.00"),
-        reward_amount=Decimal("1.00"), product_ids=[product.id],
-    )
-    review_services.generate_ai_prompts(review_campaign)
-    review_services.activate_review_campaign(review_campaign)
-
     user = User.objects.create_user(email=email, password="x", full_name="U")
     reservation = reservation_services.create_reservation(user=user, campaign_id=rebate.id)
     receipt_services.upload_receipt(
         user=user, reservation_id=reservation.id, **RECEIPT_META,
         items=[{"description": "Cola", "quantity": 1}],
-    )  # auto-verifies -> redemption + review opportunity
-    session = ReviewSession.objects.get(user=user, product=product)
-    review_services.submit_review(session, rating=5, content="Great")
+    )  # auto-verifies -> redemption
+
+    with patch("httpx.post", return_value=_generated_review_response()):
+        review_services.generate_and_submit_review(
+            user=user, product=product,
+            answers=[("How was it?", "Great product overall.")],
+        )
     return user, product, rebate
 
 
 class BrandOverviewTests(APITestCase):
     def test_overview_matches_source_data(self):
-        owner, brand, wallet = _brand(plan="starter")  # rebate fee 20%, review fee 0.30
+        owner, brand, wallet = _brand(plan="starter")  # rebate fee 20%
         _full_flow(brand)
 
         o = services.brand_overview(brand)
@@ -68,12 +81,12 @@ class BrandOverviewTests(APITestCase):
         self.assertEqual(o["reviews"], 1)
         self.assertEqual(o["published_reviews"], 1)
         self.assertEqual(o["average_rating"], Decimal("5.00"))
-        # Spend: rebate reward 5 + fee 1.00 (20%) + review reward 1 + review fee 0.30
+        # Spend: rebate reward 5 + fee 1.00 (20%) + review reward 1 (flat, no fee).
         self.assertEqual(o["spend"]["rebate_reward"], Decimal("5.00"))
         self.assertEqual(o["spend"]["rebate_fee"], Decimal("1.00"))
         self.assertEqual(o["spend"]["review_reward"], Decimal("1.00"))
-        self.assertEqual(o["spend"]["review_fee"], Decimal("0.30"))
-        self.assertEqual(o["spend"]["total"], Decimal("7.30"))
+        self.assertEqual(o["spend"]["review_fee"], Decimal("0.00"))
+        self.assertEqual(o["spend"]["total"], Decimal("7.00"))
 
     def test_tenant_isolation(self):
         owner_a, brand_a, _ = _brand("acme")
@@ -143,8 +156,8 @@ class PlatformAnalyticsTests(APITestCase):
         self.assertEqual(o["reviews_total"], 1)
         # Customer received rebate 5 + review 1.
         self.assertEqual(o["total_reward_paid"], Decimal("6.00"))
-        # Platform fees: rebate 1.00 + review 0.30.
-        self.assertEqual(o["total_fees"], Decimal("1.30"))
+        # Platform fees: rebate 1.00 (reviews carry no fee in the flat-reward flow).
+        self.assertEqual(o["total_fees"], Decimal("1.00"))
 
     def test_platform_endpoint_requires_admin(self):
         owner, brand, _ = _brand()

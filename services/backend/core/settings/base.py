@@ -82,24 +82,8 @@ RESERVATION_GLOBAL_CAP = env.int("RESERVATION_GLOBAL_CAP", default=100_000)
 # Receipts / fraud (spec 2.7): soft cap on a customer's concurrent open claims.
 MAX_ACTIVE_CLAIMS = env.int("MAX_ACTIVE_CLAIMS", default=25)
 
-# Reviews module (spec 2.4–2.6).
+# Reviews module: flat reward per AI-generated review (Apps.reviews).
 REVIEW_REWARD_AMOUNT = env("REVIEW_REWARD_AMOUNT", default="1.00")
-REVIEW_PRODUCT_COOLDOWN_DAYS = env.int("REVIEW_PRODUCT_COOLDOWN_DAYS", default=90)
-REVIEW_MAX_PER_RECEIPT = env.int("REVIEW_MAX_PER_RECEIPT", default=5)
-REVIEW_SESSION_EXPIRY_DAYS = env.int("REVIEW_SESSION_EXPIRY_DAYS", default=7)
-REVIEW_HOLD_DAYS = env.int("REVIEW_HOLD_DAYS", default=30)  # 1–2★ held window
-REVIEW_AUTO_PUBLISH_MIN_RATING = env.int("REVIEW_AUTO_PUBLISH_MIN_RATING", default=3)
-
-# AI seam for review prompt generation. Empty key → deterministic mock.
-ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
-ANTHROPIC_MODEL = env("ANTHROPIC_MODEL", default="claude-3-5-sonnet-20241022")
-
-OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
-OPENAI_MODEL = env("OPENAI_MODEL", default="gpt-4o")
-
-GOOGLE_AI_API_KEY = env("GOOGLE_AI_API_KEY", default="")
-GOOGLE_STUDIO_API_KEY = env("GOOGLE_STUDIO_API_KEY", default="")
-GOOGLE_MODEL = env("GOOGLE_MODEL", default="gemini-1.5-pro")
 
 # Legacy name for the receipt-OCR microservice base URL. Superseded by
 # RECEIPT_OCR_API_URL below, which falls back to this so existing deployments
@@ -147,7 +131,6 @@ PAYOUT_MIN_AMOUNT = env("PAYOUT_MIN_AMOUNT", default="1.00")
 # Notifications. Empty FCM key → push is mocked (logged) in dev.
 FCM_SERVER_KEY = env("FCM_SERVER_KEY", default="")
 NOTIFY_RECEIPT_REMINDER_AFTER_HOURS = env.int("NOTIFY_RECEIPT_REMINDER_AFTER_HOURS", default=24)
-NOTIFY_REVIEW_REMINDER_AFTER_HOURS = env.int("NOTIFY_REVIEW_REMINDER_AFTER_HOURS", default=24)
 NOTIFY_INACTIVE_AFTER_DAYS = env.int("NOTIFY_INACTIVE_AFTER_DAYS", default=14)
 NOTIFY_DEDUPE_HOURS = env.int("NOTIFY_DEDUPE_HOURS", default=24)
 NOTIFY_NEW_OFFER_DEDUPE_DAYS = env.int("NOTIFY_NEW_OFFER_DEDUPE_DAYS", default=7)
@@ -339,12 +322,9 @@ SPECTACULAR_SETTINGS = {
         "PlanSlugEnum": "Apps.billing.models.Plan.Slug",
         "WalletKindEnum": "Apps.wallets.models.Wallet.Kind",
         "BookmarkKindEnum": "Apps.offers.models.Bookmark.Kind",
-        # Campaign.Status and ReviewCampaign.Status share an identical value set,
-        # so a single shared component name resolves the collision.
         "CampaignLifecycleStatusEnum": "Apps.campaigns.models.Campaign.Status",
         "SocialProviderEnum": "Apps.accounts.models.SocialAccount.Provider",
         "PayoutProviderEnum": "Apps.payouts.models.PayoutMethod.Provider",
-        "ReviewStatusEnum": "Apps.reviews.models.Review.Status",
     },
 }
 

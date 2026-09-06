@@ -127,39 +127,6 @@ def generate_receipt_reminders() -> int:
     return sent
 
 
-def generate_review_notifications() -> int:
-    """REWARDS_WAITING for fresh opportunities; REVIEW_REMINDER for aging ones."""
-    from Apps.reviews.models import ReviewSession
-
-    now = timezone.now()
-    age_cutoff = now - dt.timedelta(hours=settings.NOTIFY_REVIEW_REMINDER_AFTER_HOURS)
-    sessions = ReviewSession.objects.filter(
-        status=ReviewSession.Status.ACTIVE, expires_at__gt=now
-    ).select_related("user", "product")
-
-    sent = 0
-    for session in sessions:
-        is_aging = session.created_at <= age_cutoff
-        ntype = (
-            NotificationType.REVIEW_REMINDER if is_aging
-            else NotificationType.REWARDS_WAITING
-        )
-        if _recently_notified(session.user, ntype, reference_id=session.id):
-            continue
-        notify(
-            user=session.user,
-            notification_type=ntype,
-            context={
-                "product": session.product.name,
-                "amount": str(session.reward_amount),
-            },
-            reference_type="review_session",
-            reference_id=session.id,
-        )
-        sent += 1
-    return sent
-
-
 def generate_inactivity_reminders() -> int:
     from Apps.accounts.models import User
 
@@ -216,7 +183,6 @@ def generate_new_offer_notifications() -> int:
 def run_all_generators() -> dict:
     return {
         "receipt_reminders": generate_receipt_reminders(),
-        "review_notifications": generate_review_notifications(),
         "inactivity": generate_inactivity_reminders(),
         "new_offers": generate_new_offer_notifications(),
     }

@@ -20,7 +20,7 @@ from Apps.products.models import Product
 from Apps.rebates.models import Redemption
 from Apps.receipts.models import Receipt
 from Apps.reservations.models import Reservation
-from Apps.reviews.models import Review, ReviewSession
+from Apps.reviews.models import Review
 from Apps.wallets.models import LedgerEntry, Wallet
 
 
@@ -52,8 +52,7 @@ def campaign_metrics(campaign: Campaign) -> dict:
 def product_metrics(product: Product) -> dict:
     redemptions = Redemption.objects.filter(campaign__products=product)
     reviews = Review.objects.filter(product=product)
-    published = reviews.filter(status=Review.Status.PUBLISHED)
-    avg = published.aggregate(a=Avg("rating"))["a"]
+    avg = reviews.aggregate(a=Avg("rating"))["a"]
     return {
         "redemptions": redemptions.count(),
         "reviews_count": reviews.count(),
@@ -84,9 +83,8 @@ def brand_overview(brand: Brand) -> dict:
     reservations = Reservation.objects.filter(campaign__brand=brand)
     receipts = Receipt.objects.filter(brand=brand)
     redemptions = Redemption.objects.filter(brand=brand)
-    reviews = Review.objects.filter(review_campaign__brand=brand)
-    published = reviews.filter(status=Review.Status.PUBLISHED)
-    avg = published.aggregate(a=Avg("rating"))["a"]
+    reviews = Review.objects.filter(brand=brand)
+    avg = reviews.aggregate(a=Avg("rating"))["a"]
 
     spend = _spend_by_category(brand)
     C = LedgerEntry.Category
@@ -106,7 +104,10 @@ def brand_overview(brand: Brand) -> dict:
         "rejected_receipts": receipts.filter(status=Receipt.Status.REJECTED).count(),
         "redemptions": redemptions.count(),
         "reviews": reviews.count(),
-        "published_reviews": published.count(),
+        # No moderation step in the current review flow -- every saved
+        # review is immediately final, so this equals `reviews`. Kept as a
+        # separate key for API stability (existing consumers of this field).
+        "published_reviews": reviews.count(),
         "average_rating": round(avg, 2) if avg is not None else None,
         "spend": {
             "rebate_reward": reward_spend,

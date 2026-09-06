@@ -1,22 +1,29 @@
-"""Client for the Receipt Intelligence API's review-writing endpoint.
+"""Client for the AI service's review-generation endpoint.
 
-Turns a reviewer's own Q&A answers (collected in ``ReviewSession.messages``)
-into prose, by posting them to the same AI microservice that does receipt OCR
-(see ``Apps.receipts.ocr`` for the sibling seam). The base URL and key come
-from settings (``REVIEW_AI_API_URL`` / ``REVIEW_AI_API_KEY``) — never
-hardcoded here.
+Turns a user's own Q&A answers about a product into a finished review, by
+posting them to the same independently-deployed AI microservice that does
+receipt OCR (see ``Apps.receipts.ocr`` for the sibling seam; production:
+``https://api.joinnibbl.com/ai``). The base URL and key come from settings
+(``REVIEW_AI_API_URL`` / ``REVIEW_AI_API_KEY``) — never hardcoded here. This
+module only consumes that service's documented response shape; it makes no
+changes to the AI service's own code, API, or deployment.
+
+Question generation is NOT handled here: the frontend calls the AI service's
+``/reviews/questions`` endpoint directly and collects the user's answers, so
+this backend only ever sees the finished (question, answer) pairs.
 
 The provider's contract (``POST {base}/api/v1/reviews/generate``) is::
 
     {
       "success": bool,
-      "data": {"title": str, "body": str, "rating": int, ...},
+      "data": {"title": str, "body": str, "rating": int,
+                "ai_generated": bool, "disclosure": str, ...},
       ...
     }
 
 Answers are what makes the review *grounded* on the provider's side (its
 ``ai_generated`` flag comes back false only when ``answers`` is non-empty),
-so every call here includes them.
+so a call is only made once at least one answer has been collected.
 """
 
 from __future__ import annotations
@@ -29,10 +36,12 @@ logger = logging.getLogger(__name__)
 
 
 class ReviewWriterUnavailable(Exception):
-    """The review-writing service is unreachable, timed out, or unconfigured.
+    """The review-writing service is unreachable, timed out, unconfigured,
+    or returned something unusable.
 
-    Callers fall back to stitching the reviewer's own answers together rather
-    than blocking the reviewer on an external call.
+    Callers must not save a review or issue a reward when this is raised —
+    unlike the OCR seam, there is no safe fallback for a review that wasn't
+    actually written by the AI service.
     """
 
 
@@ -47,15 +56,20 @@ def is_configured() -> bool:
 def write_review(
     *,
     product_name: str,
-    product_context: str = "",
+    category: str | None = None,
+    description: str | None = None,
+    attributes: dict[str, str] | None = None,
     qa_pairs: list[tuple[str, str]],
+    rating: int | None = None,
     language: str = "English",
 ) -> dict:
-    """POST the reviewer's Q&A to the review-writing service.
+    """POST product information + the user's Q&A to the review-generation service.
 
-    ``qa_pairs`` is the ordered (question, answer) pairs collected over the
-    session's chat. Returns ``{"title": str, "body": str, "rating": int | None}``.
+    ``qa_pairs`` is the ordered (question, answer) pairs the frontend
+    collected after calling the AI service's ``/reviews/questions`` endpoint
+    directly and showing them to the user.
 
+    Returns ``{"data": {...GeneratedReview fields...}, "raw": {...full envelope...}}``.
     Raises ReviewWriterUnavailable if the service can't produce a review.
     """
     base = _base_url()
@@ -82,9 +96,16 @@ def write_review(
         ],
         "language": language,
     }
-    context = (product_context or "").strip()
-    if context:
-        payload["description"] = context[:2000]
+    category = (category or "").strip()
+    if category:
+        payload["category"] = category[:100]
+    description = (description or "").strip()
+    if description:
+        payload["description"] = description[:2000]
+    if attributes:
+        payload["attributes"] = {str(k): str(v) for k, v in attributes.items() if v}
+    if rating is not None:
+        payload["rating"] = int(rating)
 
     try:
         resp = httpx.post(
@@ -112,9 +133,4 @@ def write_review(
     if not isinstance(data, dict) or not data.get("body"):
         raise ReviewWriterUnavailable("The review-writing service returned no review text.")
 
-    rating = data.get("rating")
-    return {
-        "title": str(data.get("title") or ""),
-        "body": str(data["body"]),
-        "rating": int(rating) if isinstance(rating, (int, float)) else None,
-    }
+    return {"data": data, "raw": body}

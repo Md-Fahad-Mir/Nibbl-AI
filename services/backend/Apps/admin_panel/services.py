@@ -12,7 +12,6 @@ from Apps.common.models import AuditLog
 from Apps.common.money import ZERO, to_money
 from Apps.notifications import services as notification_services
 from Apps.notifications.models import NotificationType
-from Apps.reviews import services as review_services
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
 
@@ -130,17 +129,6 @@ def reactivate_user(*, user, admin) -> User:
     )
     return user
 
-
-# ---------------------------------------------------------------------------
-# Platform review moderation
-# ---------------------------------------------------------------------------
-def remove_review(*, review, admin, reason="") -> None:
-    review_services.remove_review(review=review, moderator=admin, reason=reason)
-    _audit(
-        admin=admin, action=AuditLog.Action.DELETE,
-        target_type="review", target_id=review.id,
-        metadata={"event": "review_removed_by_admin", "reason": reason},
-    )
 
 
 # ---------------------------------------------------------------------------

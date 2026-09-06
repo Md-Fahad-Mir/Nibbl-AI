@@ -5,7 +5,6 @@ from rest_framework import serializers
 from Apps.campaigns.models import Campaign
 from Apps.common.models import AuditLog
 from Apps.receipts.models import FraudFlag
-from Apps.reviews.models import Review
 from Apps.wallets.models import LedgerEntry
 
 
@@ -79,16 +78,6 @@ class AdminLedgerEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = LedgerEntry
         fields = ["id", "wallet", "wallet_kind", "entry_type", "amount", "category", "balance_after", "description", "created_at"]
-        read_only_fields = fields
-
-
-class HeldReviewSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.name", read_only=True)
-    brand_name = serializers.CharField(source="review_campaign.brand.name", read_only=True)
-
-    class Meta:
-        model = Review
-        fields = ["id", "product_name", "brand_name", "rating", "content", "status", "created_at"]
         read_only_fields = fields
 
 

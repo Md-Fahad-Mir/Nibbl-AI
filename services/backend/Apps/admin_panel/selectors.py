@@ -3,7 +3,6 @@
 from Apps.campaigns.models import Campaign
 from Apps.common.models import AuditLog
 from Apps.receipts.models import FraudFlag
-from Apps.reviews.models import Review
 from Apps.wallets.models import LedgerEntry
 
 LIST_LIMIT = 200
@@ -39,12 +38,6 @@ def all_transactions(*, category: str = ""):
     if category:
         qs = qs.filter(category=category)
     return qs[:LIST_LIMIT]
-
-
-def held_reviews():
-    return Review.objects.filter(status=Review.Status.HELD).select_related(
-        "product", "review_campaign", "user"
-    )
 
 
 def audit_logs(*, target_type: str = "", actor_id: str = ""):

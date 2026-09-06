@@ -35,7 +35,7 @@ def brand_customers(brand) -> dict:
         Receipt.objects.filter(brand=brand).values_list("user_id", flat=True)
     )
     user_ids.update(
-        Review.objects.filter(review_campaign__brand=brand).values_list("user_id", flat=True)
+        Review.objects.filter(brand=brand).values_list("user_id", flat=True)
     )
 
     from Apps.accounts.models import User
@@ -45,7 +45,7 @@ def brand_customers(brand) -> dict:
     rows = []
     for user_id, user in users.items():
         redemptions = Redemption.objects.filter(brand=brand, user=user)
-        reviews = Review.objects.filter(review_campaign__brand=brand, user=user)
+        reviews = Review.objects.filter(brand=brand, user=user)
         earned = redemptions.aggregate(t=Sum("reward_amount"))["t"] or ZERO
 
         row = {

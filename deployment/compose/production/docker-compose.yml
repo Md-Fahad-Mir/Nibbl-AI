@@ -33,7 +33,14 @@ services:
       # nginx template) and strips the prefix before forwarding here, so this
       # only needs to be reflected back into the OpenAPI schema and docs UI.
       ROOT_PATH: /ai
-      API_KEY: ${AI_API_KEY:?AI_API_KEY must be set in the runtime .env}
+      # X-API-Key intentionally optional: no override here, so this falls
+      # through to .env.production.ai's empty API_KEY= (the app's own
+      # documented "empty means no authentication" mode). The endpoint is
+      # open to anyone who finds the URL; it also runs paid OpenAI Vision
+      # OCR per request, so this is a real, uncapped cost exposure, not a
+      # cosmetic setting -- revert by restoring the API_KEY line below if
+      # that turns out to matter:
+      #   API_KEY: ${AI_API_KEY:?AI_API_KEY must be set in the runtime .env}
       WEB_CONCURRENCY: ${AI_WEB_CONCURRENCY:-1}
       OCR_LANGUAGES: ${AI_OCR_LANGUAGES:-eng}
       OCR_TIMEOUT_SECONDS: "30"

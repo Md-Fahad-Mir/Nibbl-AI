@@ -28,9 +28,9 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.domain.evidence import Evidence, ExtractionMethod
-from app.extraction.context import LineView, ReceiptContext
+from app.extraction.context import PRICE_TAX_FLAG, LineView, ReceiptContext
 from app.extraction.lexicon import LabelCategory
-from app.normalization.money import ParsedAmount, parse_all_amounts
+from app.normalization.money import ParsedAmount, SeparatorStyle, parse_all_amounts
 from app.schemas.receipt import LineItem
 
 #: "2 x 4.00", "2 @ 4.00", "2x4.00" -- quantity and unit price together.
@@ -41,6 +41,16 @@ _QTY_AT_PRICE = re.compile(
 
 #: A leading quantity: "2 COFFEE", "3  BREAD".
 _LEADING_QTY = re.compile(r"^\s*(\d{1,3})\s+(?=[A-Za-z])")
+
+#: The leading number is the brand, not a column quantity. Qty-column POS
+#: prints these as "1 5 Hour Energy"; without that extra 1, taking 5 as the
+#: quantity left the name as "Hour Energy".
+_NUMBERED_PRODUCT = re.compile(
+    r"^\s*\d{1,4}\s+"
+    r"(?:HOUR|HRS?|UP|GUYS|MUSKETEERS|ELEVEN|WONDERS|ALIVE|STEP|"
+    r"IN[\s\-]?1|FOR[\s\-]?1)\b",
+    re.IGNORECASE,
+)
 
 #: A quantity marker attached to the description: "COFFEE X2", "COFFEE x 2".
 #: Not anchored to end-of-line, because the line total follows it.
@@ -95,9 +105,11 @@ _METADATA_LINE = re.compile(
 )
 
 #: Coupon and manufacturer-discount rows. Real reductions, but not purchases:
-#: counting them as items double-books the receipt.
+#: counting them as items double-books the receipt. ``PROMO`` is the 7-Eleven
+#: / NCR form of the same thing -- a negative line in the item list that is
+#: then summarised again as DISCOUNT(S) after the subtotal.
 _COUPON_LINE = re.compile(
-    r"\b(?:MFR\s+COUPON|CVS\s+COUPON|COUPON|VOUCHER|REBATE)\b",
+    r"\b(?:MFR\s+COUPON|CVS\s+COUPON|COUPON|VOUCHER|REBATE|PROMO)\b",
     re.IGNORECASE,
 )
 
@@ -305,7 +317,13 @@ def _parse_item_line(
         working = _blank(working, code.span(1))
 
     qty_at_price = _QTY_AT_PRICE.search(working)
+    if qty_at_price is not None and _is_glued_pack_marker(working, qty_at_price):
+        qty_at_price = None
     weight = _WEIGHT.search(working)
+
+    # Drop T/F/N/E taxability flags before prices are read, so "6.00 T" and
+    # the glued OCR form "6.00T" both leave a clean description.
+    working = PRICE_TAX_FLAG.sub(r"\g<price>", working)
 
     if qty_at_price is not None and _is_product_code(qty_at_price.group(2)):
         # "2 x 284060377 GG OATMILK" has the exact shape of quantity-times-unit-
@@ -337,12 +355,20 @@ def _parse_item_line(
             quantity = _to_decimal(marked.group(1))
             working = _blank(working, marked.span())
             method = ExtractionMethod.REGEX
-        elif leading is not None:
+        elif leading is not None and not _NUMBERED_PRODUCT.match(working):
             quantity = _to_decimal(leading.group(1))
             working = _blank(working, leading.span(1))
             method = ExtractionMethod.REGEX
 
     prices = parse_all_amounts(working, style=context.separator_style, repair_ocr=False)
+    expanded: list[ParsedAmount] = []
+    for price in prices:
+        expanded.extend(_split_model_and_price(working, price, context.separator_style))
+    prices = [price for price in expanded if not _is_name_amount(working, price)]
+    # Once a real money figure is on the line, leftover bare integers are
+    # pack sizes, model numbers and brand digits -- not a second price.
+    if any("." in price.raw or "," in price.raw for price in prices):
+        prices = [price for price in prices if "." in price.raw or "," in price.raw]
     if not prices:
         return None
 
@@ -465,6 +491,85 @@ def _is_product_code(token: str) -> bool:
     return cleaned.isdigit() and len(cleaned) >= _PRODUCT_CODE_MIN_DIGITS
 
 
+def _is_glued_pack_marker(text: str, match: re.Match[str]) -> bool:
+    """Whether a qty×price match is actually a pack size in the name.
+
+    ``Wings 8x 6.00`` has the shape of 8 × 6.00, but ``8x`` is an 8-pack and
+    6.00 is the line total. True quantity-times-price either spaces the
+    operator (``2 x 4.00  8.00``) or still has another price after the match.
+    """
+    token = match.group(0)
+    if re.search(r"\d\s+[xX@*]", token):
+        return False
+    if not re.search(r"\d[xX]", token):
+        return False
+    rest = text[match.end() :]
+    return not parse_all_amounts(rest, repair_ocr=False)
+
+
+def _split_model_and_price(
+    text: str, amount: ParsedAmount, style: SeparatorStyle
+) -> list[ParsedAmount]:
+    """Split ``iPhone 16 899.00`` so 16 is not absorbed into a grouped price.
+
+    Space-as-thousands (``1 234,50``) is a real grouping form in comma-decimal
+    locales. In dot-decimal receipts the digits before the space on an item
+    line are a model number sitting next to the price.
+    """
+    if style is SeparatorStyle.COMMA_DECIMAL:
+        return [amount]
+    match = re.fullmatch(r"(\d{1,4})[\s\u00a0\u202f]+(\d+[.,]\d{1,3})", amount.raw.strip())
+    if match is None:
+        return [amount]
+    idx = text.find(amount.raw)
+    prefix = text[:idx] if idx >= 0 else ""
+    if not any(char.isalpha() for char in prefix):
+        return [amount]
+    model = match.group(1)
+    price = match.group(2)
+    return [
+        ParsedAmount(value=Decimal(model), raw=model),
+        ParsedAmount(value=Decimal(price.replace(",", ".")), raw=price),
+    ]
+
+
+def _is_name_amount(text: str, amount: ParsedAmount) -> bool:
+    """Whether ``amount`` is digits inside the product name, not a price.
+
+    Receipt prices carry cents. The integers that remain are pack ratios
+    (``3:1``), letter-glued codes (``B12``, ``3M``, ``V8``), hyphenated
+    brands (``7-Up``), pack markers (``8x``, ``12pk``) and percents (``2%``).
+    Stripping them is how "Hot Dog 3:1" became "Hot Dog" and "Vitamin B12"
+    became "Vitamin B".
+    """
+    if "." in amount.raw or "," in amount.raw:
+        return False
+
+    start = 0
+    while True:
+        found = text.find(amount.raw, start)
+        if found < 0:
+            return False
+        after_at = found + len(amount.raw)
+        before = text[found - 1] if found > 0 else ""
+        after = text[after_at] if after_at < len(text) else ""
+        # Skip a match that is only the prefix/suffix of a longer number.
+        if before.isdigit() or after.isdigit() or before in ".," or after in ".,":
+            start = found + 1
+            continue
+        if before.isalpha() or after.isalpha():
+            return True
+        if before == ":" or after == ":":
+            return True
+        if after in "-/" and after_at + 1 < len(text) and text[after_at + 1].isalpha():
+            return True
+        if after in "%xX":
+            return True
+        if re.match(r"\s*(?:PK|PACK|CT|COUNT|PC|PCS)\b", text[after_at:], re.IGNORECASE):
+            return True
+        start = found + 1
+
+
 def _blank(text: str, span: tuple[int, int]) -> str:
     """Replace ``span`` with spaces, preserving every other character offset.
 
@@ -483,8 +588,13 @@ def _extract_description(text: str, amounts: list[ParsedAmount]) -> str | None:
     only prices and punctuation remain to remove.
     """
     cleaned = text
-    for amount in amounts:
-        cleaned = cleaned.replace(amount.raw, " ", 1)
+    for amount in reversed(amounts):
+        # Prices sit on the right; replace the last occurrence so a "1" in
+        # the name is not eaten by a "1.00" total whose raw was mis-sliced.
+        idx = cleaned.rfind(amount.raw)
+        if idx < 0:
+            continue
+        cleaned = cleaned[:idx] + " " + cleaned[idx + len(amount.raw) :]
 
     cleaned = re.sub(r"[@*]", " ", cleaned)
     cleaned = re.sub(r"[.\-_*=]{2,}", " ", cleaned)

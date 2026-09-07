@@ -32,12 +32,14 @@ from app.schemas.receipt import ReceiptSection
 
 #: A line that looks like a postal address.
 #:
-#: The street-number alternative carries no trailing word boundary on purpose:
-#: it ends mid-word (the "P" of "5959 Poplar"), where a boundary can never
-#: hold. An earlier revision had one, matched nothing, and silently dropped
-#: every street line from the merchant address.
+#: The street-number alternative requires at least two digits. A single digit
+#: plus a word is a store name far more often than a street ("7 ELEVEN");
+#: real one-digit streets still match via the suffix list ("1 Main Street").
+#: The suffix alternative carries no trailing word boundary on the first
+#: letters of the street name on purpose: it ends mid-word (the "P" of
+#: "5959 Poplar"), where a boundary can never hold.
 _ADDRESS_HINT = re.compile(
-    r"\b\d{1,5}\s+[A-Za-z]"
+    r"\b\d{2,5}\s+[A-Za-z]"
     r"|\b(?:STREET|ST\.|ROAD|RD\.|AVENUE|AVE|LANE|LN\.|BLVD|BOULEVARD"
     r"|DRIVE|DR\.|SUITE|STE\.|FLOOR|UNIT|BLOCK|SECTOR|PLOT|HOUSE"
     r"|HIGHWAY|HWY|P\.?O\.?\s*BOX|ZIP|POSTCODE)\b",
@@ -48,9 +50,12 @@ _ADDRESS_HINT = re.compile(
 _POSTCODE = re.compile(r"\b(\d{4,6}|[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b")
 
 #: Greetings and boilerplate that are never a merchant name.
+#: SALE / VOID / REFUND are transaction types printed in the header, not
+#: store names -- reading SALE as the merchant is how a 7-Eleven receipt
+#: reported its store as "SALE".
 _BOILERPLATE = re.compile(
     r"\b(WELCOME|THANK|THANKS|HELLO|RECEIPT|INVOICE|TAX INVOICE|CUSTOMER COPY"
-    r"|MERCHANT COPY|ORIGINAL|DUPLICATE|CASH MEMO|BILL)\b",
+    r"|MERCHANT COPY|ORIGINAL|DUPLICATE|CASH MEMO|BILL|SALE|VOID|REFUND)\b",
     re.IGNORECASE,
 )
 

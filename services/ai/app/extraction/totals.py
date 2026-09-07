@@ -346,6 +346,13 @@ def _extract_discount(context: ReceiptContext) -> ExtractedField[Discount]:
     if not lines:
         return ExtractedField.absent()
 
+    # Item rows can contain PROMO/COUPON (a DISCOUNT keyword) and also be
+    # summarised again as DISCOUNT(S) in the totals block. Prefer the totals
+    # line when one exists so the same 0.71 is not counted twice.
+    totals_lines = [line for line in lines if line.section is ReceiptSection.TOTALS]
+    if totals_lines:
+        lines = totals_lines
+
     collected: list[tuple[Decimal, LineView, str]] = []
     for line in lines:
         label = line.label_of(LabelCategory.DISCOUNT)

@@ -11,7 +11,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.extraction.items import _ANNOTATION
+from app.extraction.items import _ANNOTATION, sum_item_totals
 from app.extraction.merchant import _looks_like_address
 from app.extraction.receipt import RuleBasedReceiptExtractor
 
@@ -102,14 +102,14 @@ def test_annotation_line_is_excluded_from_items(extract) -> None:
 # ------------------------------------------------------------------ address
 @pytest.mark.parametrize(
     "line",
-    ["5959 Poplar Ave", "123 Oak Street, Springfield", "88 Harbour Road", "10115 Berlin"],
+    ["5959 Poplar Ave", "123 Oak Street, Springfield", "88 Harbour Road", "10115 Berlin", "1 Main Street"],
 )
 def test_street_lines_are_recognised_as_addresses(line: str) -> None:
     """A trailing word boundary made the street-number branch unmatchable."""
     assert _looks_like_address(line)
 
 
-@pytest.mark.parametrize("line", ["TARGET.", "MORNIF MEAT BF", "THANK YOU"])
+@pytest.mark.parametrize("line", ["TARGET.", "MORNIF MEAT BF", "THANK YOU", "7 ELEVEN", "7-Eleven"])
 def test_non_addresses_are_not_matched(line: str) -> None:
     assert not _looks_like_address(line)
 
@@ -246,3 +246,127 @@ def test_balance_due_is_still_a_valid_total(extract) -> None:
 def test_labelled_total_still_wins_over_the_fallback(extract) -> None:
     result = extract(["SHOP", "Item 5.50", "TOTAL 5.50", "CASH 20.00", "CHANGE 14.50"])
     assert result.total.value == Decimal("5.50")
+
+
+# -------------------------------------------- US POS tax flags (7-Eleven)
+def test_tax_flags_are_not_part_of_the_description(extract) -> None:
+    """T/F after the price is a taxability code, not a product initial.
+
+    7-Eleven (and most US grocery POS) prints T=taxable, F=food after every
+    line total. Leaving it on the name produced "HF Tyson Wing Bnls Hot Honey T".
+    """
+    result = extract(
+        [
+            "7 ELEVEN",
+            "8 HF Tyson Wing Bnls Hot Honey          6.00 T",
+            "1 Bimbo White Bread                       3.49 F",
+            "SUBTOTAL 9.49",
+            "TOTAL 9.49",
+        ]
+    )
+    assert [item.description for item in result.items] == [
+        "HF Tyson Wing Bnls Hot Honey",
+        "Bimbo White Bread",
+    ]
+    assert result.items[0].total_price == Decimal("6.00")
+    assert result.items[1].total_price == Decimal("3.49")
+
+
+def test_glued_tax_flag_is_stripped(extract) -> None:
+    """OCR sometimes drops the space: "6.00T" rather than "6.00 T"."""
+    result = extract(["SHOP", "Milk 2.50T", "TOTAL 2.50"])
+    assert result.items[0].description == "Milk"
+    assert result.items[0].total_price == Decimal("2.50")
+
+
+def test_product_ending_in_e_is_not_treated_as_a_tax_flag(extract) -> None:
+    """Only a letter after the price is a flag; "Vitamin E" is the name."""
+    result = extract(["SHOP", "Vitamin E 4.99", "TOTAL 4.99"])
+    assert result.items[0].description == "Vitamin E"
+
+
+def test_promo_line_does_not_truncate_the_item_list(extract) -> None:
+    """A PROMO row contains a DISCOUNT keyword and used to start the totals block.
+
+    Everything below it -- the rest of the basket -- was then skipped, which is
+    why this 7-Eleven receipt returned two items against a 34.63 subtotal.
+    """
+    result = extract(
+        [
+            "7 ELEVEN",
+            "611 W KATELLA AVE",
+            "1 Checkout Bag Charge                     0.10",
+            "8 HF Tyson Wing Bnls Hot Honey          6.00 T",
+            "1 PROMO BonelessWings 8x                -0.71 T",
+            "2 HF Tyson Wing SpicyBrd                 3.58 T",
+            "1 OSI Spicy Bite Hot Dog 3:1            2.19 T",
+            "1 Bimbo White Bread                       3.49 F",
+            "2 California Cobb Salad wChkn            12.98 F",
+            "1 Sand Southwest Trky                     6.29 F",
+            "SUBTOTAL                                 $34.63",
+            "DISCOUNT(S)                             -$0.71",
+            "TAX ON 11.06                             $0.86",
+            "TOTAL DUE                               $34.78",
+            "CHANGE                                   $66.00",
+            "Cash                                     $100.78",
+        ]
+    )
+    descriptions = [item.description for item in result.items]
+    assert result.merchant_name.value == "7 ELEVEN"
+    assert "HF Tyson Wing Bnls Hot Honey" in descriptions
+    assert "HF Tyson Wing SpicyBrd" in descriptions
+    assert "OSI Spicy Bite Hot Dog 3:1" in descriptions
+    assert "Bimbo White Bread" in descriptions
+    assert "California Cobb Salad wChkn" in descriptions
+    assert "Sand Southwest Trky" in descriptions
+    assert all("PROMO" not in (d or "") for d in descriptions)
+    assert not any((item.description or "").endswith(" T") for item in result.items)
+    assert not any((item.description or "").endswith(" F") for item in result.items)
+    assert result.subtotal.value == Decimal("34.63")
+    assert result.discount.value is not None
+    assert result.discount.value.amount == Decimal("0.71")
+    assert result.tax.value is not None
+    assert result.tax.value.total == Decimal("0.86")
+    assert result.total.value == Decimal("34.78")
+    assert sum_item_totals(result.items) == Decimal("34.63")
+
+
+def test_item_promo_without_totals_discount_is_still_recorded(extract) -> None:
+    """When the register does not reprint DISCOUNT(S), the PROMO row is the discount."""
+    result = extract(
+        [
+            "SHOP",
+            "8 Wings 6.00 T",
+            "1 PROMO Wings 8x -0.71 T",
+            "SUBTOTAL 6.00",
+            "TOTAL 5.29",
+        ]
+    )
+    assert [item.description for item in result.items] == ["Wings"]
+    assert result.discount.value is not None
+    assert result.discount.value.amount == Decimal("0.71")
+
+
+def test_pack_ratio_stays_in_the_description(extract) -> None:
+    """ "3:1" is a pack size, not two prices to strip out of the name."""
+    result = extract(["SHOP", "1 OSI Spicy Bite Hot Dog 3:1 2.19 T", "TOTAL 2.19"])
+    assert result.items[0].description == "OSI Spicy Bite Hot Dog 3:1"
+    assert result.items[0].total_price == Decimal("2.19")
+
+
+def test_seven_eleven_is_the_merchant_not_sale(extract) -> None:
+    """A numbered store name is not an address; SALE is the transaction type."""
+    result = extract(
+        [
+            "7 ELEVEN",
+            "611 W KATELLA AVE",
+            "ANAHEIM CA 928023410",
+            "THANKS",
+            "SALE",
+            "Milk 2.50",
+            "TOTAL 2.50",
+        ]
+    )
+    assert result.merchant_name.value == "7 ELEVEN"
+    assert result.merchant_address.value is not None
+    assert "611 W KATELLA AVE" in result.merchant_address.value

@@ -29,6 +29,20 @@ from app.schemas.receipt import ReceiptSection
 #: A line of only separator characters, used as a section boundary hint.
 _DIVIDER = re.compile(r"^[\s\-=_*~.#]{3,}$")
 
+#: US grocery and convenience POS (7-Eleven, Target, Kroger, Walmart) prints
+#: a taxability letter immediately after the line total: T=taxable, F=food,
+#: N=non-taxable, E=exempt. Anchored to the end of the line so a product
+#: like "T-shirt" is not eaten. Totals lines never carry this flag.
+PRICE_TAX_FLAG = re.compile(
+    r"(?P<price>[-+]?(?:\d+[.,])?\d+[.,]\d{1,3})\s*(?P<flag>[TFNE])\s*$",
+    re.IGNORECASE,
+)
+
+#: A leading quantity on a priced row: "8 HF Tyson Wing", "1 PROMO Wings".
+#: Totals labels are not qty-prefixed, so this distinguishes an item that
+#: happens to contain the word PROMO from the DISCOUNT(S) totals line.
+_LEADING_ITEM_QTY = re.compile(r"^\s*\d{1,3}\s+(?=[A-Za-z])")
+
 
 @dataclass(frozen=True, slots=True)
 class LineView:
@@ -348,6 +362,20 @@ def _is_price_only(line: LineView | None) -> bool:
     return not remainder.strip(" 	$€£¥₹৳.,:-")
 
 
+def _looks_like_item_row(line: LineView) -> bool:
+    """Whether a totals-vocabulary hit is sitting on a product row.
+
+    Item lines routinely contain words from the totals lexicon. ``PROMO`` is a
+    DISCOUNT keyword, so ``1 PROMO BonelessWings 8x -0.71 T`` used to start
+    the totals block and every item below it was dropped. A trailing T/F/N/E
+    taxability flag, or a leading quantity on a priced line, are item-row
+    shapes that a real SUBTOTAL / DISCOUNT(S) / TAX line never has.
+    """
+    if PRICE_TAX_FLAG.search(line.normalized):
+        return True
+    return bool(_LEADING_ITEM_QTY.match(line.normalized) and line.has_monetary_amount)
+
+
 def _assign_sections(context: ReceiptContext) -> None:
     """Segment the document into layout regions.
 
@@ -372,7 +400,11 @@ def _assign_sections(context: ReceiptContext) -> None:
         LabelCategory.DISCOUNT,
         LabelCategory.SHIPPING,
     )
-    totals_indices = [i for i, line in enumerate(lines) if line.has(*totals_categories)]
+    totals_indices = [
+        i
+        for i, line in enumerate(lines)
+        if line.has(*totals_categories) and not _looks_like_item_row(line)
+    ]
     payment_indices = [
         i
         for i, line in enumerate(lines)

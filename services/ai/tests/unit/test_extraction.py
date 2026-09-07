@@ -149,6 +149,34 @@ def test_quantity_times_unit_price_derives_the_line_total(extract) -> None:
     assert item.total_price == Decimal("8.00")
 
 
+@pytest.mark.parametrize(
+    ("line", "description"),
+    [
+        ("Vitamin B12 4.99", "Vitamin B12"),
+        ("7-Up 1.99", "7-Up"),
+        ("7 Up 1.99", "7 Up"),
+        ("3M Tape 5.00", "3M Tape"),
+        ("V8 Juice 2.50", "V8 Juice"),
+        ("5 Hour Energy 3.49", "5 Hour Energy"),
+        ("iPhone 16 899.00", "iPhone 16"),
+        ("Coke 12pk 6.00", "Coke 12pk"),
+        ("Wings 8x 6.00", "Wings 8x"),
+        ("2% Milk 3.49", "2% Milk"),
+        ("1 OSI Spicy Bite Hot Dog 3:1 2.19 T", "OSI Spicy Bite Hot Dog 3:1"),
+    ],
+)
+def test_numbers_in_product_names_are_kept(extract, line: str, description: str) -> None:
+    """Pack sizes, model numbers and numbered brands are not prices.
+
+    parse_all_amounts treats every integer as money, and stripping those from
+    the description is how "Vitamin B12" became "Vitamin B" and "7 Up"
+    became "Up" with quantity 7.
+    """
+    result = extract(["THE SHOP", line, "TOTAL 99.00"])
+    assert len(result.items) == 1
+    assert result.items[0].description == description
+
+
 def test_description_only_line_pairs_with_next_line_price(extract) -> None:
     result = extract(["THE SHOP", "ESPRESSO", "4.00", "TOTAL 4.00"])
     assert len(result.items) == 1

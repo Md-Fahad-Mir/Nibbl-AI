@@ -29,15 +29,23 @@ class FallbackOfferInline(admin.StackedInline):
 
 @admin.register(Campaign)
 class CampaignAdmin(admin.ModelAdmin):
-    list_display = ("name", "brand", "get_products", "status", "daily_budget", "auto_paused", "created_at")
+    list_display = (
+        "name", "brand", "get_products", "status", "daily_budget",
+        "has_merchant_restriction", "auto_paused", "created_at",
+    )
     list_filter = ("status", "is_bogo")
-    search_fields = ("name", "brand__name", "products__name")
+    search_fields = ("name", "brand__name", "products__name", "allowed_merchants")
     autocomplete_fields = ("brand", "products")
     inlines = [RewardTierInline, RestrictionInline, FallbackOfferInline]
 
     def get_products(self, obj):
         return ", ".join([p.name for p in obj.products.all()])
     get_products.short_description = "Products"
+
+    def has_merchant_restriction(self, obj):
+        return bool(obj.allowed_merchants.strip())
+    has_merchant_restriction.short_description = "Merchant restricted"
+    has_merchant_restriction.boolean = True
 
 
 @admin.register(CampaignURL)

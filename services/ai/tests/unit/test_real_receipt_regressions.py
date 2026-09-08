@@ -102,7 +102,13 @@ def test_annotation_line_is_excluded_from_items(extract) -> None:
 # ------------------------------------------------------------------ address
 @pytest.mark.parametrize(
     "line",
-    ["5959 Poplar Ave", "123 Oak Street, Springfield", "88 Harbour Road", "10115 Berlin", "1 Main Street"],
+    [
+        "5959 Poplar Ave",
+        "123 Oak Street, Springfield",
+        "88 Harbour Road",
+        "10115 Berlin",
+        "1 Main Street",
+    ],
 )
 def test_street_lines_are_recognised_as_addresses(line: str) -> None:
     """A trailing word boundary made the street-number branch unmatchable."""

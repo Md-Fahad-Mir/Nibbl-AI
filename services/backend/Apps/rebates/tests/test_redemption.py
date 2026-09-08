@@ -1,5 +1,8 @@
+import tempfile
 from decimal import Decimal
 
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -237,3 +240,29 @@ class NoFeePlanTests(APITestCase):
         self.assertEqual(redemption.fee_amount, Decimal("0.00"))
         bw.refresh_from_db()
         self.assertEqual(bw.balance, Decimal("95.00"))  # 100 - 5, no fee
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class ReceiptImageUrlTests(APITestCase):
+    def test_brand_redemption_list_exposes_receipt_image_url(self):
+        owner, brand, product, campaign, _ = _world(reward="5.00")
+        user, reservation = _claim(campaign)
+        receipt = receipt_services.upload_receipt(
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
+            items=[{"description": "Cola 12oz", "quantity": 1}],
+        )
+        # Attach an image file so the derived URL is populated.
+        receipt.image = SimpleUploadedFile(
+            "r.jpg", b"fake-jpeg-bytes", content_type="image/jpeg"
+        )
+        receipt.save(update_fields=["image"])
+
+        self.client.force_authenticate(owner)
+        resp = self.client.get(
+            reverse("v1:rebates:brand-redemption-list", args=[brand.id])
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        row = resp.data[0]
+        self.assertIsNotNone(row["receipt_image_url"])
+        self.assertTrue(row["receipt_image_url"].startswith("http"))
+        self.assertIn("receipts/", row["receipt_image_url"])

@@ -39,7 +39,9 @@ class RedemptionDetailView(APIView):
         redemption = get_user_redemption(request.user, redemption_id)
         if redemption is None:
             raise NotFound("Redemption not found.")
-        return Response(s.RedemptionSerializer(redemption).data)
+        return Response(
+            s.RedemptionSerializer(redemption, context={"request": request}).data
+        )
 
 
 @extend_schema(tags=["redemptions"])
@@ -51,5 +53,7 @@ class BrandRedemptionListView(APIView):
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand)
         return Response(
-            s.RedemptionSerializer(redemptions_for_brand(brand), many=True).data
+            s.RedemptionSerializer(
+                redemptions_for_brand(brand), many=True, context={"request": request}
+            ).data
         )

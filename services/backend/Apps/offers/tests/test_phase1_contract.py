@@ -164,14 +164,22 @@ class MiscContractTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(set(resp.data), {"count", "next", "previous", "results"})
 
-    def test_profile_update_accepts_avatar_url(self):
+    def test_profile_update_accepts_avatar_upload(self):
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        buf = BytesIO()
+        Image.new("RGB", (1, 1)).save(buf, format="PNG")
+        avatar = SimpleUploadedFile("a.png", buf.getvalue(), content_type="image/png")
+
         user = User.objects.create_user(
             email="c@example.com", password="x", full_name="C", is_email_verified=True
         )
         self.client.force_authenticate(user)
         resp = self.client.patch(
             reverse("v1:accounts:users:me"),
-            {"avatar_url": "https://cdn.example.com/a.png"}, format="json",
+            {"avatar": avatar}, format="multipart",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data["avatar_url"], "https://cdn.example.com/a.png")
+        self.assertIsNotNone(resp.data["avatar_url"])

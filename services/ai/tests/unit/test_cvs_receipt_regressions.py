@@ -164,3 +164,27 @@ def test_coupon_row_is_still_a_discount(extract) -> None:
     result = extract(["CVS", "1 SHAMPOO 5.00", "1 MFR COUPON 2.00 -", "TOTAL 3.00"])
     assert result.discount.value is not None
     assert result.discount.value.amount == Decimal("2.00")
+
+
+def test_dollar_off_coupon_does_not_hide_other_coupons(extract) -> None:
+    """A qty-prefixed "$2 OFF" coupon must not become the whole discount.
+
+    That row carries a COUPON label but the token after the quantity is `$`,
+    not a letter. Treating it as the start of the totals block left only the
+    last coupon, collapsing a manufacturer-coupon total of 8.00 down to 2.00.
+    """
+    result = extract(
+        [
+            "CVS",
+            "1 SHAMPOO 5.00",
+            "1 MFR COUPON 5.00 -",
+            "1 MFR COUPON 1.00 -",
+            "1 $2 OFF PAPER TOWEL 1.77 - CVS COUPON",
+            "1 COUPON 2.00 -",
+            "SUBTOTAL 5.00",
+            "TOTAL 5.00",
+        ]
+    )
+    assert result.discount.value is not None
+    assert result.discount.value.amount == Decimal("8.00")
+    assert result.discount.value.description == "TOTAL DISCOUNT"

@@ -38,10 +38,13 @@ PRICE_TAX_FLAG = re.compile(
     re.IGNORECASE,
 )
 
-#: A leading quantity on a priced row: "8 HF Tyson Wing", "1 PROMO Wings".
-#: Totals labels are not qty-prefixed, so this distinguishes an item that
-#: happens to contain the word PROMO from the DISCOUNT(S) totals line.
-_LEADING_ITEM_QTY = re.compile(r"^\s*\d{1,3}\s+(?=[A-Za-z])")
+#: A leading quantity on a priced row: "8 HF Tyson Wing", "1 PROMO Wings",
+#: "1 $2 OFF PAPER TOWEL". Totals labels are not qty-prefixed, so this
+#: distinguishes an item that happens to contain PROMO/COUPON from the
+#: DISCOUNT(S) totals line. Currency after the qty is the CVS "$2 OFF"
+#: coupon shape -- requiring a letter there let that row start the totals
+#: block and every coupon below it was dropped.
+_LEADING_ITEM_QTY = re.compile(r"^\s*\d{1,3}\s+(?=[A-Za-z$€£¥₹৳])")
 
 
 @dataclass(frozen=True, slots=True)

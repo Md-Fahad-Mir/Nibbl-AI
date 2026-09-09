@@ -205,6 +205,25 @@ def _fallback_total_from_bottom(context: ReceiptContext) -> ExtractedField[Decim
     return ExtractedField.absent()
 
 
+#: Labels that reprint the basket discount after the subtotal, as opposed to
+#: per-row coupons still sitting in (or leaking into) the totals section.
+_TOTALS_DISCOUNT_SUMMARIES = frozenset(
+    {
+        "DISCOUNT",
+        "DISCOUNTS",
+        "TOTAL DISCOUNT",
+        "MARKDOWN",
+        "LOYALTY DISCOUNT",
+        "MEMBER DISCOUNT",
+        "STAFF DISCOUNT",
+        "RABATT",
+        "REMISE",
+        "DESCUENTO",
+        "SCONTO",
+        "REDUCTION",
+    }
+)
+
 #: Footer savings summaries. They report what was saved across the whole trip
 #: and are informational: the reductions are already reflected in the prices
 #: above. Summing them into the discount produced a figure many times the
@@ -347,11 +366,20 @@ def _extract_discount(context: ReceiptContext) -> ExtractedField[Discount]:
         return ExtractedField.absent()
 
     # Item rows can contain PROMO/COUPON (a DISCOUNT keyword) and also be
-    # summarised again as DISCOUNT(S) in the totals block. Prefer the totals
-    # line when one exists so the same 0.71 is not counted twice.
-    totals_lines = [line for line in lines if line.section is ReceiptSection.TOTALS]
-    if totals_lines:
-        lines = totals_lines
+    # summarised again as DISCOUNT(S) in the totals block. Prefer a genuine
+    # totals *summary* when one exists so the same 0.71 is not counted twice.
+    # Coupon rows that leaked into the totals section are not a summary:
+    # treating "1 COUPON 2.00 -" as the whole discount collapsed a CVS
+    # manufacturer-coupon total of 19.00 down to 2.00.
+    totals_summaries = [
+        line
+        for line in lines
+        if line.section is ReceiptSection.TOTALS
+        and (label := line.label_of(LabelCategory.DISCOUNT)) is not None
+        and label.keyword in _TOTALS_DISCOUNT_SUMMARIES
+    ]
+    if totals_summaries:
+        lines = totals_summaries
 
     collected: list[tuple[Decimal, LineView, str]] = []
     for line in lines:

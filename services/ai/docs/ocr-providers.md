@@ -87,8 +87,8 @@ Configuration: `TESSERACT_CMD`, `TESSERACT_TESSDATA_DIR`, `TESSERACT_PSM`
 ### `paddleocr`
 
 PP-OCRv5 detector + recogniser. Seconds on CPU. Use this locally unless you
-have a GPU. Install `paddlepaddle` and `paddleocr`, then
-`OCR_PROVIDER=paddleocr`.
+have a GPU. The production image already installs this extra. Locally:
+`pip install '.[paddleocr-vl]'`, then `OCR_PROVIDER=paddleocr`.
 
 Configuration: `PADDLEOCR_OCR_VERSION` (default `PP-OCRv5`), `PADDLEOCR_DEVICE`.
 
@@ -99,8 +99,10 @@ image/logo, seal, header, footer) and a 0.9B model reads each crop, including
 the wide spaces receipts use to line up amounts. Image blocks are OCR'd so
 stylised header type is not dropped as decoration.
 
-Install `paddlepaddle` (CPU or GPU) and `pip install 'paddleocr[doc-parser]'`,
-then set `OCR_PROVIDER=paddleocr_vl` or `paddleocr_vl+tesseract`. Startup
+The production image already includes `paddleocr[doc-parser]` and CPU
+PaddlePaddle. Locally: `pip install '.[paddleocr-vl]'` (or `paddlepaddle-gpu`
+on a GPU host), then set `OCR_PROVIDER=paddleocr_vl` or
+`paddleocr_vl+tesseract`. Startup
 loads the 0.9B weights (a few minutes on CPU) so the first extract is not
 charged for model load. On CPU set `OCR_TIMEOUT_SECONDS=900` and
 `OCR_MAX_RETRIES=0`. Phone photos are capped at `PADDLEOCR_VL_MAX_LONG_EDGE`

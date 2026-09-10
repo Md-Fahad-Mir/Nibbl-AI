@@ -2,9 +2,10 @@
 
 ## Does the target host need Tesseract?
 
-**With Docker: no action needed.** The image installs `tesseract-ocr` and
-`tesseract-ocr-eng` itself, so the container is self-contained. Deploy it
-anywhere that runs containers.
+**With Docker: no action needed.** The image installs Tesseract, CPU
+PaddlePaddle, and `paddleocr[doc-parser]`, so `tesseract`, `paddleocr`, and
+`paddleocr_vl` can all be selected with `OCR_PROVIDER` without a rebuild.
+Deploy it anywhere that runs containers.
 
 **Without Docker: yes, you must install it.** `pip install` pulls in
 `pytesseract`, which is only a wrapper around a `tesseract` executable — not
@@ -35,10 +36,11 @@ The image is multi-stage: the builder creates a locked virtualenv from
 the application. Compilers never reach the final image, which keeps it smaller
 and removes them from the attack surface.
 
-Also in the runtime image: Tesseract with the English pack, OpenCV's runtime
-libraries, an unprivileged `appuser` (uid 1001, no login shell), and a
-`HEALTHCHECK` on `/health`. No secrets are baked in — every credential arrives
-through the environment.
+Also in the runtime image: Tesseract with the English pack, CPU PaddlePaddle
+plus PP-OCRv5 / PaddleOCR-VL Python packages, OpenCV's runtime libraries, an
+unprivileged `appuser` (uid 1001, no login shell), and a `HEALTHCHECK` on
+`/health`. Paddle weights download into `/app/data` on first use. No secrets
+are baked in — every credential arrives through the environment.
 
 ### Adding languages
 

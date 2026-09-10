@@ -4,7 +4,7 @@
 # you can ignore it and configure the same values in the dashboard by hand.
 #
 # The image builds from the Dockerfile in this repo, which installs Tesseract
-# itself -- there is nothing to install on the host.
+# and the Paddle OCR extra -- there is nothing to install on the host.
 
 services:
   - type: web

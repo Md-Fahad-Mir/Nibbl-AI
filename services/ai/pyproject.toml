@@ -41,10 +41,11 @@ dev = [
     "mypy>=1.10",
     "types-requests",
 ]
-# Install paddlepaddle (CPU or GPU) first, then this extra. The engine is
-# hardware-specific and is not pinned here.
+# Production image installs this extra (CPU PaddlePaddle + PP-OCRv5 / VL).
+# GPU hosts should install paddlepaddle-gpu instead of the CPU wheel.
 paddleocr-vl = [
     "paddleocr[doc-parser]>=3.3",
+    "paddlepaddle>=3.0,<4",
 ]
 
 [project.urls]

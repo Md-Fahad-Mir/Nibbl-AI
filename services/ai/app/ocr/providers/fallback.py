@@ -82,6 +82,9 @@ class FallbackOCRProvider(OCRProvider):
             "fallback": self._secondary.describe(),
         }
 
+    def warmup(self) -> None:
+        self._primary.warmup()
+
     def extract(self, request: OCRRequest) -> OCRResult:
         try:
             return self._primary.extract(request)

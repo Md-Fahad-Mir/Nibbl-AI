@@ -124,6 +124,14 @@ def test_full_address_block_is_joined(extract) -> None:
     assert "Memphis, Tennessee 38119" in address
 
 
+def test_city_state_zip_without_comma_is_an_address(extract) -> None:
+    result = extract(
+        ["Walmart", "610 W 29TH ST", "SAN ANGELO TX 76903", "Milk 2.50", "TOTAL 2.50"]
+    )
+    assert result.merchant_address.value is not None
+    assert "SAN ANGELO TX 76903" in result.merchant_address.value
+
+
 # ------------------------------------------------------------------ payment
 def test_single_asterisk_card_mask(extract) -> None:
     """ "*5025 VISA CHARGE" -- one asterisk, not four."""

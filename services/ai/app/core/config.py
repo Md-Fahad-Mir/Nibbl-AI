@@ -55,7 +55,8 @@ class Settings(BaseSettings):
 
     # ------------------------------------------------------------------ ocr
     ocr_provider: str = "tesseract"
-    ocr_timeout_seconds: Annotated[float, Field(gt=0, le=300)] = 30.0
+    #: PaddleOCR-VL on CPU can take several minutes per photo after warmup.
+    ocr_timeout_seconds: Annotated[float, Field(gt=0, le=1800)] = 30.0
     ocr_max_retries: Annotated[int, Field(ge=0, le=5)] = 2
     ocr_retry_base_delay_seconds: Annotated[float, Field(ge=0, le=10)] = 0.25
     #: Languages passed to the OCR engine, in priority order. Tesseract expects
@@ -86,6 +87,35 @@ class Settings(BaseSettings):
     vision_base_url: str = ""
     vision_api_key: SecretStr = SecretStr("")
     vision_max_output_tokens: Annotated[int, Field(ge=256, le=16_000)] = 4096
+
+    # --- PaddleOCR-VL (OCR_PROVIDER=paddleocr_vl) -----------------------
+    #: Full layout+VLM pipeline version: v1, v1.5, or v1.6.
+    paddleocr_vl_pipeline_version: str = "v1.6"
+    #: Inference device. Empty lets Paddle pick GPU 0, then CPU.
+    paddleocr_vl_device: str = ""
+    #: Inference engine. Empty keeps PaddleOCR's default (usually paddle).
+    paddleocr_vl_engine: str = ""
+    #: Run OCR on image / logo blocks so stylised header text is not dropped.
+    paddleocr_vl_use_ocr_for_image_block: bool = True
+    #: Read stamps and circular seals when they carry text.
+    paddleocr_vl_use_seal_recognition: bool = True
+    #: Longest edge (px) handed to the VLM. Phone photos at 3000px create
+    #: dozens of layout crops; each is a 0.9B forward pass on CPU.
+    paddleocr_vl_max_long_edge: Annotated[int, Field(ge=0, le=4096)] = 1280
+    #: Keep layout analysis so titles, tables, headers and body stay separate.
+    paddleocr_vl_use_layout_detection: bool = True
+    paddleocr_vl_use_doc_orientation_classify: bool = False
+    paddleocr_vl_use_doc_unwarping: bool = False
+    #: Optional remote VLM backend (vllm-server, sglang-server, ...).
+    paddleocr_vl_vl_rec_backend: str = ""
+    paddleocr_vl_vl_rec_server_url: str = ""
+    paddleocr_vl_vl_rec_api_model_name: str = ""
+    paddleocr_vl_vl_rec_api_key: SecretStr = SecretStr("")
+
+    # --- PP-OCRv5 (OCR_PROVIDER=paddleocr) --------------------------------
+    #: Fast detector+recogniser. Use this on CPU; paddleocr_vl needs a GPU.
+    paddleocr_ocr_version: str = "PP-OCRv5"
+    paddleocr_device: str = ""
 
     # -------------------------------------------------------------- uploads
     max_file_size_mb: Annotated[float, Field(gt=0, le=100)] = 10.0

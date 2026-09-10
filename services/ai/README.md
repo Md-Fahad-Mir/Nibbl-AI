@@ -338,7 +338,7 @@ annotated full list. The settings that most change behaviour:
 
 | Variable | Default | Effect |
 |---|---|---|
-| `OCR_PROVIDER` | `tesseract` | Which engine runs. `fixture` replays recorded OCR and refuses to run in production. |
+| `OCR_PROVIDER` | `tesseract` | `paddleocr` is PP-OCRv5 (seconds on CPU). `paddleocr_vl` is the 0.9B VLM and needs a GPU. `fixture` replays recorded OCR and refuses to run in production. |
 | `OCR_LANGUAGES` | `eng` | Comma-separated ISO 639-2/T codes. |
 | `DATE_ORDER` | `none` | `none` never guesses ambiguous dates. Set `DMY`/`MDY` only if you know the source locale. |
 | `DEFAULT_COUNTRY` | *(empty)* | Resolves shared symbols: `$` + `CA` → `CAD`. |

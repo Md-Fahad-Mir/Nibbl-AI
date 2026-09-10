@@ -132,6 +132,7 @@ def _config_signature(settings: Settings) -> tuple[str, ...]:
     for the process lifetime, and a secret has no business living in one.
     """
     vision_key = settings.vision_api_key.get_secret_value()
+    paddle_key = settings.paddleocr_vl_vl_rec_api_key.get_secret_value()
     return (
         ",".join(settings.ocr_languages),
         settings.tesseract_cmd,
@@ -142,6 +143,18 @@ def _config_signature(settings: Settings) -> tuple[str, ...]:
         settings.vision_model,
         settings.vision_base_url,
         hashlib.sha256(vision_key.encode()).hexdigest() if vision_key else "",
+        settings.paddleocr_vl_pipeline_version,
+        settings.paddleocr_vl_device,
+        settings.paddleocr_vl_engine,
+        str(settings.paddleocr_vl_use_ocr_for_image_block),
+        str(settings.paddleocr_vl_use_seal_recognition),
+        str(settings.paddleocr_vl_max_long_edge),
+        str(settings.paddleocr_vl_use_layout_detection),
+        settings.paddleocr_vl_vl_rec_backend,
+        settings.paddleocr_vl_vl_rec_server_url,
+        hashlib.sha256(paddle_key.encode()).hexdigest() if paddle_key else "",
+        settings.paddleocr_ocr_version,
+        settings.paddleocr_device,
     )
 
 

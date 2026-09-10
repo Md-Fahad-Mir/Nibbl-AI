@@ -186,6 +186,9 @@ TAX_WORD_HINTS: Final[dict[str, tuple[str, ...]]] = {
 
 _CODE_PATTERN: Final[re.Pattern[str]] = re.compile(r"\b([A-Z]{3})\b")
 
+#: US city/state line as printed without a dollar sign: ``SAN ANGELO TX 76903``.
+_US_STATE_ZIP: Final[re.Pattern[str]] = re.compile(r"\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b")
+
 #: Symbols ordered longest-first so "R$" is matched before "R".
 _SYMBOL_ORDER: Final[tuple[str, ...]] = tuple(
     sorted(
@@ -340,7 +343,18 @@ def detect_currency(
             candidates=candidates,
         )
 
-    # 4. No indicator at all.
+    # 4. No indicator at all — a US state+ZIP on the receipt is still
+    # evidence of USD (Walmart and similar POS omit the dollar sign).
+    if _US_STATE_ZIP.search(normalize_unicode(text).upper()):
+        return CurrencyDetection(
+            code="USD",
+            symbol=None,
+            confidence=0.70,
+            reason="us_state_zip_in_text",
+            warnings=tuple(warnings),
+            candidates=candidates,
+        )
+
     if default_currency:
         return CurrencyDetection(
             code=default_currency,

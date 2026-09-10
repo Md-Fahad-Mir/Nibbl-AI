@@ -68,6 +68,28 @@ _AT_PRICE = re.compile(r"@\s*(\d+(?:[.,]\d{1,3})?)")
 #: A SKU / product code printed alongside the description.
 _SKU = re.compile(r"(?<![\w])((?=[A-Z0-9\-]{5,20}$)[A-Z0-9]{2,}[A-Z0-9\-]*)")
 
+#: UPC-A / EAN / Walmart item codes sitting after the name. The whole-string
+#: ``_SKU`` pattern misses these because the tax flag and price follow them.
+_EMBEDDED_SKU = re.compile(
+    r"(?<![\d.,A-Za-z])(\d{11,14}|[0-9]{6,12}[A-Z]{1,4})(?![\dA-Za-z])",
+    re.IGNORECASE,
+)
+
+#: OCR glues a 12-digit UPC to the cents price: ``0681131092874.47``.
+_GLUED_UPC_PRICE = re.compile(r"(?<![\d])(\d{12})(\d[.,]\d{2})(?![\d])")
+
+#: Walmart prints the tax letter *before* the price: ``NIGHT HAWK ... F 2.78``.
+#: ``X`` is omitted — it is the qty×price operator in ``2 x 4.00``.
+#: Must follow a digit (the UPC) so "Vitamin E 4.99" is not eaten.
+_PRE_PRICE_TAX_FLAG = re.compile(
+    r"(?<=\d)\s+([TFNE])\s+(?=\d+[.,]\d{2})",
+    re.IGNORECASE,
+)
+
+#: Leftover tax letters and a stray OCR ``0`` after the price has been taken.
+#: ``E`` is omitted so "Vitamin E" is not stripped as an exempt flag.
+_TRAILING_TAX_NOISE = re.compile(r"(?:\s+[TFNX]|\s+0)+\s*$", re.IGNORECASE)
+
 #: A leading product code: a long run of digits with no decimal separator, at
 #: the start of the line. Target-style receipts print a 9-digit DPCI before the
 #: description, and it parses as a perfectly good "amount" -- which is how a
@@ -316,14 +338,24 @@ def _parse_item_line(
         sku = code.group(1)
         working = _blank(working, code.span(1))
 
+    # Separate a UPC that OCR jammed into the price, then lift any remaining
+    # mid-line product code so it is not left in the description.
+    working = _GLUED_UPC_PRICE.sub(r"\1 \2", working)
+    embedded = _pick_embedded_sku(working)
+    if embedded is not None:
+        sku = sku or embedded[0]
+        working = _blank(working, embedded[1])
+
     qty_at_price = _QTY_AT_PRICE.search(working)
     if qty_at_price is not None and _is_glued_pack_marker(working, qty_at_price):
         qty_at_price = None
     weight = _WEIGHT.search(working)
 
-    # Drop T/F/N/E taxability flags before prices are read, so "6.00 T" and
-    # the glued OCR form "6.00T" both leave a clean description.
+    # Drop T/F/N/E/X taxability flags before prices are read, so "6.00 T",
+    # the glued OCR form "6.00T", and Walmart's "F 2.78" all leave a clean
+    # description.
     working = PRICE_TAX_FLAG.sub(r"\g<price>", working)
+    working = _PRE_PRICE_TAX_FLAG.sub(lambda match: " " * len(match.group(0)), working)
 
     if qty_at_price is not None and _is_product_code(qty_at_price.group(2)):
         # "2 x 284060377 GG OATMILK" has the exact shape of quantity-times-unit-
@@ -383,6 +415,15 @@ def _parse_item_line(
             unit_price = unit_candidate.value
 
     description = _extract_description(working, prices)
+    if description is not None:
+        description = _TRAILING_TAX_NOISE.sub("", description).strip()
+        if sku is None:
+            leftover = _pick_embedded_sku(description)
+            if leftover is not None:
+                sku = leftover[0]
+                description = _blank(description, leftover[1])
+                description = _TRAILING_TAX_NOISE.sub("", description).strip()
+                description = re.sub(r"\s+", " ", description)
     if description is None or len(description) < _MIN_DESCRIPTION_LENGTH:
         return None
 
@@ -606,8 +647,23 @@ def _extract_description(text: str, amounts: list[ParsedAmount]) -> str | None:
     return cleaned
 
 
+def _pick_embedded_sku(text: str) -> tuple[str, tuple[int, int]] | None:
+    """Return ``(code, span)`` for a mid-line UPC / EAN / letter-suffixed PLU."""
+    matches = list(_EMBEDDED_SKU.finditer(text))
+    if not matches:
+        return None
+    chosen = max(
+        matches,
+        key=lambda match: (len(re.sub(r"\D", "", match.group(1))), len(match.group(1))),
+    )
+    return chosen.group(1), chosen.span(1)
+
+
 def _extract_sku(description: str) -> str | None:
     """Pull a product code out of a description, when one is clearly present."""
+    embedded = _pick_embedded_sku(description)
+    if embedded is not None:
+        return embedded[0]
     match = _SKU.search(description.strip())
     if match is None:
         return None

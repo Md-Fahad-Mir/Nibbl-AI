@@ -219,6 +219,7 @@ KEYWORDS: Final[dict[LabelCategory, tuple[str, ...]]] = {
         "AMOUNT TENDERED",
         "TENDERED",
         "TENDER",
+        "TEND",
         "CASH PAID",
         "AMOUNT PAID",
         "PAID",

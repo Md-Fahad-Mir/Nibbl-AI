@@ -72,6 +72,10 @@ contract: ## Export openapi.json + sample responses for backend handover
 evaluate: ## Report extraction accuracy over the fixture dataset
 	$(PYTHON) scripts/evaluate.py
 
+.PHONY: paddleocr-vl
+paddleocr-vl: ## Download/run PaddleOCR-VL on the sample grocery receipt
+	$(PYTHON) scripts/try_paddleocr_vl.py
+
 .PHONY: check
 check: lint typecheck test golden-check ## Everything CI runs
 

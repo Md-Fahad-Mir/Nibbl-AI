@@ -102,7 +102,7 @@ Everything is environment-driven. The full annotated list is in
 | `CORS_ALLOW_ORIGINS` | *(empty)* | Set only if a browser calls the API directly. |
 | `MAX_FILE_SIZE_MB` | `10` | Upload limit. |
 | `OCR_LANGUAGES` | `eng` | Extra languages need their `tesseract-ocr-<lang>` pack in the image. |
-| `OCR_PROVIDER` | `tesseract` | Set `openai_vision` to have a multimodal model read receipts instead. More accurate on photos; receipts then leave your infrastructure. |
+| `OCR_PROVIDER` | `tesseract` | Set `paddleocr_vl` for layout-aware local OCR (logos, mixed fonts, column spaces). Set `openai_vision` to have a cloud multimodal model read receipts instead. |
 | `VISION_MODEL` | `gpt-4o-mini` | Vision model. Names move -- verify with `python scripts/check_llm.py --list`. |
 | `VISION_API_KEY` | *(empty)* | Required when `OCR_PROVIDER=openai_vision`. |
 | `LLM_MODEL` | `gpt-4o-mini` | Text model for the review endpoints. |

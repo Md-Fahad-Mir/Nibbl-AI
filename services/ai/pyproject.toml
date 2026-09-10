@@ -41,6 +41,11 @@ dev = [
     "mypy>=1.10",
     "types-requests",
 ]
+# Install paddlepaddle (CPU or GPU) first, then this extra. The engine is
+# hardware-specific and is not pinned here.
+paddleocr-vl = [
+    "paddleocr[doc-parser]>=3.3",
+]
 
 [project.urls]
 Documentation = "./docs/architecture.md"
@@ -109,7 +114,7 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # Third-party packages without bundled type information.
-module = ["cv2.*", "pytesseract.*", "structlog.*"]
+module = ["cv2.*", "pytesseract.*", "structlog.*", "paddleocr.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -127,6 +132,7 @@ addopts = "-ra --strict-markers --strict-config"
 markers = [
     "slow: tests that take more than a second",
     "requires_tesseract: needs the tesseract binary installed",
+    "requires_paddleocr_vl: needs paddlepaddle and paddleocr[doc-parser]",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

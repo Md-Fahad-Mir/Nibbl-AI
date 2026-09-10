@@ -31,10 +31,11 @@ _DIVIDER = re.compile(r"^[\s\-=_*~.#]{3,}$")
 
 #: US grocery and convenience POS (7-Eleven, Target, Kroger, Walmart) prints
 #: a taxability letter immediately after the line total: T=taxable, F=food,
-#: N=non-taxable, E=exempt. Anchored to the end of the line so a product
-#: like "T-shirt" is not eaten. Totals lines never carry this flag.
+#: N=non-taxable, E=exempt, X=taxable (Walmart). Anchored to the end of the
+#: line so a product like "T-shirt" is not eaten. Totals lines never carry
+#: this flag.
 PRICE_TAX_FLAG = re.compile(
-    r"(?P<price>[-+]?(?:\d+[.,])?\d+[.,]\d{1,3})\s*(?P<flag>[TFNE])\s*$",
+    r"(?P<price>[-+]?(?:\d+[.,])?\d+[.,]\d{1,3})\s*(?P<flag>[TFNEX])\s*$",
     re.IGNORECASE,
 )
 

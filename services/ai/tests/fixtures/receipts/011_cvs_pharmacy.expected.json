@@ -1,6 +1,6 @@
 {
   "confidence": {
-    "extraction": 0.8518072916666667,
+    "extraction": 0.8570528846153846,
     "fields": {
       "currency": 0.0,
       "discount": 0.4273500000000001,
@@ -10,7 +10,7 @@
       "merchant.name": 0.6945000000000001,
       "merchant.phone": 0.0,
       "merchant.registration_id": 0.8705000000000002,
-      "merchant.store_id": 0.0,
+      "merchant.store_id": 0.8705000000000002,
       "merchant.tax_id": 0.0,
       "merchant.website": 0.0,
       "payment.card_last4": 0.0,
@@ -26,7 +26,7 @@
       "transaction.time": 0.8705000000000002
     },
     "ocr": 0.8099999999999999,
-    "overall": 0.7149835784313726,
+    "overall": 0.7199049841772152,
     "validation": 0.4
   },
   "currency": null,
@@ -131,7 +131,7 @@
     "name": "CVS/pharmacy'",
     "phone": null,
     "registration_id": "O3",
-    "store_id": null,
+    "store_id": "6855",
     "tax_id": null,
     "website": null
   },

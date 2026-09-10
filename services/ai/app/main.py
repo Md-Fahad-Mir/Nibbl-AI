@@ -112,6 +112,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # orchestrator withholds traffic, which is more diagnosable than a
         # container that will not start.
         logger.error("ocr_provider_not_ready", detail=detail)
+    else:
+        logger.info("ocr_warmup_started", provider=settings.ocr_provider)
+        primary = settings.ocr_provider.split("+", 1)[0].strip()
+        if primary == "paddleocr_vl":
+            print(
+                "Loading PaddleOCR-VL weights (a few minutes on CPU). "
+                "Wait for 'ready' before uploading a receipt.",
+                flush=True,
+            )
+        elif primary == "paddleocr":
+            print("Loading PP-OCRv5. Wait for 'ready' before uploading a receipt.", flush=True)
+        app.state.ocr_provider.warmup()
+        logger.info("ocr_warmup_complete", provider=settings.ocr_provider)
+        if primary in {"paddleocr_vl", "paddleocr"}:
+            print(f"{primary} is ready. Open http://127.0.0.1:8001/docs", flush=True)
 
     yield
 

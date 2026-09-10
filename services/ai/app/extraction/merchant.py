@@ -77,8 +77,14 @@ _GREETING_PREFIX = re.compile(
 )
 
 _STORE_ID_REGEX = re.compile(
-    r"\b(?:STORE|STR|BRANCH|LOC|LOCATION|SITE)\s*[:#.\s]*([A-Za-z0-9\-_]{1,15})\b",
+    r"\b(?:STORE|STR|BRANCH|LOC|LOCATION|SITE)\s*[:#.\s]*([A-Za-z0-9\-_]{1,15})\b"
+    r"|(?<![A-Z])ST\s*#\s*(\d{1,8})(?!\d)",
     re.IGNORECASE,
+)
+
+#: US city + state + ZIP with no comma: "SAN ANGELO TX 76903".
+_US_CITY_STATE_ZIP = re.compile(
+    r"^[A-Za-z][A-Za-z .'-]+\s+[A-Z]{2}\s+\d{5}(?:-\d{4})?$",
 )
 
 
@@ -112,10 +118,16 @@ def extract_merchant(context: ReceiptContext) -> MerchantResult:
 
 def _extract_store_id(context: ReceiptContext) -> ExtractedField[str]:
     """Extract store or branch identifier from header or metadata."""
-    for line in _header_lines(context) + context.in_section(ReceiptSection.METADATA):
+    ordered: list[LineView] = []
+    for line in _header_lines(context) + context.in_section(ReceiptSection.METADATA) + list(
+        context.lines
+    ):
+        if line not in ordered:
+            ordered.append(line)
+    for line in ordered:
         match = _STORE_ID_REGEX.search(line.normalized)
         if match:
-            val = match.group(1).strip()
+            val = (match.group(1) or match.group(2) or "").strip()
             if val and val.upper() not in {"NO", "NUMBER", "ID", "TAX", "TEL", "FAX"}:
                 return ExtractedField(
                     value=val,
@@ -158,6 +170,8 @@ def _is_name_candidate(line: LineView) -> bool:
 def _looks_like_address(text: str) -> bool:
     """Whether a line reads as a postal address."""
     if _ADDRESS_HINT.search(text):
+        return True
+    if _US_CITY_STATE_ZIP.match(text.strip()):
         return True
     # A comma-separated line ending in a postcode is an address even without
     # an explicit street keyword.

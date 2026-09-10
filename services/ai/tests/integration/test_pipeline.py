@@ -328,6 +328,7 @@ def test_provider_is_selected_by_configuration(make_settings) -> None:
 
     assert "fixture" in available_providers()
     assert "tesseract" in available_providers()
+    assert "paddleocr_vl" in available_providers()
 
     settings = make_settings(ocr_provider="fixture")
     assert create_ocr_provider(settings=settings).name == "fixture"

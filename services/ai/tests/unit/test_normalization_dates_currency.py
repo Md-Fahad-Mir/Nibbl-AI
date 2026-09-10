@@ -166,6 +166,12 @@ def test_configured_default_is_low_confidence() -> None:
     assert detection.reason == "configured_default"
 
 
+def test_us_state_zip_implies_usd() -> None:
+    detection = detect_currency("SAN ANGELO TX 76903\nTOTAL 46.42")
+    assert detection.code == "USD"
+    assert detection.reason == "us_state_zip_in_text"
+
+
 def test_no_evidence_yields_no_currency() -> None:
     detection = detect_currency("TOTAL 25.99")
     assert detection.code is None

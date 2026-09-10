@@ -59,12 +59,19 @@ _REG_ID_LABELS: Final[re.Pattern[str]] = re.compile(
 #: "Rechnung X" without a variant per language.
 _RECEIPT_ID_LABELS: Final[re.Pattern[str]] = re.compile(
     r"\b("
-    r"RECEIPT|RCPT|INVOICE|INV|BILL|ORDER|TRANS(?:ACTION)?|TXN|TRX|REF(?:ERENCE)?"
+    r"RECEIPT|RCPT|INVOICE|INV|BILL|ORDER|TRANS(?:ACTION)?|TXN|TRX|TR|TC"
+    r"|REF(?:ERENCE)?"
     r"|TICKET|CHECK|DOC(?:UMENT)?|SALE|REG(?:ISTER)?"
     r"|BELEG|KASSENBON|RECHNUNG|QUITTUNG"
     r"|FACTURE|RECU|FACTURA|RECIBO|NOTA|FATTURA|SCONTRINO"
     r")"
     r"\s*[-.]?\s*(?:NO|NR|NUM(?:BER)?|ID|N|#)?\b[.:\s#-]*",
+    re.IGNORECASE,
+)
+
+#: Walmart / similar POS: ``TR# 06738`` is the transaction, not the debit REF#.
+_TRANSACTION_NUMBER: Final[re.Pattern[str]] = re.compile(
+    r"(?<![A-Z])TR\s*#\s*(\d{3,8})(?!\d)",
     re.IGNORECASE,
 )
 
@@ -74,6 +81,8 @@ _ID_VALUE: Final[re.Pattern[str]] = re.compile(r"([A-Z0-9][A-Z0-9\-/_:]{1,35})",
 
 #: Card-scheme names as printed by terminals.
 _CARD_TYPES: Final[dict[str, str]] = {
+    "US DEBIT": "DEBIT",
+    "DEBIT": "DEBIT",
     "VISA": "VISA",
     "MASTERCARD": "MASTERCARD",
     "MASTER CARD": "MASTERCARD",
@@ -191,6 +200,14 @@ def extract_receipt_number(text: str) -> str | None:
     """Extract a receipt / invoice / transaction identifier."""
     found = _extract_labelled_id(text, _RECEIPT_ID_LABELS)
     return found[1] if found else None
+
+
+def extract_transaction_number(text: str) -> str | None:
+    """Extract a POS ``TR#`` / ``TRX#`` printed beside store metadata."""
+    if not text:
+        return None
+    match = _TRANSACTION_NUMBER.search(normalize_unicode(text))
+    return match.group(1) if match else None
 
 
 def extract_card_type(text: str) -> str | None:

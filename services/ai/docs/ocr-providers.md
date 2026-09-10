@@ -84,6 +84,38 @@ Configuration: `TESSERACT_CMD`, `TESSERACT_TESSDATA_DIR`, `TESSERACT_PSM`
 (default 6 = uniform text block, the best general default for receipts),
 `TESSERACT_OEM`.
 
+### `paddleocr`
+
+PP-OCRv5 detector + recogniser. Seconds on CPU. Use this locally unless you
+have a GPU. Install `paddlepaddle` and `paddleocr`, then
+`OCR_PROVIDER=paddleocr`.
+
+Configuration: `PADDLEOCR_OCR_VERSION` (default `PP-OCRv5`), `PADDLEOCR_DEVICE`.
+
+### `paddleocr_vl`
+
+Local document VLM. Layout analysis labels every region (title, text, table,
+image/logo, seal, header, footer) and a 0.9B model reads each crop, including
+the wide spaces receipts use to line up amounts. Image blocks are OCR'd so
+stylised header type is not dropped as decoration.
+
+Install `paddlepaddle` (CPU or GPU) and `pip install 'paddleocr[doc-parser]'`,
+then set `OCR_PROVIDER=paddleocr_vl` or `paddleocr_vl+tesseract`. Startup
+loads the 0.9B weights (a few minutes on CPU) so the first extract is not
+charged for model load. On CPU set `OCR_TIMEOUT_SECONDS=900` and
+`OCR_MAX_RETRIES=0`. Phone photos are capped at `PADDLEOCR_VL_MAX_LONG_EDGE`
+(default 1280) so the VLM does not read a 12MP crop set. Leave
+`PADDLEOCR_VL_USE_SEAL_RECOGNITION=false` on CPU — receipts do not need it.
+
+Does not report calibrated confidence — `confidence` is `None`. Geometry
+comes from layout boxes. Vendor extras stay in `provider_metadata.blocks`.
+
+Configuration: `PADDLEOCR_VL_PIPELINE_VERSION` (default `v1.6`),
+`PADDLEOCR_VL_DEVICE`, `PADDLEOCR_VL_MAX_LONG_EDGE` (default 1280),
+`PADDLEOCR_VL_USE_OCR_FOR_IMAGE_BLOCK` (default true),
+`PADDLEOCR_VL_USE_SEAL_RECOGNITION`, `PADDLEOCR_VL_USE_LAYOUT_DETECTION`,
+and the optional `PADDLEOCR_VL_VL_REC_*` remote-backend settings.
+
 ### `fixture`
 
 Replays **recorded** OCR output from disk. It does not generate anything — it

@@ -99,6 +99,14 @@ def redact_text(text: str | None) -> RedactionResult:
         digits = re.sub(r"[ -]", "", raw)
         if not (13 <= len(digits) <= 19):
             return raw
+        # Ungrouped 13–14 digit runs are EAN/UPC product codes, or a 12-digit
+        # UPC glued to the first digit of the price ("0681131092874.47").
+        # Payment cards are 15–16 (rarely 19), or grouped 4-4-4-4.
+        grouped = bool(re.search(r"[ -]", raw))
+        if not grouped and len(digits) < 15:
+            return raw
+        if text[match.end() : match.end() + 1] == ".":
+            return raw
         # A 16-digit run on a payment receipt is masked whether or not it
         # passes Luhn: OCR digit errors would otherwise defeat the check.
         if not _luhn_valid(digits) and len(digits) not in (15, 16):

@@ -83,3 +83,7 @@ class OCRProvider(ABC):
     def describe(self) -> dict[str, Any]:
         """Return non-sensitive provider metadata for logs and ``/version``."""
         return {"provider": self.name}
+
+    def warmup(self) -> None:
+        """Load models or clients that would otherwise pay on the first request."""
+        return None

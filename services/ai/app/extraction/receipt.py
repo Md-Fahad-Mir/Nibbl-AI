@@ -31,7 +31,7 @@ from app.extraction.merchant import extract_merchant
 from app.extraction.payment import extract_payment
 from app.extraction.totals import TotalsResult, extract_totals
 from app.normalization.currency import detect_currency
-from app.normalization.numbers import extract_receipt_number
+from app.normalization.numbers import extract_receipt_number, extract_transaction_number
 from app.schemas.ocr import OCRResult
 from app.schemas.receipt import Discount, PaymentMethod, PaymentSplit, Tax
 
@@ -250,10 +250,23 @@ class RuleBasedReceiptExtractor:
     def _extract_receipt_number(context: ReceiptContext) -> ExtractedField[str]:
         """Extract the receipt / transaction identifier.
 
-        Searched from the top: the identifier is printed in the metadata block,
-        and footer text can contain similar-looking codes (loyalty ids, survey
-        codes) that must not win.
+        Prefer ``TR#`` (the register transaction) over ``REF#`` (a card
+        network reference) when both are printed. Then search from the top:
+        the identifier is in the metadata block, and footer text can contain
+        similar-looking codes that must not win.
         """
+        for line in context.lines:
+            value = extract_transaction_number(line.normalized)
+            if value:
+                return ExtractedField(
+                    value=value,
+                    evidence=(
+                        line.evidence(
+                            ExtractionMethod.KEYWORD_ANCHORED, notes="pos_transaction_number"
+                        ),
+                    ),
+                    raw_value=line.raw,
+                )
         for line in context.lines:
             value = extract_receipt_number(line.normalized)
             if value:

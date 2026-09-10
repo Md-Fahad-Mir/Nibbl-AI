@@ -189,6 +189,12 @@ def test_short_identifiers_are_not_masked() -> None:
     assert result.text == "ORDER 12345 TOTAL 9.99 PHONE 5550142"
 
 
+def test_glued_upc_is_not_masked() -> None:
+    result = redact_text("AUTODRIVE 20 0681131092874.47 X")
+    assert "068113109287" in result.text
+    assert not result.redacted
+
+
 def test_cvv_is_masked() -> None:
     result = redact_text("CVV 123")
     assert "123" not in result.text

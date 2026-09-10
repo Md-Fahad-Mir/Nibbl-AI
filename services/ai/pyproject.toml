@@ -89,6 +89,8 @@ ignore = [
 "app/normalization/money.py" = ["RUF001"]
 "app/normalization/currency.py" = ["RUF001", "RUF003"]
 "tests/unit/test_normalization_text.py" = ["RUF001"]
+# The pack-marker docstring intentionally shows × vs the letter x.
+"app/extraction/items.py" = ["RUF002"]
 # Tests deliberately use assert and long descriptive names.
 "tests/**" = ["ARG001", "ARG002", "ARG004", "S101"]
 # Provider packages import submodules purely to trigger registration.

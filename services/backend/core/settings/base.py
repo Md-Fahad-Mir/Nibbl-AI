@@ -67,6 +67,7 @@ LOCAL_APPS = [
     "Apps.notifications",
     "Apps.analytics",
     "Apps.admin_panel",
+    "Apps.content",
 ]
 
 # Promotional referral reward (M1 "Invite Friends, Earn $5").

@@ -29,6 +29,43 @@ def _brand(slug="acme", plan="starter"):
     return owner, brand
 
 
+class ApproveBrandTests(APITestCase):
+    def _pending_brand_user(self):
+        return User.objects.create_user(
+            email="brand@example.com", password="x", full_name="Brand Owner",
+            role=User.Role.BRAND, is_approved=False,
+        )
+
+    def test_admin_can_approve_brand_user(self):
+        self.client.force_authenticate(_admin())
+        user = self._pending_brand_user()
+        resp = self.client.post(
+            reverse("v1:admin_panel:user-approve-brand", args=[user.id])
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["is_approved"])
+        self.assertEqual(resp.data["role"], "brand")
+        user.refresh_from_db()
+        self.assertTrue(user.is_approved)
+
+    def test_approve_rejects_non_brand_user(self):
+        self.client.force_authenticate(_admin())
+        consumer = User.objects.create_user(
+            email="c@example.com", password="x", full_name="C",
+        )
+        resp = self.client.post(
+            reverse("v1:admin_panel:user-approve-brand", args=[consumer.id])
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_user_list_includes_is_approved(self):
+        self.client.force_authenticate(_admin())
+        self._pending_brand_user()
+        resp = self.client.get(reverse("v1:admin_panel:user-list"))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("is_approved", resp.data[0])
+
+
 class AdminGatingTests(APITestCase):
     def test_non_admin_blocked_on_admin_endpoints(self):
         owner, brand = _brand()

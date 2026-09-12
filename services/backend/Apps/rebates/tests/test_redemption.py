@@ -266,3 +266,72 @@ class ReceiptImageUrlTests(APITestCase):
         self.assertIsNotNone(row["receipt_image_url"])
         self.assertTrue(row["receipt_image_url"].startswith("http"))
         self.assertIn("receipts/", row["receipt_image_url"])
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class BrandRedemptionDetailTests(APITestCase):
+    def test_detail_returns_nested_campaign_customer_receipt(self):
+        owner, brand, product, campaign, _ = _world(reward="5.00")
+        user, reservation = _claim(campaign)
+        receipt = receipt_services.upload_receipt(
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
+            items=[{"description": "Cola 12oz", "quantity": 1}],
+        )
+        receipt.image = SimpleUploadedFile(
+            "r.jpg", b"fake-jpeg-bytes", content_type="image/jpeg"
+        )
+        receipt.save(update_fields=["image"])
+        redemption = Redemption.objects.get()
+
+        self.client.force_authenticate(owner)
+        resp = self.client.get(
+            reverse(
+                "v1:rebates:brand-redemption-detail", args=[brand.id, redemption.id]
+            )
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.data
+
+        # Top level.
+        self.assertEqual(data["status"], Redemption.Status.ISSUED)
+        self.assertEqual(data["reward_amount"], "5.00")
+
+        # Nested campaign.
+        self.assertEqual(data["campaign"]["name"], campaign.name)
+
+        # Nested customer (counts scoped to this brand).
+        self.assertEqual(data["customer"]["email"], user.email)
+        self.assertEqual(data["customer"]["name"], user.full_name)
+        self.assertEqual(data["customer"]["redemptions_count"], 1)
+        self.assertEqual(data["customer"]["reviews_count"], 0)
+
+        # Nested receipt.
+        self.assertEqual(data["receipt"]["status"], Receipt.Status.VERIFIED)
+        self.assertTrue(data["receipt"]["image_url"].startswith("http"))
+        self.assertIn("line_items", data["receipt"])
+
+    def test_detail_is_tenant_scoped_404_for_other_brand(self):
+        owner, brand, product, campaign, _ = _world(reward="5.00")
+        user, reservation = _claim(campaign)
+        receipt_services.upload_receipt(
+            user=user, reservation_id=reservation.id, **RECEIPT_META,
+            items=[{"description": "Cola 12oz", "quantity": 1}],
+        )
+        redemption = Redemption.objects.get()
+
+        # A second brand whose owner must not see the first brand's redemption.
+        other_owner = User.objects.create_user(
+            email="other@example.com", password="x", full_name="Other"
+        )
+        other_brand = Brand.objects.create(name="Other", slug="other", plan=None)
+        BrandMembership.objects.create(
+            brand=other_brand, user=other_owner, role=BrandMembership.Role.OWNER
+        )
+        self.client.force_authenticate(other_owner)
+        resp = self.client.get(
+            reverse(
+                "v1:rebates:brand-redemption-detail",
+                args=[other_brand.id, redemption.id],
+            )
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

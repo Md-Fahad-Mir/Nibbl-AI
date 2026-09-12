@@ -121,6 +121,116 @@ def brand_overview(brand: Brand) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Brand rebates summary (period-over-period)
+# ---------------------------------------------------------------------------
+def _change_percent(current, previous) -> float:
+    """Period-over-period change. A zero baseline returns 0.0 (no div-by-zero)."""
+    prev = float(previous)
+    if prev == 0:
+        return 0.0
+    return round((float(current) - prev) / prev * 100, 1)
+
+
+def _rebate_window(brand: Brand, start, end) -> dict:
+    """Raw rebate metrics for a single [start, end) window."""
+    reservations = Reservation.objects.filter(
+        campaign__brand=brand, created_at__gte=start, created_at__lt=end
+    )
+    receipts = Receipt.objects.filter(
+        brand=brand, created_at__gte=start, created_at__lt=end
+    )
+    redemptions = Redemption.objects.filter(
+        brand=brand, created_at__gte=start, created_at__lt=end
+    )
+
+    reservation_count = reservations.count()
+    redemption_count = redemptions.count()
+    total_cashback = _sum(redemptions, "reward_amount")
+    spend = total_cashback + _sum(redemptions, "fee_amount")
+    redemption_rate = (
+        round(redemption_count / reservation_count * 100, 1) if reservation_count else 0.0
+    )
+
+    # Average claim time: a redemption's issued_at minus its reservation's created_at.
+    deltas = [
+        (r.issued_at - r.reservation.created_at).total_seconds() / 60.0
+        for r in redemptions.select_related("reservation")
+        if r.issued_at and r.reservation_id and r.reservation.created_at
+    ]
+    avg_claim_time = round(sum(deltas) / len(deltas)) if deltas else 0
+
+    # Active users: distinct across reservations, receipts and redemptions.
+    user_ids: set = set()
+    user_ids.update(reservations.values_list("user_id", flat=True))
+    user_ids.update(receipts.values_list("user_id", flat=True))
+    user_ids.update(redemptions.values_list("user_id", flat=True))
+
+    return {
+        "total_cashback": total_cashback,
+        "redemption_rate": redemption_rate,
+        "avg_claim_time_minutes": avg_claim_time,
+        "active_users": len(user_ids),
+        "spend": spend,
+    }
+
+
+def _budget_savings(brand: Brand, start, end, spend) -> "Decimal":  # noqa: F821
+    """Budgeted allowance for the window minus actual reward+fee spend.
+
+    ``active_days`` per campaign is approximated as the days its
+    [start_at|created_at, end_at|now] window overlaps the period -- the codebase
+    keeps no pause history, so a finer figure is not available. Documented
+    assumption; change here if the product defines active_days differently.
+    """
+    period_days = max((end - start).days, 1)
+    budgeted = ZERO
+    for campaign in brand.campaigns.all():
+        c_start = campaign.start_at or campaign.created_at
+        c_end = campaign.end_at or end
+        overlap_start = max(c_start, start)
+        overlap_end = min(c_end, end)
+        active_days = max(0, min((overlap_end - overlap_start).days, period_days))
+        budgeted += campaign.daily_budget * active_days
+    return budgeted - spend
+
+
+def brand_rebates_summary(brand: Brand, period_days: int = 30) -> dict:
+    now = timezone.now()
+    cur_start = now - dt.timedelta(days=period_days)
+    prev_start = now - dt.timedelta(days=2 * period_days)
+
+    cur = _rebate_window(brand, cur_start, now)
+    prev = _rebate_window(brand, prev_start, cur_start)
+
+    total_cashback_change = _change_percent(cur["total_cashback"], prev["total_cashback"])
+    redemption_rate_change = _change_percent(cur["redemption_rate"], prev["redemption_rate"])
+    avg_claim_time_change = _change_percent(
+        cur["avg_claim_time_minutes"], prev["avg_claim_time_minutes"]
+    )
+    active_users_change = _change_percent(cur["active_users"], prev["active_users"])
+
+    # Headline movement: redemption rate, falling back to cashback when there was
+    # no prior redemption rate to compare against.
+    performance_change = (
+        redemption_rate_change if prev["redemption_rate"] else total_cashback_change
+    )
+
+    return {
+        "performance_change_percent": performance_change,
+        "performance_change_label": "better" if performance_change >= 0 else "worse",
+        "budget_savings": _budget_savings(brand, cur_start, now, cur["spend"]),
+        "total_cashback": cur["total_cashback"],
+        "total_cashback_change_percent": total_cashback_change,
+        "redemption_rate": cur["redemption_rate"],
+        "redemption_rate_change_percent": redemption_rate_change,
+        "avg_claim_time_minutes": cur["avg_claim_time_minutes"],
+        "avg_claim_time_change_percent": avg_claim_time_change,
+        "active_users": cur["active_users"],
+        "active_users_change_percent": active_users_change,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Platform overview (admin)
 # ---------------------------------------------------------------------------
 def platform_overview() -> dict:

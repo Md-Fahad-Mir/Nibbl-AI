@@ -69,6 +69,54 @@ def _full_flow(brand, *, email="c@example.com"):
     return user, product, rebate
 
 
+class BrandRebatesSummaryTests(APITestCase):
+    def test_summary_endpoint_shape_and_values(self):
+        owner, brand, wallet = _brand(plan="starter")  # rebate fee 20%
+        _full_flow(brand)  # 1 reservation -> 1 redemption (reward 5.00) this period
+
+        self.client.force_authenticate(owner)
+        resp = self.client.get(
+            reverse("v1:analytics:brand-rebates-summary", args=[brand.id]),
+            {"period": "30d"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.data
+
+        # All contract keys present.
+        self.assertEqual(
+            set(data),
+            {
+                "performance_change_percent",
+                "performance_change_label",
+                "budget_savings",
+                "total_cashback",
+                "total_cashback_change_percent",
+                "redemption_rate",
+                "redemption_rate_change_percent",
+                "avg_claim_time_minutes",
+                "avg_claim_time_change_percent",
+                "active_users",
+                "active_users_change_percent",
+            },
+        )
+        # Values derived from the single current-period redemption.
+        self.assertEqual(data["total_cashback"], "5.00")      # decimal string
+        self.assertEqual(data["redemption_rate"], 100.0)      # 1 redemption / 1 reservation
+        self.assertEqual(data["active_users"], 1)
+        self.assertIn(data["performance_change_label"], {"better", "worse"})
+
+    def test_summary_requires_membership(self):
+        owner, brand, wallet = _brand()
+        outsider = User.objects.create_user(
+            email="outsider@example.com", password="x", full_name="X"
+        )
+        self.client.force_authenticate(outsider)
+        resp = self.client.get(
+            reverse("v1:analytics:brand-rebates-summary", args=[brand.id])
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class BrandOverviewTests(APITestCase):
     def test_overview_matches_source_data(self):
         owner, brand, wallet = _brand(plan="starter")  # rebate fee 20%

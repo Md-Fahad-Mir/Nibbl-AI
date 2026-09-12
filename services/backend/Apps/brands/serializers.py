@@ -7,6 +7,8 @@ from Apps.brands.models import Brand, BrandApplication, BrandMembership
 
 class BrandSerializer(serializers.ModelSerializer):
     plan = PlanSerializer(read_only=True)
+    logo = serializers.SerializerMethodField()
+    logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Brand
@@ -17,6 +19,7 @@ class BrandSerializer(serializers.ModelSerializer):
             "legal_name",
             "description",
             "website",
+            "logo",
             "logo_url",
             "contact_email",
             "status",
@@ -25,11 +28,35 @@ class BrandSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "slug", "status", "plan", "created_at"]
 
+    def get_logo(self, obj):
+        """Relative media path of the uploaded logo, or None."""
+        return obj.logo.url if obj.logo else None
+
+    def get_logo_url(self, obj):
+        """Absolute URL of the uploaded logo; falls back to the stored URL.
+
+        Brands with no uploaded ``logo`` keep returning their existing
+        ``logo_url`` value, so their response is unchanged.
+        """
+        if obj.logo:
+            request = self.context.get("request")
+            return (
+                request.build_absolute_uri(obj.logo.url) if request else obj.logo.url
+            )
+        return obj.logo_url or None
+
 
 class BrandUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Brand
-        fields = ["legal_name", "description", "website", "logo_url", "contact_email"]
+        fields = [
+            "legal_name",
+            "description",
+            "website",
+            "logo",
+            "logo_url",
+            "contact_email",
+        ]
 
 
 class BrandApplicationSerializer(serializers.ModelSerializer):

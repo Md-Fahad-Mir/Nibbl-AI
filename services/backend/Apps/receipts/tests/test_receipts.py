@@ -1,5 +1,8 @@
+import tempfile
 from decimal import Decimal
 
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -146,6 +149,40 @@ class ManualReviewApiTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(resp.data), 1)
+
+    @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+    def test_queue_receipt_includes_reviewer_fields(self):
+        self.receipt.image = SimpleUploadedFile(
+            "r.jpg", b"fake-jpeg-bytes", content_type="image/jpeg"
+        )
+        self.receipt.save(update_fields=["image"])
+
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(
+            reverse("v1:receipts:review-queue", args=[self.brand.id])
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        receipt = resp.data[0]["receipt"]
+
+        # Claimant identity (reviewer-only fields).
+        self.assertEqual(receipt["user"], self.user.id)
+        self.assertEqual(receipt["user_email"], self.user.email)
+        self.assertEqual(receipt["user_name"], self.user.full_name)
+
+        # Absolute receipt image URL.
+        self.assertTrue(receipt["image_url"].startswith("http"))
+
+        # Match + fraud context.
+        self.assertFalse(receipt["matched"])
+        self.assertIsNone(receipt["matched_product"])
+        self.assertIsNone(receipt["matched_product_name"])
+        self.assertIsInstance(receipt["line_items"], list)
+        self.assertIsInstance(receipt["fraud_flags"], list)
+        if receipt["fraud_flags"]:
+            self.assertEqual(
+                set(receipt["fraud_flags"][0]),
+                {"id", "reason", "detail", "resolved", "created_at"},
+            )
 
     def test_approve_verifies_receipt(self):
         self.client.force_authenticate(self.owner)

@@ -90,8 +90,83 @@ class UploadReceiptSerializer(serializers.Serializer):
     image = serializers.FileField()
 
 
+class FraudFlagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FraudFlag
+        fields = ["id", "reason", "detail", "resolved", "created_at"]
+        read_only_fields = fields
+
+
+class ReviewQueueReceiptSerializer(serializers.ModelSerializer):
+    """Brand-facing receipt for the manual review queue.
+
+    A superset of the consumer ``ReceiptSerializer`` carrying the reviewer-only
+    context a brand needs to judge a claim (claimant identity, receipt image,
+    matched product, fraud flags). Kept separate so the consumer receipt
+    endpoints' response is not changed.
+    """
+
+    campaign_name = serializers.CharField(source="campaign.name", read_only=True)
+    brand_name = serializers.CharField(source="brand.name", read_only=True)
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    user_avatar_url = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+    matched_product_name = serializers.CharField(
+        source="matched_product.name", read_only=True, default=None
+    )
+    reward_amount = serializers.DecimalField(
+        source="reservation.reward_amount", max_digits=14, decimal_places=2,
+        read_only=True,
+    )
+    line_items = ReceiptLineItemSerializer(many=True, read_only=True)
+    fraud_flags = FraudFlagSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Receipt
+        fields = [
+            "id",
+            "reservation",
+            "campaign",
+            "campaign_name",
+            "brand_name",
+            "user",
+            "user_name",
+            "user_email",
+            "user_avatar_url",
+            "image_url",
+            "status",
+            "merchant",
+            "purchased_at",
+            "receipt_number",
+            "total",
+            "matched",
+            "matched_units",
+            "matched_product",
+            "matched_product_name",
+            "reward_amount",
+            "decision_reason",
+            "line_items",
+            "fraud_flags",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def _absolute_url(self, file_field):
+        if not file_field:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(file_field.url) if request else file_field.url
+
+    def get_user_avatar_url(self, obj):
+        return self._absolute_url(obj.user.avatar)
+
+    def get_image_url(self, obj):
+        return self._absolute_url(obj.image)
+
+
 class ReviewItemSerializer(serializers.ModelSerializer):
-    receipt = ReceiptSerializer(read_only=True)
+    receipt = ReviewQueueReceiptSerializer(read_only=True)
 
     class Meta:
         model = ManualReviewItem

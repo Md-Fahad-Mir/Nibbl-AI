@@ -23,6 +23,7 @@ class Brand(BaseModel):
     legal_name = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
     website = models.URLField(blank=True)
+    logo = models.ImageField(upload_to="brand_logos/", null=True, blank=True)
     logo_url = models.URLField(blank=True)
     contact_email = models.EmailField(blank=True)
 

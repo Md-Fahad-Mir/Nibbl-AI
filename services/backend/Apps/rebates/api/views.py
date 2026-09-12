@@ -10,6 +10,7 @@ from Apps.brands.access import get_brand_or_404, require_membership
 from Apps.common.pagination import paginate, paginated_response_serializer
 from Apps.rebates import serializers as s
 from Apps.rebates.selectors import (
+    get_brand_redemption,
     get_user_redemption,
     redemptions_for_brand,
     redemptions_for_user,
@@ -55,5 +56,23 @@ class BrandRedemptionListView(APIView):
         return Response(
             s.RedemptionSerializer(
                 redemptions_for_brand(brand), many=True, context={"request": request}
+            ).data
+        )
+
+
+@extend_schema(tags=["redemptions"])
+class BrandRedemptionDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: s.BrandRedemptionDetailSerializer})
+    def get(self, request, brand_id, redemption_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand)
+        redemption = get_brand_redemption(brand, redemption_id)
+        if redemption is None:
+            raise NotFound("Redemption not found.")
+        return Response(
+            s.BrandRedemptionDetailSerializer(
+                redemption, context={"request": request}
             ).data
         )

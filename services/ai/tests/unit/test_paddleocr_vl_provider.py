@@ -188,7 +188,9 @@ def test_vendor_exception_is_normalised(monkeypatch, settings) -> None:
 
 def test_timeout_is_retryable(monkeypatch, settings) -> None:
     provider = PaddleOCRVLProvider(settings)
-    monkeypatch.setattr(provider, "_pipeline_instance", lambda: SimpleNamespace(predict=lambda image: None))
+    monkeypatch.setattr(
+        provider, "_pipeline_instance", lambda: SimpleNamespace(predict=lambda image: None)
+    )
 
     def _never_finishes(target, kwargs=None, daemon=None, name=None):
         class _Alive:

@@ -119,8 +119,8 @@ def extract_merchant(context: ReceiptContext) -> MerchantResult:
 def _extract_store_id(context: ReceiptContext) -> ExtractedField[str]:
     """Extract store or branch identifier from header or metadata."""
     ordered: list[LineView] = []
-    for line in _header_lines(context) + context.in_section(ReceiptSection.METADATA) + list(
-        context.lines
+    for line in (
+        _header_lines(context) + context.in_section(ReceiptSection.METADATA) + list(context.lines)
     ):
         if line not in ordered:
             ordered.append(line)

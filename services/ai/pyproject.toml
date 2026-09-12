@@ -89,10 +89,13 @@ ignore = [
 "app/normalization/money.py" = ["RUF001"]
 "app/normalization/currency.py" = ["RUF001", "RUF003"]
 "tests/unit/test_normalization_text.py" = ["RUF001"]
-# The pack-marker docstring intentionally shows × vs the letter x.
-"app/extraction/items.py" = ["RUF002"]
-# Tests deliberately use assert and long descriptive names.
-"tests/**" = ["ARG001", "ARG002", "ARG004", "S101"]
+# The pack-marker docstring intentionally shows × vs the letter x; several AI
+# modules use × / – (en dash) in explanatory comments too (RUF002/RUF003).
+"app/extraction/items.py" = ["RUF002", "RUF003"]
+"app/ocr/base.py" = ["RUF003", "RET501"]
+"app/security/redaction.py" = ["RUF003"]
+# Tests deliberately use assert, long names, and × / – in explanatory comments.
+"tests/**" = ["ARG001", "ARG002", "ARG004", "ARG005", "S101", "RUF003"]
 # Provider packages import submodules purely to trigger registration.
 "app/**/providers/__init__.py" = ["F401"]
 "app/ocr/__init__.py" = ["F401"]
@@ -117,7 +120,7 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # Third-party packages without bundled type information.
-module = ["cv2.*", "pytesseract.*", "structlog.*", "paddleocr.*"]
+module = ["cv2.*", "pytesseract.*", "structlog.*", "paddleocr.*", "paddle.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

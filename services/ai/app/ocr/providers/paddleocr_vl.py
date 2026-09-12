@@ -428,6 +428,6 @@ def _box(raw: object, *, page: int) -> OCRBox | None:
 
 def _as_int(value: object, default: int) -> int:
     try:
-        return int(value)  # type: ignore[arg-type]
+        return int(value)  # type: ignore[call-overload, no-any-return]
     except (TypeError, ValueError):
         return default

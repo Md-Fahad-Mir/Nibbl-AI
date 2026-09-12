@@ -30,13 +30,19 @@ def _write_sample(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     image = np.full((1100, 700, 3), 250, dtype=np.uint8)
     y = 70
-    cv2.putText(image, "GREENFIELD MARKET", (70, y), cv2.FONT_HERSHEY_SIMPLEX, 1.15, (20, 20, 20), 3)
+    cv2.putText(
+        image, "GREENFIELD MARKET", (70, y), cv2.FONT_HERSHEY_SIMPLEX, 1.15, (20, 20, 20), 3
+    )
     y += 50
     cv2.putText(image, "412 Oak Street", (70, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (40, 40, 40), 2)
     y += 36
-    cv2.putText(image, "Springfield, IL 62704", (70, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (40, 40, 40), 2)
+    cv2.putText(
+        image, "Springfield, IL 62704", (70, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (40, 40, 40), 2
+    )
     y += 50
-    cv2.putText(image, "2026-03-12  14:22", (70, y), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (40, 40, 40), 2)
+    cv2.putText(
+        image, "2026-03-12  14:22", (70, y), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (40, 40, 40), 2
+    )
     y += 70
     rows = (
         ("Organic Milk 1gal", "4.50"),
@@ -57,7 +63,9 @@ def _write_sample(path: Path) -> Path:
     cv2.putText(image, "TOTAL", (70, y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (10, 10, 10), 3)
     cv2.putText(image, "14.58", (500, y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (10, 10, 10), 3)
     y += 80
-    cv2.putText(image, "VISA ************4321", (70, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (40, 40, 40), 2)
+    cv2.putText(
+        image, "VISA ************4321", (70, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (40, 40, 40), 2
+    )
     if not cv2.imwrite(str(path), image):
         raise SystemExit(f"Could not write sample receipt to {path}")
     return path
@@ -110,21 +118,19 @@ def main() -> int:
         print(
             "In the Python 3.12 venv run:\n"
             "  pip install paddlepaddle==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/\n"
-            "  pip install -U \"paddleocr[doc-parser]\"",
+            '  pip install -U "paddleocr[doc-parser]"',
             file=sys.stderr,
         )
         return 1
 
     print(f"Running PaddleOCR-VL on {image_path} (timeout {args.timeout:.0f}s)...")
-    result = provider.extract(
-        OCRRequest(image=_load_bgr(image_path), timeout_seconds=args.timeout)
-    )
+    result = provider.extract(OCRRequest(image=_load_bgr(image_path), timeout_seconds=args.timeout))
     print()
     print(f"model: {result.model}")
     print(f"lines: {len(result.lines)}")
     blocks = result.provider_metadata.get("blocks") or []
     if blocks:
-        print("layout:", ", ".join(sorted({str(block.get('label')) for block in blocks})))
+        print("layout:", ", ".join(sorted({str(block.get("label")) for block in blocks})))
     print()
     print(result.text)
     return 0

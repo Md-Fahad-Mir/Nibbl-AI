@@ -1,4 +1,10 @@
+import tempfile
+from io import BytesIO
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -131,6 +137,45 @@ class BrandAccessTests(APITestCase):
             reverse("v1:brands:brand-detail", args=[self.brand.id])
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+    def test_manager_can_update_brand_with_logo_upload(self):
+        buf = BytesIO()
+        Image.new("RGB", (1, 1)).save(buf, format="PNG")
+        logo = SimpleUploadedFile("logo.png", buf.getvalue(), content_type="image/png")
+
+        self.client.force_authenticate(self.owner)
+        resp = self.client.patch(
+            reverse("v1:brands:brand-detail", args=[self.brand.id]),
+            {
+                "legal_name": "Acme Legal",
+                "description": "Snacks brand",
+                "website": "https://acme.example.com",
+                "contact_email": "support@acme.example.com",
+                "logo": logo,
+            },
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["legal_name"], "Acme Legal")
+        # logo -> relative media path; logo_url -> absolute URL of the same file.
+        self.assertTrue(resp.data["logo"].startswith("/"))
+        self.assertIn("brand_logos/", resp.data["logo"])
+        self.assertTrue(resp.data["logo_url"].startswith("http"))
+        self.assertIn("brand_logos/", resp.data["logo_url"])
+
+    def test_brand_without_logo_keeps_stored_logo_url(self):
+        # A brand that never uploads a logo keeps its existing logo_url value,
+        # so the shipped response is unchanged for existing brands.
+        self.brand.logo_url = "https://cdn.example.com/existing.png"
+        self.brand.save(update_fields=["logo_url"])
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(
+            reverse("v1:brands:brand-detail", args=[self.brand.id])
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsNone(resp.data["logo"])
+        self.assertEqual(resp.data["logo_url"], "https://cdn.example.com/existing.png")
 
     def test_my_brands_only_lists_own(self):
         self.client.force_authenticate(self.outsider)

@@ -103,7 +103,7 @@ class BrandDetailView(APIView):
     def get(self, request, brand_id):
         brand = _get_brand_or_404(brand_id)
         _require_membership(request.user, brand)
-        return Response(s.BrandSerializer(brand).data)
+        return Response(s.BrandSerializer(brand, context={"request": request}).data)
 
     @extend_schema(request=s.BrandUpdateSerializer, responses={200: s.BrandSerializer})
     def patch(self, request, brand_id):
@@ -112,7 +112,7 @@ class BrandDetailView(APIView):
         serializer = s.BrandUpdateSerializer(brand, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(s.BrandSerializer(brand).data)
+        return Response(s.BrandSerializer(brand, context={"request": request}).data)
 
 
 @extend_schema(tags=["brands"])

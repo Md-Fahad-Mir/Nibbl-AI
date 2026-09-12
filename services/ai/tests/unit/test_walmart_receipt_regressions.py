@@ -21,6 +21,7 @@ def extract(settings, ocr_result_factory):
 
     return _extract
 
+
 _WALMART_OCR = [
     "Give us feedback @ survey.walmart.com Thank you! ID #:7P9W2NFJGWL",
     "Walmart",

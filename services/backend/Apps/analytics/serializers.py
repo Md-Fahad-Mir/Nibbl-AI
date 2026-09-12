@@ -3,6 +3,20 @@ from rest_framework import serializers
 from Apps.analytics.models import PlatformStat
 
 
+class BrandRebatesSummarySerializer(serializers.Serializer):
+    performance_change_percent = serializers.FloatField()
+    performance_change_label = serializers.CharField()
+    budget_savings = serializers.DecimalField(max_digits=14, decimal_places=2)
+    total_cashback = serializers.DecimalField(max_digits=14, decimal_places=2)
+    total_cashback_change_percent = serializers.FloatField()
+    redemption_rate = serializers.FloatField()
+    redemption_rate_change_percent = serializers.FloatField()
+    avg_claim_time_minutes = serializers.IntegerField()
+    avg_claim_time_change_percent = serializers.FloatField()
+    active_users = serializers.IntegerField()
+    active_users_change_percent = serializers.FloatField()
+
+
 class SpendSerializer(serializers.Serializer):
     rebate_reward = serializers.DecimalField(max_digits=14, decimal_places=2)
     rebate_fee = serializers.DecimalField(max_digits=14, decimal_places=2)

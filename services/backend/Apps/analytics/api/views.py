@@ -23,6 +23,34 @@ class BrandOverviewView(APIView):
         return Response(s.BrandOverviewSerializer(services.brand_overview(brand)).data)
 
 
+def _parse_period_days(raw, default: int = 30) -> int:
+    """Parse a ?period=<N>d query value (e.g. '30d') into a day count."""
+    if not raw:
+        return default
+    text = str(raw).strip().lower().rstrip("d")
+    try:
+        n = int(text)
+    except ValueError:
+        return default
+    return n if 1 <= n <= 365 else default
+
+
+@extend_schema(tags=["analytics"])
+class BrandRebatesSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: s.BrandRebatesSummarySerializer})
+    def get(self, request, brand_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand)
+        period_days = _parse_period_days(request.query_params.get("period"))
+        return Response(
+            s.BrandRebatesSummarySerializer(
+                services.brand_rebates_summary(brand, period_days=period_days)
+            ).data
+        )
+
+
 @extend_schema(tags=["analytics"])
 class BrandCampaignAnalyticsView(APIView):
     permission_classes = [IsAuthenticated]

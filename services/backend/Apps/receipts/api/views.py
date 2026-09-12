@@ -129,7 +129,9 @@ class ReviewQueueView(APIView):
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand)
         return Response(
-            s.ReviewItemSerializer(review_queue_for_brand(brand), many=True).data
+            s.ReviewItemSerializer(
+                review_queue_for_brand(brand), many=True, context={"request": request}
+            ).data
         )
 
 

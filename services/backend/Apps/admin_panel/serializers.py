@@ -67,6 +67,7 @@ class AdminUserSerializer(serializers.Serializer):
     email = serializers.EmailField()
     full_name = serializers.CharField()
     role = serializers.CharField()
+    is_approved = serializers.BooleanField()
     is_active = serializers.BooleanField()
     is_email_verified = serializers.BooleanField()
     created_at = serializers.DateTimeField()

@@ -130,6 +130,22 @@ def reactivate_user(*, user, admin) -> User:
     return user
 
 
+def approve_brand_user(*, user, admin) -> User:
+    """Approve a directly-created brand account (sets ``is_approved``)."""
+    if user.role != User.Role.BRAND:
+        raise AdminError("User is not a brand account.")
+    if user.is_approved:
+        raise AdminError("Brand account is already approved.")
+    user.is_approved = True
+    user.save(update_fields=["is_approved", "updated_at"])
+    _audit(
+        admin=admin, action=AuditLog.Action.UPDATE,
+        target_type="user", target_id=user.id,
+        metadata={"event": "brand_user_approved"},
+    )
+    return user
+
+
 
 # ---------------------------------------------------------------------------
 # Announcements (broadcast)

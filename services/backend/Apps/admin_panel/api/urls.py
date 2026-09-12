@@ -11,6 +11,7 @@ urlpatterns = [
     path("admin/users/<uuid:user_id>/wallet/credit/", views.AdminUserWalletCreditView.as_view(), name="user-wallet-credit"),
     path("admin/users/<uuid:user_id>/suspend/", views.SuspendUserView.as_view(), name="user-suspend"),
     path("admin/users/<uuid:user_id>/reactivate/", views.ReactivateUserView.as_view(), name="user-reactivate"),
+    path("admin/users/<uuid:user_id>/approve-brand/", views.AdminApproveBrandView.as_view(), name="user-approve-brand"),
     path("admin/fraud-flags/", views.FraudFlagListView.as_view(), name="fraud-flags"),
     path("admin/campaigns/", views.AdminCampaignListView.as_view(), name="campaigns"),
     path("admin/transactions/", views.AdminTransactionListView.as_view(), name="transactions"),

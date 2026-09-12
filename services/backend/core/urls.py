@@ -37,6 +37,7 @@ api_v1_patterns = [
     path("", include("Apps.notifications.api.urls")),
     path("", include("Apps.analytics.api.urls")),
     path("", include("Apps.admin_panel.api.urls")),
+    path("", include("Apps.content.api.urls")),
 ]
 
 urlpatterns = [

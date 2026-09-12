@@ -105,6 +105,19 @@ class ReactivateUserView(APIView):
 
 
 @extend_schema(tags=["admin"])
+class AdminApproveBrandView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(request=None, responses={200: s.AdminUserSerializer})
+    def post(self, request, user_id):
+        user = User.objects.filter(id=user_id, is_deleted=False).first()
+        if user is None:
+            raise NotFound("User not found.")
+        user = _run(services.approve_brand_user, user=user, admin=request.user)
+        return Response(s.AdminUserSerializer(user).data)
+
+
+@extend_schema(tags=["admin"])
 class AdminUserWalletCreditView(APIView):
     permission_classes = [IsPlatformAdmin]
 

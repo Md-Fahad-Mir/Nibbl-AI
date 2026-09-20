@@ -47,6 +47,7 @@ class ProductCrudTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_archive_product_excludes_from_match(self):
+        active_product = create_product(brand=self.brand, name="Sprite")
         product = create_product(brand=self.brand, name="Cola")
         resp = self.client.delete(
             reverse(
@@ -57,6 +58,13 @@ class ProductCrudTests(APITestCase):
         product.refresh_from_db()
         self.assertFalse(product.is_active)
         self.assertIsNone(match_product(brand=self.brand, text="Cola"))
+        listing = self.client.get(
+            reverse("v1:products:product-list", args=[self.brand.id])
+        )
+        self.assertEqual(listing.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [str(item["id"]) for item in listing.data], [str(active_product.id)]
+        )
 
     def test_non_manager_cannot_create(self):
         member = User.objects.create_user(

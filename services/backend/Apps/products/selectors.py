@@ -5,7 +5,7 @@ from Apps.products.models import Product, ProductAlias
 
 
 def products_for_brand(brand):
-    return Product.objects.filter(brand=brand)
+    return Product.objects.filter(brand=brand, is_active=True)
 
 
 def get_brand_product(brand, product_id) -> Product | None:

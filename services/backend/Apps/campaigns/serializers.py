@@ -81,6 +81,11 @@ class CampaignCreateSerializer(serializers.Serializer):
 
 
 class CampaignUpdateSerializer(serializers.Serializer):
+    product = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=False,
+    )
     name = serializers.CharField(max_length=255, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     daily_budget = serializers.DecimalField(

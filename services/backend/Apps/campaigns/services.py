@@ -104,6 +104,10 @@ def update_campaign(campaign: Campaign, **fields) -> Campaign:
     if campaign.status in (Campaign.Status.COMPLETED, Campaign.Status.ARCHIVED):
         raise CampaignError("This campaign can no longer be edited.")
 
+    product_ids = fields.pop("product", None)
+    if product_ids is not None:
+        products = _resolve_products(campaign.brand, product_ids)
+
     if "daily_budget" in fields:
         fields["daily_budget"] = to_money(fields["daily_budget"])
         if fields["daily_budget"] <= ZERO:
@@ -115,6 +119,9 @@ def update_campaign(campaign: Campaign, **fields) -> Campaign:
             restriction_changed = True
         setattr(campaign, key, value)
     campaign.save()
+
+    if product_ids is not None:
+        campaign.products.set(products)
 
     if restriction_changed:
         regenerate_restriction(campaign)

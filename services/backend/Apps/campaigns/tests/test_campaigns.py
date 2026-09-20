@@ -85,6 +85,48 @@ class CampaignCreateTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class CampaignUpdateTests(APITestCase):
+    def setUp(self):
+        self.owner, self.brand, self.product = _setup_brand()
+        self.campaign = services.create_campaign(
+            brand=self.brand, product_ids=[self.product.id],
+            name="C", daily_budget=Decimal("100.00"),
+        )
+        self.client.force_authenticate(self.owner)
+        self.url = reverse(
+            "v1:campaigns:campaign-detail", args=[self.brand.id, self.campaign.id]
+        )
+
+    def test_update_replaces_products(self):
+        replacement = create_product(brand=self.brand, name="Replacement")
+        response = self.client.patch(
+            self.url, {"product": [str(replacement.id)]}, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list(self.campaign.products.all()), [replacement])
+
+    def test_omitting_products_preserves_selection(self):
+        response = self.client.patch(self.url, {"name": "Updated"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list(self.campaign.products.all()), [self.product])
+
+    def test_invalid_products_leave_campaign_unchanged(self):
+        other_brand = Brand.objects.create(name="Other", slug="other")
+        foreign = create_product(brand=other_brand, name="Foreign")
+        inactive = create_product(brand=self.brand, name="Inactive")
+        inactive.is_active = False
+        inactive.save(update_fields=["is_active"])
+        for products in ([], [str(foreign.id)], [str(inactive.id)], ["invalid"]):
+            with self.subTest(products=products):
+                response = self.client.patch(
+                    self.url, {"product": products, "name": "Changed"}, format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.campaign.refresh_from_db()
+                self.assertEqual(self.campaign.name, "C")
+                self.assertEqual(list(self.campaign.products.all()), [self.product])
+
+
 class TierTests(APITestCase):
     def setUp(self):
         self.owner, self.brand, self.product = _setup_brand()

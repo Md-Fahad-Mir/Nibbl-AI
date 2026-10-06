@@ -183,6 +183,10 @@ def _credit_wallet_from_payment(intent) -> str:
 
     Idempotent per PaymentIntent, so Stripe's at-least-once delivery is safe.
     """
+    # A real webhook delivers a StripeObject (which has no .get()); normalize
+    # to a plain dict so field access matches the test fixtures.
+    if hasattr(intent, "to_dict"):
+        intent = intent.to_dict()
     metadata = intent.get("metadata") or {}
     if metadata.get("purpose") != WALLET_TOPUP:
         return "ignored"

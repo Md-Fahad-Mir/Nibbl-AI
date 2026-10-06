@@ -80,6 +80,28 @@ class WalletTopupServiceTests(APITestCase):
         self.wallet.refresh_from_db()
         self.assertEqual(self.wallet.balance, Decimal("0.00"))
 
+    def test_webhook_handles_real_stripe_object(self):
+        # Real webhooks deliver a StripeObject (no .get()), not a plain dict;
+        # the handler must normalize it, or it crashes in production.
+        import stripe
+
+        obj = stripe.PaymentIntent.construct_from(
+            {
+                "id": "pi_obj",
+                "amount_received": 7500,
+                "metadata": {
+                    "purpose": "wallet_topup",
+                    "brand_id": str(self.brand.id),
+                },
+            },
+            "sk_test",
+        )
+        services.handle_stripe_event(
+            {"type": "payment_intent.succeeded", "data": {"object": obj}}
+        )
+        self.wallet.refresh_from_db()
+        self.assertEqual(self.wallet.balance, Decimal("75.00"))
+
 
 class AddFundsEndpointTests(APITestCase):
     def setUp(self):

@@ -20,6 +20,8 @@ env = environ.Env(
     DEBUG=(bool, False),
     SECRET_KEY=(str, ""),
     ALLOWED_HOSTS=(list, []),
+    STRIPE_SECRET_KEY=(str, ""),
+    STRIPE_WEBHOOK_SECRET=(str, ""),
 )
 
 # Load services/backend/.env if present (local dev). In prod, real env vars win.
@@ -28,6 +30,10 @@ environ.Env.read_env(BASE_DIR / ".env")
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
+
+# Stripe (billing). Server-side only; empty until configured per environment.
+STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET")
 
 
 # ---------------------------------------------------------------------------

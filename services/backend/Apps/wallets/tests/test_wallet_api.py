@@ -7,6 +7,8 @@ from rest_framework.test import APITestCase
 from Apps.accounts.models import User
 from Apps.billing.models import Plan
 from Apps.brands.models import Brand, BrandMembership
+from Apps.wallets import services as wallet_services
+from Apps.wallets.models import LedgerEntry
 
 
 class BrandWalletApiTests(APITestCase):
@@ -40,15 +42,19 @@ class BrandWalletApiTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_funding_increases_balance_and_records_transaction(self):
+    def test_funding_is_reflected_in_transactions(self):
+        # Funding now arrives via Stripe (billing); the wallet transactions
+        # endpoint should still surface the resulting funding entry.
         self.client.force_authenticate(self.owner)
-        resp = self.client.post(
-            reverse("v1:wallets:brand-wallet-fund", args=[self.brand.id]),
-            {"amount": "250.00"},
-            format="json",
+        wallet = wallet_services.get_or_create_brand_wallet(self.brand)
+        wallet_services.credit(
+            wallet=wallet,
+            amount=Decimal("250.00"),
+            category=LedgerEntry.Category.FUNDING,
+            reference_type="stripe_payment_intent",
+            reference_id="pi_test",
+            description="Wallet funding via Stripe",
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(Decimal(resp.data["balance"]), Decimal("250.00"))
 
         tx = self.client.get(
             reverse("v1:wallets:brand-wallet-transactions", args=[self.brand.id])

@@ -83,14 +83,3 @@ class ActivitySerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
-
-
-class FundWalletSerializer(serializers.Serializer):
-    amount = serializers.DecimalField(
-        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
-    )
-    # Optional client-supplied key so a retried funding request is not
-    # double-posted (the ledger dedupes on this key).
-    idempotency_key = serializers.CharField(
-        required=False, allow_blank=True, max_length=128
-    )

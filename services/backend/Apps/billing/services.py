@@ -12,11 +12,17 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from Apps.billing import stripe_gateway
 from Apps.billing.models import Plan, Subscription
+from Apps.brands.models import Brand
 from Apps.common.dates import add_months
 from Apps.common.money import ZERO, to_money
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+
+
+class BillingError(Exception):
+    """A billing operation could not be completed."""
 
 
 # ---------------------------------------------------------------------------
@@ -135,3 +141,65 @@ def charge_due_subscriptions(now=None) -> dict:
         outcome = _charge_one(subscription, now)
         summary[outcome] += 1
     return summary
+
+
+# ---------------------------------------------------------------------------
+# Stripe: card payments that fund the brand wallet (money IN)
+# ---------------------------------------------------------------------------
+WALLET_TOPUP = "wallet_topup"
+
+
+def create_wallet_topup_intent(*, brand, amount) -> dict:
+    """Create a Stripe PaymentIntent to add ``amount`` (USD) to the wallet.
+
+    Returns the client_secret the frontend uses to confirm the card. The wallet
+    is credited only when the ``payment_intent.succeeded`` webhook arrives.
+    """
+    amount = to_money(amount)
+    if amount <= ZERO:
+        raise BillingError("Amount must be positive.")
+
+    intent = stripe_gateway.create_payment_intent(
+        brand=brand,
+        amount_cents=int(amount * 100),
+        purpose=WALLET_TOPUP,
+    )
+    return {
+        "client_secret": intent.client_secret,
+        "payment_intent_id": intent.id,
+        "amount": amount,
+    }
+
+
+def handle_stripe_event(event) -> str:
+    """Route a verified Stripe webhook event. Returns a short outcome string."""
+    if event["type"] == "payment_intent.succeeded":
+        return _credit_wallet_from_payment(event["data"]["object"])
+    return "ignored"
+
+
+def _credit_wallet_from_payment(intent) -> str:
+    """Credit a brand wallet from a succeeded wallet-topup PaymentIntent.
+
+    Idempotent per PaymentIntent, so Stripe's at-least-once delivery is safe.
+    """
+    metadata = intent.get("metadata") or {}
+    if metadata.get("purpose") != WALLET_TOPUP:
+        return "ignored"
+
+    brand = Brand.objects.filter(id=metadata.get("brand_id")).first()
+    if brand is None:
+        return "ignored"
+
+    amount = to_money(Decimal(intent["amount_received"]) / 100)
+    wallet = wallet_services.get_or_create_brand_wallet(brand)
+    wallet_services.credit(
+        wallet=wallet,
+        amount=amount,
+        category=LedgerEntry.Category.FUNDING,
+        reference_type="stripe_payment_intent",
+        reference_id=intent["id"],
+        description="Wallet funding via Stripe",
+        idempotency_key=f"stripe:pi:{intent['id']}",
+    )
+    return "credited"

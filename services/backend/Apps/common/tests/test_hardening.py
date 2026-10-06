@@ -24,19 +24,23 @@ def _brand(plan="starter"):
 
 
 class FundingIdempotencyTests(APITestCase):
+    """Money-in (now via Stripe) must dedupe on the idempotency key so a
+    redelivered payment credits the wallet only once."""
+
     def test_same_idempotency_key_funds_once(self):
-        owner, brand = _brand()
-        self.client.force_authenticate(owner)
-        url = reverse("v1:wallets:brand-wallet-fund", args=[brand.id])
-        payload = {"amount": "100.00", "idempotency_key": "fund-abc"}
-
-        first = self.client.post(url, payload, format="json")
-        second = self.client.post(url, payload, format="json")  # retry
-
-        self.assertEqual(first.status_code, status.HTTP_200_OK)
-        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        _, brand = _brand()
         wallet = wallet_services.get_or_create_brand_wallet(brand)
-        # Credited only once despite two identical requests.
+        for _ in range(2):  # redelivery with the same key
+            wallet_services.credit(
+                wallet=wallet,
+                amount=Decimal("100.00"),
+                category=LedgerEntry.Category.FUNDING,
+                reference_type="stripe_payment_intent",
+                reference_id="pi_1",
+                idempotency_key="stripe:pi:pi_1",
+            )
+        wallet.refresh_from_db()
+        # Credited only once despite two identical posts.
         self.assertEqual(wallet.balance, Decimal("100.00"))
         self.assertEqual(
             LedgerEntry.objects.filter(
@@ -46,12 +50,15 @@ class FundingIdempotencyTests(APITestCase):
         )
 
     def test_no_key_allows_repeated_funding(self):
-        owner, brand = _brand()
-        self.client.force_authenticate(owner)
-        url = reverse("v1:wallets:brand-wallet-fund", args=[brand.id])
-        self.client.post(url, {"amount": "10.00"}, format="json")
-        self.client.post(url, {"amount": "10.00"}, format="json")
+        _, brand = _brand()
         wallet = wallet_services.get_or_create_brand_wallet(brand)
+        for _ in range(2):
+            wallet_services.credit(
+                wallet=wallet,
+                amount=Decimal("10.00"),
+                category=LedgerEntry.Category.FUNDING,
+            )
+        wallet.refresh_from_db()
         self.assertEqual(wallet.balance, Decimal("20.00"))
 
 

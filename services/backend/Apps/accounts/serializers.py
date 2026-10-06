@@ -87,11 +87,12 @@ class RegisterSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=255)
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, validators=[validate_password])
+    # Platform admin is never self-registerable; only consumer and brand are
+    # allowed here (brand still requires admin approval before it can log in).
     role = serializers.ChoiceField(
         choices=[
             (User.Role.CONSUMER, "Consumer"),
             (User.Role.BRAND, "Brand member"),
-            (User.Role.ADMIN, "Platform admin"),
         ],
         default=User.Role.CONSUMER,
     )

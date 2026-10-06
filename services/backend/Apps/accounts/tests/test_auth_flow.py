@@ -67,6 +67,23 @@ class RegistrationTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_register_rejects_admin_role(self):
+        from Apps.accounts.models import PendingUser
+        resp = self.client.post(
+            self.url,
+            {
+                "full_name": "Sneaky Admin",
+                "email": "sneaky@example.com",
+                "password": "Sup3rSecret!",
+                "role": "admin",
+                "accept_terms": True,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(PendingUser.objects.filter(email="sneaky@example.com").exists())
+        self.assertFalse(User.objects.filter(email="sneaky@example.com").exists())
+
     def test_register_with_referral_links_referrer(self):
         from Apps.accounts.models import PendingUser
         referrer = User.objects.create_user(

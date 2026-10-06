@@ -101,6 +101,9 @@ def register_user(
     role: str = User.Role.CONSUMER,
     referral_code: str | None = None,
 ) -> PendingUser:
+    # Self-registration can never grant platform-admin access.
+    if role == User.Role.ADMIN:
+        raise AccountError("Invalid role for registration.")
     if User.objects.filter(email__iexact=email, is_deleted=False).exists():
         raise AccountError("A user with this email already exists.")
 

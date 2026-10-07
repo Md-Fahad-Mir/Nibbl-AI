@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatDate, formatMoney, titleCase, toNumber } from "../../utils/backendMappers";
+import FundWalletModal from "./FundWalletModal";
 
 interface WalletOverviewProps {
   onViewAll: () => void;
@@ -11,39 +12,31 @@ interface WalletOverviewProps {
 export default function WalletOverview({ onViewAll }: WalletOverviewProps) {
   const wallet = useBrandApiStore((state) => state.wallet);
   const transactions = useBrandApiStore((state) => state.walletTransactions).slice(0, 5);
-  const fundWallet = useBrandApiStore((state) => state.fundWallet);
   const [fundAmount, setFundAmount] = useState("250");
-  const [isFunding, setIsFunding] = useState(false);
   const [fundError, setFundError] = useState("");
+  const [modalAmount, setModalAmount] = useState<string | null>(null);
   const available = wallet?.available ?? wallet?.balance ?? 0;
   const held = toNumber(wallet?.held);
   const balance = toNumber(wallet?.balance);
   const usagePercent = balance > 0 ? Math.min(100, Math.round((held / balance) * 100)) : 0;
 
-  const handleFundWallet = async () => {
+  const handleFundWallet = () => {
     const amount = Number(fundAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
       setFundError("Enter a funding amount greater than zero.");
       return;
     }
-    setIsFunding(true);
     setFundError("");
-    try {
-      const key =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      await fundWallet(amount.toFixed(2), key);
-    } catch (error) {
-      setFundError(error instanceof Error ? error.message : "Could not fund wallet.");
-    } finally {
-      setIsFunding(false);
-    }
+    setModalAmount(amount.toFixed(2));
   };
 
   return (
     <div className="flex flex-col gap-8 w-full text-left font-manrope">
-      
+
+      {modalAmount && (
+        <FundWalletModal amount={modalAmount} onClose={() => setModalAmount(null)} />
+      )}
+
       {/* Balance & Usage Cards Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 w-full items-stretch">
         
@@ -76,10 +69,9 @@ export default function WalletOverview({ onViewAll }: WalletOverviewProps) {
             <button
               type="button"
               onClick={handleFundWallet}
-              disabled={isFunding}
               className="h-11 rounded-xl bg-white px-5 text-sm font-extrabold text-[#001BD2] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isFunding ? "Funding..." : "Add Funds"}
+              Add Funds
             </button>
           </div>
           {fundError && <p className="z-10 relative mt-3 text-xs font-bold text-red-100">{fundError}</p>}

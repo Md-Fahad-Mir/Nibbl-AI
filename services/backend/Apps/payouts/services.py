@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from Apps.accounts import twilio_verify
 from Apps.common.exceptions import DomainError
 from Apps.common.money import ZERO, to_money
 from Apps.payouts.models import PayoutBatch, PayoutMethod, WithdrawalRequest
@@ -52,7 +53,8 @@ def remove_payout_method(method: PayoutMethod) -> None:
 # Withdrawal request (places a hold on the customer wallet)
 # ---------------------------------------------------------------------------
 @transaction.atomic
-def request_withdrawal(*, user, payout_method_id, amount) -> WithdrawalRequest:
+def _validate_withdrawal(*, user, payout_method_id, amount):
+    """Shared pre-checks for a withdrawal. Returns (method, wallet, amount)."""
     amount = to_money(amount)
     minimum = to_money(settings.PAYOUT_MIN_AMOUNT)
     if amount < minimum:
@@ -65,6 +67,38 @@ def request_withdrawal(*, user, payout_method_id, amount) -> WithdrawalRequest:
     wallet = wallet_services.get_or_create_customer_wallet(user)
     if wallet.available() < amount:
         raise PayoutError("Insufficient available balance.")
+    return method, wallet, amount
+
+
+def _require_verified_phone(user) -> str:
+    if not (user.phone and user.is_phone_verified):
+        raise PayoutError("Verify your mobile number before withdrawing.")
+    return user.phone
+
+
+def _mask_phone(phone: str) -> str:
+    return "•••• ••" + phone[-4:] if len(phone) >= 4 else "••••"
+
+
+def start_withdrawal_verification(*, user, payout_method_id, amount) -> str:
+    """Validate the pending withdrawal and send an SMS code (returns masked phone)."""
+    _validate_withdrawal(user=user, payout_method_id=payout_method_id, amount=amount)
+    phone = _require_verified_phone(user)
+    twilio_verify.start_verification(phone)
+    return _mask_phone(phone)
+
+
+def request_withdrawal(*, user, payout_method_id, amount, code="") -> WithdrawalRequest:
+    method, wallet, amount = _validate_withdrawal(
+        user=user, payout_method_id=payout_method_id, amount=amount
+    )
+
+    # SMS verification is enforced once Twilio Verify is configured; until then
+    # the flow is unchanged so existing clients keep working.
+    if settings.TWILIO_VERIFY_SERVICE_SID:
+        phone = _require_verified_phone(user)
+        if not code or not twilio_verify.check_verification(phone, code):
+            raise PayoutError("Invalid or missing verification code.")
 
     withdrawal = WithdrawalRequest.objects.create(
         user=user, payout_method=method, provider=method.provider,

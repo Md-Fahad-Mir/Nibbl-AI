@@ -9,6 +9,7 @@ urlpatterns = [
     path("payout-methods/", views.PayoutMethodListCreateView.as_view(), name="method-list"),
     path("payout-methods/<uuid:method_id>/", views.PayoutMethodDeleteView.as_view(), name="method-delete"),
     path("withdrawals/", views.WithdrawalListCreateView.as_view(), name="withdrawal-list"),
+    path("withdrawals/send-code/", views.WithdrawalSendCodeView.as_view(), name="withdrawal-send-code"),
     path("withdrawals/<uuid:withdrawal_id>/", views.WithdrawalDetailView.as_view(), name="withdrawal-detail"),
     # Admin
     path("admin/withdrawals/", views.AdminWithdrawalListView.as_view(), name="admin-withdrawal-list"),

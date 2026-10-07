@@ -22,6 +22,9 @@ env = environ.Env(
     ALLOWED_HOSTS=(list, []),
     STRIPE_SECRET_KEY=(str, ""),
     STRIPE_WEBHOOK_SECRET=(str, ""),
+    TWILIO_ACCOUNT_SID=(str, ""),
+    TWILIO_AUTH_TOKEN=(str, ""),
+    TWILIO_VERIFY_SERVICE_SID=(str, ""),
 )
 
 # Load services/backend/.env if present (local dev). In prod, real env vars win.
@@ -34,6 +37,11 @@ ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 # Stripe (billing). Server-side only; empty until configured per environment.
 STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET")
+
+# Twilio Verify (SMS withdrawal verification). Server-side only.
+TWILIO_ACCOUNT_SID = env("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = env("TWILIO_AUTH_TOKEN")
+TWILIO_VERIFY_SERVICE_SID = env("TWILIO_VERIFY_SERVICE_SID")
 
 
 # ---------------------------------------------------------------------------

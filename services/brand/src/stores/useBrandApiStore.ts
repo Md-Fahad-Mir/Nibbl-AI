@@ -201,15 +201,16 @@ export interface SavedCard {
 
 export interface AutoRefillConfig {
   enabled: boolean;
-  threshold: string;
   amount: string;
   payment_method_id: string;
+  estimated_seven_day: string;
+  trigger_at: string;
+  recommended_amount: string;
   last_refilled_at: string | null;
 }
 
 export interface AutoRefillInput {
   enabled: boolean;
-  threshold: string;
   amount: string;
   payment_method_id: string;
 }

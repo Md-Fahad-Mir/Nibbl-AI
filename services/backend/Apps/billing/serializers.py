@@ -65,6 +65,9 @@ class AutoRefillSerializer(serializers.Serializer):
         max_digits=10, decimal_places=2, min_value=Decimal("0")
     )
     payment_method_id = serializers.CharField(
-        required=False, allow_blank=True, default=""
+        source="stripe_payment_method_id",
+        required=False,
+        allow_blank=True,
+        default="",
     )
     last_refilled_at = serializers.DateTimeField(read_only=True)

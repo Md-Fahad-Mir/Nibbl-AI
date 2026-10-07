@@ -167,6 +167,9 @@ class Phase2EndpointTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["enabled"])
+        # the saved card must round-trip back (not show empty)
+        self.assertEqual(resp.data["payment_method_id"], "pm_1")
+        self.assertEqual(self.client.get(url).data["payment_method_id"], "pm_1")
 
     def test_auto_refill_enable_without_card_is_400(self):
         self.client.force_authenticate(self.owner)

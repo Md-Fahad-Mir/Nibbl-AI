@@ -91,3 +91,22 @@ class Subscription(BaseModel):
 
     def __str__(self):
         return f"{self.brand_id} → {self.plan.slug} ({self.status})"
+
+
+class StripeCustomer(BaseModel):
+    """Links a brand to its Stripe customer so card payments can fund the wallet.
+
+    Money flows in via Stripe (card → wallet); all existing wallet deductions
+    (subscriptions, rebate fees) stay unchanged.
+    """
+
+    brand = models.OneToOneField(
+        "brands.Brand", on_delete=models.CASCADE, related_name="stripe_customer"
+    )
+    stripe_customer_id = models.CharField(max_length=255, unique=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.brand_id} → {self.stripe_customer_id}"

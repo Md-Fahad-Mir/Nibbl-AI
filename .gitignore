@@ -159,3 +159,12 @@ tmp/
 
 AWS Credentials
 
+
+# The Python `lib/` rule above unintentionally matches the Next.js frontend
+# source dirs; keep those tracked.
+!services/admin/src/lib/
+!services/admin/src/lib/**
+!services/brand/src/lib/
+!services/brand/src/lib/**
+!services/website/src/lib/
+!services/website/src/lib/**

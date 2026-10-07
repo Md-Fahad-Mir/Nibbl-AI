@@ -63,6 +63,23 @@ class AutoRefillConfigTests(APITestCase):
         self.assertEqual(config.amount, Decimal("100.00"))
         self.assertEqual(config.stripe_payment_method_id, "pm_1")
 
+    def test_list_saved_cards_normalizes_stripe_objects(self):
+        # Stripe returns StripeObjects (no .get()); list_saved_cards must
+        # normalize them or it 500s.
+        import stripe
+
+        pm = stripe.PaymentMethod.construct_from(
+            {
+                "id": "pm_1",
+                "card": {"brand": "visa", "last4": "4242", "exp_month": 12, "exp_year": 2030},
+            },
+            "sk_test",
+        )
+        with patch("Apps.billing.stripe_gateway.list_payment_methods", return_value=[pm]):
+            cards = services.list_saved_cards(brand=self.brand)
+        self.assertEqual(cards[0]["last4"], "4242")
+        self.assertEqual(cards[0]["brand"], "visa")
+
 
 class RunAutoRefillTests(APITestCase):
     @patch("Apps.billing.stripe_gateway.charge_saved_card")

@@ -63,7 +63,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build & push backend
-        if: ${{ needs.changes.outputs.backend == 'true' }}
         uses: docker/build-push-action@v5
         with:
           context: ./services/backend
@@ -138,9 +137,10 @@ jobs:
           REGISTRY='${{ needs.build.outputs.registry }}'
           SHA='${{ github.sha }}'
 
-          # Use this SHA's image for a service that was rebuilt; otherwise keep
-          # the service on its current :latest (no image was pushed for this SHA).
-          BACKEND_TAG=$([ '${{ needs.changes.outputs.backend }}' = 'true' ] && echo "$SHA" || echo "latest")
+          # Backend is always rebuilt (so a backend change can never be missed).
+          # The AI image is only rebuilt when it changed; otherwise keep it on
+          # its current :latest instead of wasting a build.
+          BACKEND_TAG="$SHA"
           AI_TAG=$([ '${{ needs.changes.outputs.ai }}' = 'true' ] && echo "$SHA" || echo "latest")
           echo "Deploying backend=$BACKEND_TAG ai=$AI_TAG"
 

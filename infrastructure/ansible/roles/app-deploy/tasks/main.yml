@@ -101,3 +101,23 @@
     mode: '0755'
     owner: ubuntu
     group: ubuntu
+
+# ─── Periodic jobs (cron) ─────────────────────────────────────────────
+# Runs the backend's scheduled management commands (reservation expiry,
+# auto-refill, reminders, subscription billing). Survives instance rebuilds.
+- name: Ensure the cron log file exists
+  file:
+    path: "{{ project_path }}/cron.log"
+    state: touch
+    mode: '0644'
+    owner: ubuntu
+    group: ubuntu
+  changed_when: false
+
+- name: Install Nibbl periodic jobs (/etc/cron.d)
+  template:
+    src: nibblai.cron.j2
+    dest: "/etc/cron.d/{{ project_name }}"
+    mode: '0644'
+    owner: root
+    group: root

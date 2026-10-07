@@ -1,0 +1,15 @@
+# Nibbl periodic jobs — managed by Ansible (app-deploy role). Do not edit by hand.
+# Each runs a management command inside the backend container; output appends
+# to {{ project_path }}/cron.log.
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+
+# Expire 7-day claim reservations and release claim slots
+*/15 * * * * root docker exec {{ project_name }}-backend python manage.py expire_reservations >> {{ project_path }}/cron.log 2>&1
+# Auto-refill wallets below 25% of the estimated 7-day requirement
+*/30 * * * * root docker exec {{ project_name }}-backend python manage.py run_auto_refill >> {{ project_path }}/cron.log 2>&1
+# Receipt/review reminders and re-engagement
+0 * * * * root docker exec {{ project_name }}-backend python manage.py send_notifications >> {{ project_path }}/cron.log 2>&1
+# Monthly subscription billing (charges what is due)
+0 9 * * * root docker exec {{ project_name }}-backend python manage.py charge_subscriptions >> {{ project_path }}/cron.log 2>&1

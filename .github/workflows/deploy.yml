@@ -4,6 +4,17 @@ on:
   push:
     branches:
       - main
+    # Don't redeploy the app for changes that don't affect the running
+    # containers (frontends aren't built here; infra/docs are applied
+    # separately). Use workflow_dispatch to force a deploy.
+    paths-ignore:
+      - 'services/admin/**'
+      - 'services/brand/**'
+      - 'services/website/**'
+      - 'infrastructure/**'
+      - 'docs/**'
+      - '.github/**'
+      - '**.md'
   workflow_dispatch:
 
 # OIDC: lets this workflow request a short-lived token to assume the AWS role.

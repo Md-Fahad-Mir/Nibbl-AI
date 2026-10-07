@@ -47,7 +47,8 @@ def create_payment_intent(*, brand, amount_cents: int, purpose: str):
         currency="usd",
         customer=customer_id,
         metadata={"brand_id": str(brand.id), "purpose": purpose},
-        payment_method_types=["card"],
+        # Dynamic methods, but no redirect-based ones (keeps the form short).
+        automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
     )
 
 
@@ -57,7 +58,7 @@ def create_setup_intent(*, brand):
     return _client().SetupIntent.create(
         customer=customer_id,
         usage="off_session",
-        payment_method_types=["card"],
+        automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
         metadata={"brand_id": str(brand.id)},
     )
 

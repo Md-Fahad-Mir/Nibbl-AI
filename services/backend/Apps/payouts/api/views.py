@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from Apps.accounts.twilio_verify import TwilioNotConfigured
 from Apps.common.exceptions import DomainError
 from Apps.common.pagination import paginate, paginated_response_serializer
 from Apps.common.permissions import IsPlatformAdmin
@@ -89,10 +90,36 @@ class WithdrawalListCreateView(APIView):
             user=request.user,
             payout_method_id=serializer.validated_data["payout_method"],
             amount=serializer.validated_data["amount"],
+            code=serializer.validated_data.get("code", ""),
         )
         return Response(
             s.WithdrawalSerializer(withdrawal).data, status=status.HTTP_201_CREATED
         )
+
+
+@extend_schema(tags=["withdrawals"])
+class WithdrawalSendCodeView(APIView):
+    """Send an SMS verification code for a pending withdrawal (Twilio Verify)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=s.SendWithdrawalCodeSerializer, responses={200: s.WithdrawalCodeSentSerializer})
+    def post(self, request):
+        serializer = s.SendWithdrawalCodeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            phone = _run(
+                services.start_withdrawal_verification,
+                user=request.user,
+                payout_method_id=serializer.validated_data["payout_method"],
+                amount=serializer.validated_data["amount"],
+            )
+        except TwilioNotConfigured:
+            return Response(
+                {"detail": "SMS verification is not available right now."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({"phone": phone}, status=status.HTTP_200_OK)
 
 
 @extend_schema(tags=["withdrawals"])

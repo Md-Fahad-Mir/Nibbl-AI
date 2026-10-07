@@ -45,6 +45,20 @@ class RequestWithdrawalSerializer(serializers.Serializer):
     amount = serializers.DecimalField(
         max_digits=14, decimal_places=2, min_value=Decimal("0.01")
     )
+    # SMS code from /withdrawals/send-code/. Enforced only when Twilio is
+    # configured, so existing clients keep working until verification is on.
+    code = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class SendWithdrawalCodeSerializer(serializers.Serializer):
+    payout_method = serializers.UUIDField()
+    amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
+    )
+
+
+class WithdrawalCodeSentSerializer(serializers.Serializer):
+    phone = serializers.CharField()
 
 
 class ReasonSerializer(serializers.Serializer):

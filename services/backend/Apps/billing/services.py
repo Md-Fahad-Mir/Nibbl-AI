@@ -13,7 +13,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from Apps.billing import stripe_gateway
-from Apps.billing.models import Plan, Subscription
+from Apps.billing.models import AutoRefill, Plan, Subscription
 from Apps.brands.models import Brand
 from Apps.common.dates import add_months
 from Apps.common.money import ZERO, to_money
@@ -207,3 +207,97 @@ def _credit_wallet_from_payment(intent) -> str:
         idempotency_key=f"stripe:pi:{intent['id']}",
     )
     return "credited"
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: saved card + automatic wallet refill
+# ---------------------------------------------------------------------------
+def create_card_setup_intent(*, brand) -> dict:
+    """Start saving a card. Returns the client_secret the frontend confirms."""
+    intent = stripe_gateway.create_setup_intent(brand=brand)
+    return {"client_secret": intent.client_secret, "setup_intent_id": intent.id}
+
+
+def list_saved_cards(*, brand) -> list[dict]:
+    """Return the brand's saved cards as simple dicts for the UI."""
+    cards = []
+    for pm in stripe_gateway.list_payment_methods(brand=brand):
+        card = pm.get("card") or {}
+        cards.append(
+            {
+                "id": pm.get("id"),
+                "brand": card.get("brand"),
+                "last4": card.get("last4"),
+                "exp_month": card.get("exp_month"),
+                "exp_year": card.get("exp_year"),
+            }
+        )
+    return cards
+
+
+def get_or_create_auto_refill(brand) -> AutoRefill:
+    config, _ = AutoRefill.objects.get_or_create(brand=brand)
+    return config
+
+
+def set_auto_refill(
+    *, brand, enabled: bool, threshold, amount, payment_method_id: str
+) -> AutoRefill:
+    """Configure a brand's auto-refill. Enabling requires a card and amounts."""
+    threshold = to_money(threshold)
+    amount = to_money(amount)
+    if enabled:
+        if not payment_method_id:
+            raise BillingError("A saved card is required to enable auto-refill.")
+        if amount <= ZERO:
+            raise BillingError("Refill amount must be positive.")
+
+    config = get_or_create_auto_refill(brand)
+    config.enabled = enabled
+    config.threshold = threshold
+    config.amount = amount
+    config.stripe_payment_method_id = payment_method_id
+    config.save(
+        update_fields=[
+            "enabled",
+            "threshold",
+            "amount",
+            "stripe_payment_method_id",
+            "updated_at",
+        ]
+    )
+    return config
+
+
+def run_auto_refill(now=None) -> dict:
+    """Charge the saved card for every enabled brand whose wallet is low.
+
+    The off-session charge credits the wallet through the usual Stripe webhook,
+    so this job only initiates the payment. Returns a summary count.
+    """
+    now = now or timezone.now()
+    summary = {"charged": 0, "skipped": 0, "failed": 0}
+
+    due = AutoRefill.objects.filter(enabled=True).select_related("brand")
+    for config in due:
+        if not config.stripe_payment_method_id or config.amount <= ZERO:
+            summary["skipped"] += 1
+            continue
+        wallet = wallet_services.get_or_create_brand_wallet(config.brand)
+        if wallet.available() >= config.threshold:
+            summary["skipped"] += 1
+            continue
+        try:
+            stripe_gateway.charge_saved_card(
+                brand=config.brand,
+                amount_cents=int(config.amount * 100),
+                payment_method_id=config.stripe_payment_method_id,
+                purpose=WALLET_TOPUP,
+            )
+        except Exception:  # card declined / auth required / Stripe error
+            summary["failed"] += 1
+            continue
+        config.last_refilled_at = now
+        config.save(update_fields=["last_refilled_at", "updated_at"])
+        summary["charged"] += 1
+    return summary

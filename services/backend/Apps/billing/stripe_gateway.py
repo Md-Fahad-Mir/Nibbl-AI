@@ -51,6 +51,39 @@ def create_payment_intent(*, brand, amount_cents: int, purpose: str):
     )
 
 
+def create_setup_intent(*, brand):
+    """Create a SetupIntent so the brand can save a card for future charges."""
+    customer_id = ensure_customer(brand)
+    return _client().SetupIntent.create(
+        customer=customer_id,
+        usage="off_session",
+        metadata={"brand_id": str(brand.id)},
+    )
+
+
+def list_payment_methods(*, brand):
+    """List the brand's saved cards (empty list if no Stripe customer yet)."""
+    link = StripeCustomer.objects.filter(brand=brand).first()
+    if link is None:
+        return []
+    resp = _client().PaymentMethod.list(customer=link.stripe_customer_id, type="card")
+    return resp.get("data", [])
+
+
+def charge_saved_card(*, brand, amount_cents: int, payment_method_id: str, purpose: str):
+    """Charge a saved card off-session (for auto-refill). Confirms immediately."""
+    customer_id = ensure_customer(brand)
+    return _client().PaymentIntent.create(
+        amount=amount_cents,
+        currency="usd",
+        customer=customer_id,
+        payment_method=payment_method_id,
+        off_session=True,
+        confirm=True,
+        metadata={"brand_id": str(brand.id), "purpose": purpose},
+    )
+
+
 def construct_event(payload: bytes, sig_header: str):
     """Verify a webhook signature and return the parsed Stripe event."""
     if not settings.STRIPE_WEBHOOK_SECRET:

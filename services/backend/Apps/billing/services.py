@@ -7,9 +7,12 @@ milestones call to compute what to charge.
 
 from __future__ import annotations
 
+import logging
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from Apps.billing import stripe_gateway
@@ -19,6 +22,20 @@ from Apps.common.dates import add_months
 from Apps.common.money import ZERO, to_money
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+
+logger = logging.getLogger(__name__)
+
+# Wallet outflows that count toward a brand's spend (what the 7-day estimate
+# and the auto-refill trigger are based on).
+_SPEND_CATEGORIES = [
+    LedgerEntry.Category.REBATE_REWARD,
+    LedgerEntry.Category.REBATE_FEE,
+    LedgerEntry.Category.REVIEW_REWARD,
+    LedgerEntry.Category.REVIEW_FEE,
+    LedgerEntry.Category.SUBSCRIPTION,
+]
+# Master spec: refill when Available Funds reaches 25% of the 7-day estimate.
+AUTO_REFILL_TRIGGER_FRACTION = Decimal("0.25")
 
 
 class BillingError(Exception):
@@ -242,11 +259,12 @@ def get_or_create_auto_refill(brand) -> AutoRefill:
     return config
 
 
-def set_auto_refill(
-    *, brand, enabled: bool, threshold, amount, payment_method_id: str
-) -> AutoRefill:
-    """Configure a brand's auto-refill. Enabling requires a card and amounts."""
-    threshold = to_money(threshold)
+def set_auto_refill(*, brand, enabled: bool, amount, payment_method_id: str) -> AutoRefill:
+    """Configure a brand's auto-refill. Enabling requires a saved card.
+
+    There is no brand-set threshold: the Master triggers a refill when Available
+    Funds reach 25% of the estimated 7-day requirement (see ``run_auto_refill``).
+    """
     amount = to_money(amount)
     if enabled:
         if not payment_method_id:
@@ -256,26 +274,73 @@ def set_auto_refill(
 
     config = get_or_create_auto_refill(brand)
     config.enabled = enabled
-    config.threshold = threshold
     config.amount = amount
     config.stripe_payment_method_id = payment_method_id
     config.save(
-        update_fields=[
-            "enabled",
-            "threshold",
-            "amount",
-            "stripe_payment_method_id",
-            "updated_at",
-        ]
+        update_fields=["enabled", "amount", "stripe_payment_method_id", "updated_at"]
     )
     return config
 
 
+def estimate_seven_day_requirement(brand) -> Decimal:
+    """Estimate a brand's 7-day funding need from its last 7 days of spend."""
+    wallet = wallet_services.get_or_create_brand_wallet(brand)
+    since = timezone.now() - timedelta(days=7)
+    total = (
+        LedgerEntry.objects.filter(
+            wallet=wallet,
+            entry_type=LedgerEntry.EntryType.DEBIT,
+            category__in=_SPEND_CATEGORIES,
+            created_at__gte=since,
+        ).aggregate(total=Sum("amount"))["total"]
+        or ZERO
+    )
+    return to_money(total)
+
+
+def auto_refill_status(brand) -> dict:
+    """Config plus the computed 7-day estimate, trigger point, and recommendation."""
+    config = get_or_create_auto_refill(brand)
+    estimate = estimate_seven_day_requirement(brand)
+    return {
+        "enabled": config.enabled,
+        "amount": config.amount,
+        "payment_method_id": config.stripe_payment_method_id,
+        "last_refilled_at": config.last_refilled_at,
+        "estimated_seven_day": estimate,
+        "trigger_at": to_money(estimate * AUTO_REFILL_TRIGGER_FRACTION),
+        # Nibbl's recommendation: fund roughly a week at a time.
+        "recommended_amount": estimate,
+    }
+
+
+def _notify_refill_failed(brand, amount) -> None:
+    """Alert the brand's managers (in-app) that their auto-refill payment failed."""
+    from Apps.brands.models import BrandMembership
+    from Apps.notifications import services as notifications
+
+    managers = BrandMembership.objects.filter(
+        brand=brand,
+        is_active=True,
+        role__in=[BrandMembership.Role.OWNER, BrandMembership.Role.ADMIN],
+    ).select_related("user")
+    for membership in managers:
+        notifications.notify(
+            user=membership.user,
+            notification_type="auto_refill_failed",
+            context={"brand": brand.name, "amount": str(amount)},
+            reference_type="auto_refill",
+            reference_id=brand.id,
+        )
+
+
 def run_auto_refill(now=None) -> dict:
-    """Charge the saved card for every enabled brand whose wallet is low.
+    """Charge the saved card for every enabled brand whose Available Funds have
+    reached 25% of their estimated 7-day requirement (Master spec).
 
     The off-session charge credits the wallet through the usual Stripe webhook,
-    so this job only initiates the payment. Returns a summary count.
+    so this job only initiates the payment. On failure the brand is notified.
+    Returns a summary count.
     """
     now = now or timezone.now()
     summary = {"charged": 0, "skipped": 0, "failed": 0}
@@ -285,8 +350,12 @@ def run_auto_refill(now=None) -> dict:
         if not config.stripe_payment_method_id or config.amount <= ZERO:
             summary["skipped"] += 1
             continue
+        trigger_at = to_money(
+            estimate_seven_day_requirement(config.brand) * AUTO_REFILL_TRIGGER_FRACTION
+        )
         wallet = wallet_services.get_or_create_brand_wallet(config.brand)
-        if wallet.available() >= config.threshold:
+        # No recent spend (estimate 0) means there is nothing to refill for.
+        if trigger_at <= ZERO or wallet.available() >= trigger_at:
             summary["skipped"] += 1
             continue
         try:
@@ -297,6 +366,8 @@ def run_auto_refill(now=None) -> dict:
                 purpose=WALLET_TOPUP,
             )
         except Exception:  # card declined / auth required / Stripe error
+            logger.warning("Auto-refill charge failed for brand %s", config.brand_id)
+            _notify_refill_failed(config.brand, config.amount)
             summary["failed"] += 1
             continue
         config.last_refilled_at = now

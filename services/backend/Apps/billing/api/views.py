@@ -93,7 +93,7 @@ class SavedCardsView(APIView):
         return Response(s.SavedCardSerializer(cards, many=True).data)
 
 
-@extend_schema(tags=["billing"], request=s.AutoRefillSerializer, responses=s.AutoRefillSerializer)
+@extend_schema(tags=["billing"], request=s.AutoRefillInputSerializer, responses=s.AutoRefillStatusSerializer)
 class AutoRefillView(APIView):
     """Get or set a brand's automatic wallet-refill configuration."""
 
@@ -102,27 +102,23 @@ class AutoRefillView(APIView):
     def get(self, request, brand_id):
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand, manager=True)
-        config = services.get_or_create_auto_refill(brand)
-        return Response(s.AutoRefillSerializer(config).data)
+        return Response(s.AutoRefillStatusSerializer(services.auto_refill_status(brand)).data)
 
     def put(self, request, brand_id):
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand, manager=True, active=True)
-        payload = s.AutoRefillSerializer(data=request.data)
+        payload = s.AutoRefillInputSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         try:
-            config = services.set_auto_refill(
+            services.set_auto_refill(
                 brand=brand,
                 enabled=payload.validated_data["enabled"],
-                threshold=payload.validated_data["threshold"],
                 amount=payload.validated_data["amount"],
-                payment_method_id=payload.validated_data.get(
-                    "stripe_payment_method_id", ""
-                ),
+                payment_method_id=payload.validated_data.get("payment_method_id", ""),
             )
         except services.BillingError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(s.AutoRefillSerializer(config).data)
+        return Response(s.AutoRefillStatusSerializer(services.auto_refill_status(brand)).data)
 
 
 @extend_schema(tags=["billing"], request=None, responses={200: None})

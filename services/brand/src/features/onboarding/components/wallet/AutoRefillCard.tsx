@@ -4,15 +4,20 @@ import { useEffect, useState } from "react";
 import { useBrandApiStore, type SavedCard } from "@/stores/useBrandApiStore";
 import SaveCardModal from "./SaveCardModal";
 
+const money = (v: string | number | undefined) =>
+  `$${Number(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 export default function AutoRefillCard() {
   const getAutoRefill = useBrandApiStore((state) => state.getAutoRefill);
   const loadSavedCards = useBrandApiStore((state) => state.loadSavedCards);
   const saveAutoRefill = useBrandApiStore((state) => state.saveAutoRefill);
 
   const [enabled, setEnabled] = useState(false);
-  const [threshold, setThreshold] = useState("100");
   const [amount, setAmount] = useState("250");
   const [paymentMethodId, setPaymentMethodId] = useState("");
+  const [recommended, setRecommended] = useState("0");
+  const [triggerAt, setTriggerAt] = useState("0");
+  const [estimate, setEstimate] = useState("0");
   const [cards, setCards] = useState<SavedCard[]>([]);
   const [showSaveCard, setShowSaveCard] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -23,9 +28,11 @@ export default function AutoRefillCard() {
     try {
       const [config, savedCards] = await Promise.all([getAutoRefill(), loadSavedCards()]);
       setEnabled(config.enabled);
-      setThreshold(String(config.threshold ?? "100"));
-      setAmount(String(config.amount ?? "250"));
+      if (Number(config.amount) > 0) setAmount(String(config.amount));
       setPaymentMethodId(config.payment_method_id ?? "");
+      setRecommended(String(config.recommended_amount ?? "0"));
+      setTriggerAt(String(config.trigger_at ?? "0"));
+      setEstimate(String(config.estimated_seven_day ?? "0"));
       setCards(savedCards);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load auto-refill.");
@@ -54,11 +61,11 @@ export default function AutoRefillCard() {
     try {
       await saveAutoRefill({
         enabled,
-        threshold: Number(threshold).toFixed(2),
         amount: Number(amount).toFixed(2),
         payment_method_id: paymentMethodId,
       });
       setMessage("Auto-refill settings saved.");
+      reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save settings.");
     } finally {
@@ -76,13 +83,14 @@ export default function AutoRefillCard() {
         <div className="flex flex-col text-left">
           <span className="font-bold text-[#131B2E] text-lg">Automatic Refill</span>
           <span className="text-xs text-[#454656] font-medium mt-1">
-            Top up the wallet from a saved card when the balance runs low.
+            Nibbl tops up your wallet from a saved card when Available Funds reach
+            25% of your estimated 7-day spend.
           </span>
         </div>
         <button
           type="button"
           onClick={() => setEnabled((value) => !value)}
-          className={`relative h-7 w-12 rounded-full transition ${enabled ? "bg-[#001BD2]" : "bg-[#C5C5D9]/40"}`}
+          className={`relative h-7 w-12 shrink-0 rounded-full transition ${enabled ? "bg-[#001BD2]" : "bg-[#C5C5D9]/40"}`}
           aria-pressed={enabled}
         >
           <span
@@ -91,28 +99,28 @@ export default function AutoRefillCard() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <label className="flex flex-col gap-1 text-left">
-          <span className="text-[11px] font-bold tracking-wider text-[#454656] uppercase">
-            When balance drops below
-          </span>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#454656]">$</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={threshold}
-              onChange={(event) => setThreshold(event.target.value)}
-              className="h-11 w-full rounded-xl border border-[#C5C5D9]/40 pl-7 pr-3 text-sm font-bold text-[#131B2E] outline-none focus:border-[#001BD2]"
-            />
-          </div>
-        </label>
-        <label className="flex flex-col gap-1 text-left">
-          <span className="text-[11px] font-bold tracking-wider text-[#454656] uppercase">
-            Refill amount
-          </span>
-          <div className="relative">
+      {/* Computed figures (read-only, from the backend) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-[#F2F3FF] p-4 rounded-2xl flex flex-col text-left gap-1">
+          <span className="text-[10px] font-bold text-[#454656]/80 uppercase">Est. 7-day spend</span>
+          <span className="text-lg font-bold text-[#131B2E]">{money(estimate)}</span>
+        </div>
+        <div className="bg-[#F2F3FF] p-4 rounded-2xl flex flex-col text-left gap-1">
+          <span className="text-[10px] font-bold text-[#454656]/80 uppercase">Refills below</span>
+          <span className="text-lg font-bold text-[#131B2E]">{money(triggerAt)}</span>
+        </div>
+        <div className="bg-[#F2F3FF] p-4 rounded-2xl flex flex-col text-left gap-1">
+          <span className="text-[10px] font-bold text-[#454656]/80 uppercase">Recommended</span>
+          <span className="text-lg font-bold text-[#001BD2]">{money(recommended)}</span>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 text-left">
+        <span className="text-[11px] font-bold tracking-wider text-[#454656] uppercase">
+          Refill amount
+        </span>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <div className="relative sm:w-48">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#454656]">$</span>
             <input
               type="number"
@@ -123,7 +131,16 @@ export default function AutoRefillCard() {
               className="h-11 w-full rounded-xl border border-[#C5C5D9]/40 pl-7 pr-3 text-sm font-bold text-[#131B2E] outline-none focus:border-[#001BD2]"
             />
           </div>
-        </label>
+          {Number(recommended) > 0 && (
+            <button
+              type="button"
+              onClick={() => setAmount(Number(recommended).toFixed(2))}
+              className="text-sm font-bold text-[#001BD2] hover:underline self-start sm:self-center"
+            >
+              Use recommended ({money(recommended)})
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-2 text-left">

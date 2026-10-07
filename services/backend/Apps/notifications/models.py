@@ -13,6 +13,8 @@ class NotificationType(models.TextChoices):
     NEW_OFFERS = "new_offers", "New offers available"
     INACTIVE = "inactive", "We miss you"
     PROMOTIONAL = "promotional", "Promotional"
+    # Brand-facing billing alerts (not preference-gated — critical).
+    AUTO_REFILL_FAILED = "auto_refill_failed", "Automatic refill failed"
 
 
 # Maps a notification type to the preference flag that gates it.

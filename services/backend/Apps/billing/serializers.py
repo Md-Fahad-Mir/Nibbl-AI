@@ -54,20 +54,25 @@ class SavedCardSerializer(serializers.Serializer):
     exp_year = serializers.IntegerField(allow_null=True)
 
 
-class AutoRefillSerializer(serializers.Serializer):
-    """Read/write a brand's auto-refill configuration."""
+class AutoRefillInputSerializer(serializers.Serializer):
+    """Write a brand's auto-refill configuration."""
 
     enabled = serializers.BooleanField()
-    threshold = serializers.DecimalField(
-        max_digits=10, decimal_places=2, min_value=Decimal("0")
-    )
     amount = serializers.DecimalField(
         max_digits=10, decimal_places=2, min_value=Decimal("0")
     )
     payment_method_id = serializers.CharField(
-        source="stripe_payment_method_id",
-        required=False,
-        allow_blank=True,
-        default="",
+        required=False, allow_blank=True, default=""
     )
-    last_refilled_at = serializers.DateTimeField(read_only=True)
+
+
+class AutoRefillStatusSerializer(serializers.Serializer):
+    """Config plus the computed 7-day estimate, trigger point, and recommendation."""
+
+    enabled = serializers.BooleanField()
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    payment_method_id = serializers.CharField(allow_blank=True)
+    estimated_seven_day = serializers.DecimalField(max_digits=10, decimal_places=2)
+    trigger_at = serializers.DecimalField(max_digits=10, decimal_places=2)
+    recommended_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    last_refilled_at = serializers.DateTimeField(allow_null=True)

@@ -47,7 +47,7 @@ def create_payment_intent(*, brand, amount_cents: int, purpose: str):
         currency="usd",
         customer=customer_id,
         metadata={"brand_id": str(brand.id), "purpose": purpose},
-        automatic_payment_methods={"enabled": True},
+        payment_method_types=["card"],
     )
 
 
@@ -57,6 +57,7 @@ def create_setup_intent(*, brand):
     return _client().SetupIntent.create(
         customer=customer_id,
         usage="off_session",
+        payment_method_types=["card"],
         metadata={"brand_id": str(brand.id)},
     )
 
@@ -67,7 +68,7 @@ def list_payment_methods(*, brand):
     if link is None:
         return []
     resp = _client().PaymentMethod.list(customer=link.stripe_customer_id, type="card")
-    return resp.get("data", [])
+    return list(resp.data)
 
 
 def charge_saved_card(*, brand, amount_cents: int, payment_method_id: str, purpose: str):

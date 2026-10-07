@@ -222,6 +222,8 @@ def list_saved_cards(*, brand) -> list[dict]:
     """Return the brand's saved cards as simple dicts for the UI."""
     cards = []
     for pm in stripe_gateway.list_payment_methods(brand=brand):
+        if hasattr(pm, "to_dict"):
+            pm = pm.to_dict()
         card = pm.get("card") or {}
         cards.append(
             {

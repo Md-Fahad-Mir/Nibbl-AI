@@ -16,10 +16,32 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
+  # ─── Detect which services changed ──────────────────────────────────
+  # Only rebuild an image when its own code changed; unchanged services keep
+  # running their current :latest image (a backend-only merge no longer
+  # rebuilds the AI image).
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      ai: ${{ steps.filter.outputs.ai }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'services/backend/**'
+            ai:
+              - 'services/ai/**'
+
   # ─── Build & Push to ECR ────────────────────────────────────────────
   build:
     name: Build & Push Images to ECR
     runs-on: ubuntu-latest
+    needs: changes
     outputs:
       registry: ${{ steps.login-ecr.outputs.registry }}
 
@@ -41,6 +63,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build & push backend
+        if: ${{ needs.changes.outputs.backend == 'true' }}
         uses: docker/build-push-action@v5
         with:
           context: ./services/backend
@@ -54,6 +77,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push AI
+        if: ${{ needs.changes.outputs.ai == 'true' }}
         uses: docker/build-push-action@v5
         with:
           context: ./services/ai
@@ -98,7 +122,7 @@ jobs:
   deploy:
     name: Deploy to Production via SSM
     runs-on: ubuntu-latest
-    needs: build
+    needs: [changes, build]
     environment: production
 
     steps:
@@ -112,7 +136,13 @@ jobs:
         run: |
           set -euo pipefail
           REGISTRY='${{ needs.build.outputs.registry }}'
-          TAG='${{ github.sha }}'
+          SHA='${{ github.sha }}'
+
+          # Use this SHA's image for a service that was rebuilt; otherwise keep
+          # the service on its current :latest (no image was pushed for this SHA).
+          BACKEND_TAG=$([ '${{ needs.changes.outputs.backend }}' = 'true' ] && echo "$SHA" || echo "latest")
+          AI_TAG=$([ '${{ needs.changes.outputs.ai }}' = 'true' ] && echo "$SHA" || echo "latest")
+          echo "Deploying backend=$BACKEND_TAG ai=$AI_TAG"
 
           # Resolve the running production instance by tag.
           INSTANCE_ID=$(aws ec2 describe-instances \
@@ -124,8 +154,8 @@ jobs:
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "Nibbl AI deploy $TAG" \
-            --parameters "commands=sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$TAG AWS_REGION=${{ env.AWS_REGION }} bash /home/ubuntu/nibblai/server-deploy.sh" \
+            --comment "Nibbl AI deploy backend=$BACKEND_TAG ai=$AI_TAG" \
+            --parameters "commands=sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$BACKEND_TAG AI_IMAGE_TAG=$AI_TAG AWS_REGION=${{ env.AWS_REGION }} bash /home/ubuntu/nibblai/server-deploy.sh" \
             --query Command.CommandId --output text)
           echo "SSM command: $CMD_ID"
 

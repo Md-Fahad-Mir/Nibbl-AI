@@ -54,21 +54,23 @@ function SetupForm({ onClose, onSaved }: SaveCardModalProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <PaymentElement />
-      {error && <p className="text-xs font-bold text-red-500">{error}</p>}
-      <div className="flex gap-3">
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+      <div className="flex-1 overflow-y-auto px-6 py-5">
+        <PaymentElement options={{ layout: "tabs" }} />
+        {error && <p className="mt-3 text-xs font-bold text-red-500">{error}</p>}
+      </div>
+      <div className="flex shrink-0 gap-3 border-t border-[#C5C5D9]/20 px-6 py-4">
         <button
           type="button"
           onClick={onClose}
-          className="h-11 flex-1 rounded-xl border border-[#C5C5D9]/40 text-sm font-bold text-[#454656] transition hover:bg-[#F2F3FF]"
+          className="h-12 flex-1 rounded-xl border border-[#C5C5D9]/40 text-sm font-bold text-[#454656] transition hover:bg-[#F2F3FF]"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={!stripe || submitting}
-          className="h-11 flex-1 rounded-xl bg-[#001BD2] text-sm font-extrabold text-white transition hover:bg-[#001BD2]/90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-12 flex-[2] rounded-xl bg-[#001BD2] text-sm font-extrabold text-white transition hover:bg-[#001BD2]/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? "Saving…" : "Save card"}
         </button>
@@ -99,19 +101,17 @@ export default function SaveCardModal({ onClose, onSaved }: SaveCardModalProps) 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-6 flex items-start justify-between">
+        <div className="flex shrink-0 items-start justify-between border-b border-[#C5C5D9]/20 px-6 py-5">
           <div>
             <h2 className="text-xl font-bold text-[#131B2E]">Save a card</h2>
-            <p className="text-sm text-[#454656]">
-              Used for automatic wallet refills.
-            </p>
+            <p className="text-sm text-[#454656]">Used for automatic wallet refills.</p>
           </div>
           <button
             type="button"
@@ -124,13 +124,13 @@ export default function SaveCardModal({ onClose, onSaved }: SaveCardModalProps) 
         </div>
 
         {!stripeConfigured ? (
-          <p className="text-sm font-semibold text-red-500">
+          <p className="px-6 py-8 text-sm font-semibold text-red-500">
             Payments are not configured (missing Stripe publishable key).
           </p>
         ) : error ? (
-          <p className="text-sm font-semibold text-red-500">{error}</p>
+          <p className="px-6 py-8 text-sm font-semibold text-red-500">{error}</p>
         ) : !clientSecret ? (
-          <p className="text-sm text-[#454656]">Preparing secure form…</p>
+          <p className="px-6 py-8 text-sm text-[#454656]">Preparing secure form…</p>
         ) : (
           <Elements stripe={stripePromise} options={{ clientSecret }}>
             <SetupForm onClose={onClose} onSaved={onSaved} />

@@ -191,6 +191,29 @@ const brandNameFromState = (state: {
   );
 };
 
+export interface SavedCard {
+  id: string;
+  brand: string | null;
+  last4: string | null;
+  exp_month: number | null;
+  exp_year: number | null;
+}
+
+export interface AutoRefillConfig {
+  enabled: boolean;
+  threshold: string;
+  amount: string;
+  payment_method_id: string;
+  last_refilled_at: string | null;
+}
+
+export interface AutoRefillInput {
+  enabled: boolean;
+  threshold: string;
+  amount: string;
+  payment_method_id: string;
+}
+
 interface BrandApiState {
   accessToken: string | null;
   refreshToken: string | null;
@@ -278,6 +301,10 @@ interface BrandApiState {
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   createTopupIntent: (amount: string) => Promise<{ client_secret: string; payment_intent_id: string }>;
   refreshWallet: () => Promise<void>;
+  createSetupIntent: () => Promise<{ client_secret: string; setup_intent_id: string }>;
+  loadSavedCards: () => Promise<SavedCard[]>;
+  getAutoRefill: () => Promise<AutoRefillConfig>;
+  saveAutoRefill: (config: AutoRefillInput) => Promise<AutoRefillConfig>;
   markAllNotificationsRead: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -888,6 +915,32 @@ export const useBrandApiStore = create<BrandApiState>()(
           apiClient.request<unknown>(backendApi.brand.walletTransactions(brandId)),
         ]);
         set({ wallet, walletTransactions: listResults(transactions) });
+      },
+      createSetupIntent: async () => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        return apiClient.request<{ client_secret: string; setup_intent_id: string }>(
+          backendApi.billing.setupIntent(brandId),
+          { body: {} },
+        );
+      },
+      loadSavedCards: async () => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) return [];
+        return apiClient.request<SavedCard[]>(backendApi.billing.savedCards(brandId));
+      },
+      getAutoRefill: async () => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        return apiClient.request<AutoRefillConfig>(backendApi.billing.autoRefill(brandId));
+      },
+      saveAutoRefill: async (config) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        return apiClient.request<AutoRefillConfig>(
+          backendApi.billing.setAutoRefill(brandId),
+          { body: config },
+        );
       },
       markAllNotificationsRead: async () => {
         await nibblApi.markAllNotificationsRead();

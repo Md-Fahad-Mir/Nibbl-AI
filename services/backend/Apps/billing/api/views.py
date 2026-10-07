@@ -55,6 +55,74 @@ class AddFundsView(APIView):
         return Response(s.TopupIntentSerializer(result).data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema(tags=["billing"], request=None, responses=s.SetupIntentSerializer)
+class SetupCardView(APIView):
+    """Start saving a card for future (auto-refill) charges."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, brand_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True, active=True)
+        try:
+            result = services.create_card_setup_intent(brand=brand)
+        except StripeNotConfigured:
+            return Response(
+                {"detail": "Payments are not available right now."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(s.SetupIntentSerializer(result).data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(tags=["billing"], responses=s.SavedCardSerializer(many=True))
+class SavedCardsView(APIView):
+    """List the brand's saved cards."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, brand_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True)
+        try:
+            cards = services.list_saved_cards(brand=brand)
+        except StripeNotConfigured:
+            return Response(
+                {"detail": "Payments are not available right now."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(s.SavedCardSerializer(cards, many=True).data)
+
+
+@extend_schema(tags=["billing"], request=s.AutoRefillSerializer, responses=s.AutoRefillSerializer)
+class AutoRefillView(APIView):
+    """Get or set a brand's automatic wallet-refill configuration."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, brand_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True)
+        config = services.get_or_create_auto_refill(brand)
+        return Response(s.AutoRefillSerializer(config).data)
+
+    def put(self, request, brand_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True, active=True)
+        payload = s.AutoRefillSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        try:
+            config = services.set_auto_refill(
+                brand=brand,
+                enabled=payload.validated_data["enabled"],
+                threshold=payload.validated_data["threshold"],
+                amount=payload.validated_data["amount"],
+                payment_method_id=payload.validated_data.get("payment_method_id", ""),
+            )
+        except services.BillingError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(s.AutoRefillSerializer(config).data)
+
+
 @extend_schema(tags=["billing"], request=None, responses={200: None})
 class StripeWebhookView(APIView):
     """Receive Stripe webhook events (signature-verified). Public endpoint."""

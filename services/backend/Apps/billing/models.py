@@ -110,3 +110,28 @@ class StripeCustomer(BaseModel):
 
     def __str__(self):
         return f"{self.brand_id} → {self.stripe_customer_id}"
+
+
+class AutoRefill(BaseModel):
+    """Per-brand automatic wallet top-up from a saved card.
+
+    When enabled and the brand wallet drops below ``threshold``, the
+    ``run_auto_refill`` job charges the saved card for ``amount`` (off-session);
+    the resulting payment credits the wallet via the normal Stripe webhook.
+    """
+
+    brand = models.OneToOneField(
+        "brands.Brand", on_delete=models.CASCADE, related_name="auto_refill"
+    )
+    enabled = models.BooleanField(default=False)
+    threshold = models.DecimalField(default=ZERO, **MONEY_FIELD)
+    amount = models.DecimalField(default=ZERO, **MONEY_FIELD)
+    # The saved Stripe PaymentMethod to charge (set after a card is saved).
+    stripe_payment_method_id = models.CharField(max_length=255, blank=True)
+    last_refilled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.brand_id} auto-refill ({'on' if self.enabled else 'off'})"

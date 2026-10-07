@@ -116,7 +116,9 @@ class AutoRefillView(APIView):
                 enabled=payload.validated_data["enabled"],
                 threshold=payload.validated_data["threshold"],
                 amount=payload.validated_data["amount"],
-                payment_method_id=payload.validated_data.get("payment_method_id", ""),
+                payment_method_id=payload.validated_data.get(
+                    "stripe_payment_method_id", ""
+                ),
             )
         except services.BillingError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)

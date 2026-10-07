@@ -16,11 +16,13 @@ services:
       - media_data:/app/media
       - static_data:/app/staticfiles
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/admin/')"]
+      # Hit the redirect-exempt health endpoint over HTTP; the forwarded-proto
+      # header keeps SECURE_SSL_REDIRECT from 301-ing to HTTPS (which hangs).
+      test: ["CMD", "curl", "-fsS", "-H", "X-Forwarded-Proto: https", "http://127.0.0.1:8000/api/v1/health/"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-      start_period: 20s
+      start_period: 40s
     depends_on:
       ai:
         condition: service_healthy

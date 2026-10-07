@@ -7,10 +7,36 @@ on:
       - staging
 
 jobs:
+  # Detect which services changed so each area's checks run only when its own
+  # code changed (a backend-only PR no longer rebuilds the AI image, etc.).
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      ai: ${{ steps.filter.outputs.ai }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'services/backend/**'
+            ai:
+              - 'services/ai/**'
+            infra:
+              - 'infrastructure/**'
+              - 'deployment/**'
+              - '.github/workflows/**'
+
   # Independent jobs so a failure in one service's checks never blocks or
   # skips another's -- each area's status reflects only its own code.
   backend:
     name: Backend
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -56,6 +82,8 @@ jobs:
 
   ai:
     name: AI Service
+    needs: changes
+    if: ${{ needs.changes.outputs.ai == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -86,6 +114,8 @@ jobs:
 
   infra:
     name: Infra Validation
+    needs: changes
+    if: ${{ needs.changes.outputs.infra == 'true' }}
     runs-on: ubuntu-latest
 
     steps:

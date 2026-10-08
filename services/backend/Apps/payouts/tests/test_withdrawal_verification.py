@@ -80,6 +80,19 @@ class SendCodeTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
+    def test_send_code_503_when_unconfigured_even_without_verified_phone(self):
+        # With SMS verification off, a shopper with no verified phone must get
+        # 503 (→ clients skip the SMS step), not "verify your phone first".
+        user = _user("d@example.com", None, verified=False)
+        method = _method(user, "d@paypal.com")
+        self.client.force_authenticate(user)
+        resp = self.client.post(
+            reverse("v1:payouts:withdrawal-send-code"),
+            {"payout_method": str(method.id), "amount": "10.00"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
 
 class WithdrawalCodeEnforcementTests(APITestCase):
     @override_settings(**TWILIO_ON)

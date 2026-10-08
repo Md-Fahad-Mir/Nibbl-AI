@@ -43,6 +43,13 @@ def campaign_metrics(campaign: Campaign) -> dict:
         "approvals": receipts.filter(status=Receipt.Status.VERIFIED).count(),
         "rejected_receipts": receipts.filter(status=Receipt.Status.REJECTED).count(),
         "redemptions": redemptions.count(),
+        # Receipts waiting for a review decision (Master: Pending Review).
+        "pending_review": receipts.filter(status=Receipt.Status.PENDING).count(),
+        # Redemptions ÷ claims, as a percent (None before any claim).
+        "redemption_rate": (
+            round(redemptions.count() * 100 / reservations.count(), 1)
+            if reservations.count() else None
+        ),
         "reward_spend": _sum(redemptions, "reward_amount"),
         "fee_spend": _sum(redemptions, "fee_amount"),
         "total_spend": _sum(redemptions, "reward_amount") + _sum(redemptions, "fee_amount"),
@@ -288,7 +295,10 @@ def refresh_campaign_stats() -> int:
     for campaign in Campaign.objects.select_related("brand").all():
         CampaignStat.objects.update_or_create(
             campaign=campaign,
-            defaults={"brand": campaign.brand, **campaign_metrics(campaign)},
+            defaults={"brand": campaign.brand, **{
+                k: v for k, v in campaign_metrics(campaign).items()
+                if k not in ("pending_review", "redemption_rate")  # live-only
+            }},
         )
         count += 1
     return count

@@ -387,18 +387,8 @@ export const backendApi = {
       path: `/brands/${brandId}/campaigns/${campaignId}/tiers/`,
       auth: true,
     }),
-    setCampaignTiers: (brandId: string, campaignId: string): ApiEndpoint => ({
-      method: "PUT",
-      path: `/brands/${brandId}/campaigns/${campaignId}/tiers/`,
-      auth: true,
-    }),
     campaignFallback: (brandId: string, campaignId: string): ApiEndpoint => ({
       method: "GET",
-      path: `/brands/${brandId}/campaigns/${campaignId}/fallback/`,
-      auth: true,
-    }),
-    setCampaignFallback: (brandId: string, campaignId: string): ApiEndpoint => ({
-      method: "PUT",
       path: `/brands/${brandId}/campaigns/${campaignId}/fallback/`,
       auth: true,
     }),
@@ -410,6 +400,16 @@ export const backendApi = {
     campaignPreview: (brandId: string, campaignId: string): ApiEndpoint => ({
       method: "GET",
       path: `/brands/${brandId}/campaigns/${campaignId}/preview/`,
+      auth: true,
+    }),
+    campaignImage: (brandId: string, campaignId: string): ApiEndpoint => ({
+      method: "PUT",
+      path: `/brands/${brandId}/campaigns/${campaignId}/image/`,
+      auth: true,
+    }),
+    campaignReviews: (brandId: string, campaignId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/campaigns/${campaignId}/reviews/`,
       auth: true,
     }),
     submitCampaign: (brandId: string, campaignId: string): ApiEndpoint => ({

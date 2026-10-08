@@ -34,6 +34,9 @@ class Campaign(BaseModel):
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    # Shown at the top of the shopper offer (one product, several, or other
+    # campaign creative).
+    image = models.ImageField(upload_to="campaign_images/%Y/%m/", blank=True, null=True)
 
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.DRAFT
@@ -123,7 +126,37 @@ class Campaign(BaseModel):
 
     @property
     def is_live(self) -> bool:
-        return self.status == self.Status.ACTIVE
+        """Claimable now: active and inside its start/end dates."""
+        if self.status != self.Status.ACTIVE:
+            return False
+        from django.utils import timezone
+
+        now = timezone.now()
+        if self.start_at and now < self.start_at:
+            return False
+        return not (self.end_at and now >= self.end_at)
+
+    @property
+    def display_status(self) -> str:
+        """Brand-facing status (Master: Pending Review, Changes Requested,
+        Scheduled, Active, Paused, Ended...)."""
+        if self.review_status != self.ReviewStatus.APPROVED:
+            return {
+                self.ReviewStatus.NOT_SUBMITTED: "draft",
+            }.get(self.review_status, self.review_status)
+        if self.status == self.Status.ACTIVE:
+            from django.utils import timezone
+
+            now = timezone.now()
+            if self.start_at and now < self.start_at:
+                return "scheduled"
+            if self.end_at and now >= self.end_at:
+                return "ended"
+            return "active"
+        if self.status in (self.Status.COMPLETED, self.Status.ARCHIVED):
+            return "ended"
+        # Approved but not live yet (e.g. waiting for wallet funds) / paused.
+        return "approved" if self.status == self.Status.DRAFT else self.status
 
 
 class CampaignReview(BaseModel):

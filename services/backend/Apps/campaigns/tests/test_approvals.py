@@ -2,9 +2,11 @@
 request changes; revisions of approved campaigns keep the live version."""
 
 import importlib
+import tempfile
 from decimal import Decimal
 
 from django.apps import apps
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -23,7 +25,7 @@ from Apps.wallets.models import LedgerEntry
 RS = Campaign.ReviewStatus
 
 
-class ApprovalWorkflowTests(APITestCase):
+class _ApprovalBase(APITestCase):
     def setUp(self):
         self.admin = User.objects.create_user(
             email="admin@nibbl.ai", password="x", full_name="Admin",
@@ -62,6 +64,15 @@ class ApprovalWorkflowTests(APITestCase):
             {"comment": comment}, format="json",
         )
 
+    def _live(self):
+        self._fund()
+        self._submit()
+        approvals.approve(CampaignReview.objects.get(), admin=self.admin)
+        self.campaign.refresh_from_db()
+
+
+
+class ApprovalWorkflowTests(_ApprovalBase):
     # -- new campaigns ----------------------------------------------------------
     def test_draft_cannot_go_live_without_approval(self):
         self._fund()
@@ -153,12 +164,6 @@ class ApprovalWorkflowTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     # -- revisions ---------------------------------------------------------------
-    def _live(self):
-        self._fund()
-        self._submit()
-        approvals.approve(CampaignReview.objects.get(), admin=self.admin)
-        self.campaign.refresh_from_db()
-
     def test_revision_keeps_live_version_until_approved(self):
         self._live()
         self.client.force_authenticate(self.owner)
@@ -241,3 +246,84 @@ class GrandfatherMigrationTests(APITestCase):
         for campaign, expected in ((live, RS.APPROVED), (paused, RS.APPROVED), (draft, RS.NOT_SUBMITTED)):
             campaign.refresh_from_db()
             self.assertEqual(campaign.review_status, expected)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class BuilderPhase3Tests(_ApprovalBase):
+    """Campaign image, category rule, dates, brand-facing status."""
+
+    def _png(self):
+        import io
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new("RGB", (2, 2)).save(buf, "PNG")
+        return SimpleUploadedFile("c.png", buf.getvalue(), content_type="image/png")
+
+    def test_image_upload_direct_on_draft(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.put(
+            self._brand_url("campaign-image"), {"image": self._png()}, format="multipart"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["image_url"].startswith("http"))
+
+    def test_image_change_on_live_campaign_is_a_revision(self):
+        self._live()
+        self.client.force_authenticate(self.owner)
+        resp = self.client.put(
+            self._brand_url("campaign-image"), {"image": self._png()}, format="multipart"
+        )
+        self.assertIsNone(resp.data["image_url"])  # live image unchanged
+        self.assertIn("image", resp.data["pending_revision"]["changes"])
+        self.client.force_authenticate(self.admin)
+        queue = self.client.get(reverse("v1:admin_panel:campaign-approvals"))
+        self.assertIn("campaign_images/", queue.data[0]["proposed_image_url"])
+        revision = CampaignReview.objects.get(kind=CampaignReview.Kind.REVISION)
+        approvals.approve(revision, admin=self.admin)
+        self.campaign.refresh_from_db()
+        self.assertTrue(self.campaign.image.name.startswith("campaign_images/"))
+
+    def test_products_from_different_categories_block_submission(self):
+        snack = create_product(brand=self.brand, name="Chips", category="Snacks")
+        self.product.category = "Drinks"
+        self.product.save()
+        self.campaign.products.add(snack)
+        resp = self._submit()
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("same category", resp.data["detail"])
+
+    def test_scheduled_campaign_is_not_claimable_until_start(self):
+        import datetime as dt
+
+        from django.utils import timezone
+
+        from Apps.reservations import services as reservation_services
+
+        start = timezone.now() + dt.timedelta(days=2)
+        Campaign.objects.filter(pk=self.campaign.pk).update(start_at=start)
+        self.campaign.refresh_from_db()
+        self._live()
+        self.assertEqual(self.campaign.display_status, "scheduled")
+        self.assertEqual(self.campaign.activated_at, start)  # cycles start at the start date
+        shopper = User.objects.create_user(email="s@x.com", password="x", full_name="S")
+        with self.assertRaises(reservation_services.ReservationError):
+            reservation_services.create_reservation(user=shopper, campaign_id=self.campaign.id)
+
+    def test_display_status_follows_review_and_lifecycle(self):
+        self.assertEqual(self.campaign.display_status, "draft")
+        self._submit()
+        self.campaign.refresh_from_db()
+        self.assertEqual(self.campaign.display_status, "pending_review")
+        approvals.approve(CampaignReview.objects.get(), admin=self.admin)  # unfunded
+        self.campaign.refresh_from_db()
+        self.assertEqual(self.campaign.display_status, "approved")
+
+    def test_receipt_eligibility_is_editable(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.patch(
+            self._brand_url("campaign-detail"), {"allowed_merchants": "Target, Kroger"}, format="json"
+        )
+        self.assertEqual(resp.data["allowed_merchants"], "Target, Kroger")

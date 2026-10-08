@@ -265,7 +265,9 @@ class CampaignApprovalQueueView(APIView):
     def get(self, request):
         reviews = approvals.pending_reviews(kind=request.query_params.get("kind", ""))
         return Response(
-            campaign_serializers.AdminCampaignReviewSerializer(reviews, many=True).data
+            campaign_serializers.AdminCampaignReviewSerializer(
+                reviews, many=True, context={"request": request}
+            ).data
         )
 
 

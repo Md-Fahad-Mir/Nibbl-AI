@@ -51,6 +51,10 @@ class CampaignSerializer(serializers.ModelSerializer):
     pending_revision = serializers.SerializerMethodField(read_only=True)
     # Nibbl's latest comment to the brand (changes requested / rejected).
     review_comment = serializers.SerializerMethodField(read_only=True)
+    # Brand-facing status: draft / pending_review / changes_requested /
+    # rejected / approved / scheduled / active / paused / ended.
+    display_status = serializers.CharField(read_only=True)
+    image_url = serializers.SerializerMethodField(read_only=True)
     # 25-hour cycle state for the brand ("Current Cycle Claims: 12 of 34").
     current_cycle_claims = serializers.SerializerMethodField(read_only=True)
     current_cycle_started_at = serializers.SerializerMethodField(read_only=True)
@@ -97,6 +101,9 @@ class CampaignSerializer(serializers.ModelSerializer):
             "review_status",
             "pending_revision",
             "review_comment",
+            "display_status",
+            "allowed_merchants",
+            "image_url",
         ]
         read_only_fields = fields
 
@@ -109,6 +116,12 @@ class CampaignSerializer(serializers.ModelSerializer):
             kind=CampaignReview.Kind.REVISION, status__in=CampaignReview.OPEN
         ).first()
         return CampaignReviewSerializer(review).data if review else None
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(obj.image.url) if request else obj.image.url
 
     def get_review_comment(self, obj) -> str:
         review = (
@@ -164,6 +177,9 @@ class _DealInputMixin(serializers.Serializer):
         max_value=Decimal("100"), required=False,
     )
     one_time_only = serializers.BooleanField(required=False)
+    # Receipt eligibility: blank = Any Retailer; otherwise the receipt must
+    # show one of these (comma-separated) retailer names.
+    allowed_merchants = serializers.CharField(required=False, allow_blank=True)
 
 
 class CampaignCreateSerializer(_DealInputMixin):
@@ -251,14 +267,27 @@ class AdminCampaignReviewSerializer(serializers.ModelSerializer):
     product_names = serializers.SerializerMethodField()
     wallet_available = serializers.SerializerMethodField()
     submitted_by_email = serializers.EmailField(source="submitted_by.email", read_only=True, default=None)
+    # A revision's newly uploaded campaign image, if it proposes one.
+    proposed_image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = CampaignReview
         fields = [
             "id", "kind", "status", "changes", "submitted_at", "submitted_by_email",
             "brand_id", "brand_name", "product_names", "wallet_available", "campaign",
+            "proposed_image_url",
         ]
         read_only_fields = fields
+
+    def get_proposed_image_url(self, obj):
+        name = (obj.changes or {}).get("image")
+        if not name:
+            return None
+        from django.core.files.storage import default_storage
+
+        url = default_storage.url(name)
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
 
     def get_product_names(self, obj) -> list[str]:
         return [p.name for p in obj.campaign.products.all()]
@@ -267,3 +296,7 @@ class AdminCampaignReviewSerializer(serializers.ModelSerializer):
         from Apps.wallets.services import get_or_create_brand_wallet
 
         return str(get_or_create_brand_wallet(obj.campaign.brand).reward_available())
+
+
+class CampaignImageSerializer(serializers.Serializer):
+    image = serializers.ImageField()

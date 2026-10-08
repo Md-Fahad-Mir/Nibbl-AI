@@ -143,9 +143,12 @@ def build_world(*, min_units=1, start_at=None, end_at=None, product_name=PRODUCT
 
 def claim(campaign, email):
     user = User.objects.create_user(email=email, password="x", full_name="C")
-    reservation = reservation_services.create_reservation(
-        user=user, campaign_id=campaign.id
-    )
+    # A dated campaign is only claimable inside its window: claim at its start.
+    at = campaign.start_at + dt.timedelta(minutes=1) if campaign.start_at else timezone.now()
+    with patch("django.utils.timezone.now", return_value=at):
+        reservation = reservation_services.create_reservation(
+            user=user, campaign_id=campaign.id
+        )
     return user, reservation
 
 

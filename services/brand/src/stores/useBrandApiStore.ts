@@ -217,6 +217,24 @@ export interface AutoRefillInput {
   payment_method_id: string;
 }
 
+export interface DealCampaignInput {
+  name: string;
+  start_at: string | null;
+  end_at: string | null;
+  product: string[];
+  deal_type: "free" | "bogo_free" | "bogo_half" | "buy_x_get_y";
+  max_rebate: string | null;
+  fixed_reward: string | null;
+  required_quantity: number;
+  offer_headline: string;
+  offer_description: string;
+  desired_redemptions: number;
+  estimated_redemption_rate: string;
+  cooldown_days: number;
+  one_time_only: boolean;
+  allowed_merchants: string;
+}
+
 interface BrandApiState {
   accessToken: string | null;
   refreshToken: string | null;
@@ -263,28 +281,16 @@ interface BrandApiState {
   updateProduct: (productId: string, body: ApiRecord | FormData) => Promise<void>;
   updateProductAliases: (productId: string, aliases: string[]) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
-  createCampaign: (body: {
-    name: string;
-    description?: string;
-    productIds: string[];
-    dailyBudget: string | number;
-    startAt?: string;
-    endAt?: string;
-    isActive?: boolean;
-    tiers?: { rewardAmount: string | number; allocationPercent: string | number }[];
-    fallback?: { rewardAmount: string | number; isEnabled: boolean; description?: string };
-  }) => Promise<ApiRecord>;
-  updateCampaign: (campaignId: string, body: {
-    name: string;
-    description?: string;
-    productIds?: string[];
-    dailyBudget: string | number;
-    startAt?: string;
-    endAt?: string;
-    isActive?: boolean;
-    tiers?: { rewardAmount: string | number; allocationPercent: string | number }[];
-    fallback?: { rewardAmount: string | number; isEnabled: boolean; description?: string };
-  }) => Promise<ApiRecord>;
+  /** Create (campaignId null) or edit a deal-model rebate campaign; optionally
+   *  upload its image and submit it for Nibbl review. Returns the campaign. */
+  saveDealCampaign: (
+    campaignId: string | null,
+    body: DealCampaignInput,
+    options?: { image?: File | null; submit?: boolean }
+  ) => Promise<ApiRecord>;
+  campaignAction: (campaignId: string, action: "submit" | "activate" | "pause") => Promise<void>;
+  refreshCampaigns: () => Promise<void>;
+  loadCampaignExtras: (campaignId: string) => Promise<{ reviews: ApiRecord[]; access: ApiRecord }>;
   createReviewCampaign: (body: {
     name: string;
     description?: string;
@@ -636,137 +642,59 @@ export const useBrandApiStore = create<BrandApiState>()(
         await apiClient.request(backendApi.brand.deleteProduct(brandId, productId));
         await get().loadProducts(brandId);
       },
-      createCampaign: async ({
-        name,
-        description = "",
-        productIds,
-        dailyBudget,
-        startAt,
-        endAt,
-        isActive = true,
-        tiers = [],
-        fallback,
-      }) => {
+      saveDealCampaign: async (campaignId, body, options = {}) => {
         const brandId = get().selectedBrandId;
-        if (!brandId) throw new Error("Select a brand before creating campaigns.");
-        const campaign = await apiClient.request<ApiRecord>(
-          backendApi.brand.createCampaign(brandId),
-          {
-            body: {
-              name,
-              description,
-              product: productIds,
-              daily_budget: String(dailyBudget),
-              start_at: startAt || null,
-              end_at: endAt || null,
-            },
-          }
-        );
-        const campaignId = String(campaign.id);
-        const tierPayload = tiers.length
-          ? tiers
-          : [{ rewardAmount: "5.00", allocationPercent: "100.00" }];
-        await apiClient.request(backendApi.brand.setCampaignTiers(brandId, campaignId), {
-          body: {
-            tiers: tierPayload.map((tier) => ({
-              reward_amount: String(tier.rewardAmount),
-              allocation_percent: String(tier.allocationPercent),
-            })),
-          },
-        });
-        if (fallback) {
-          await apiClient.request(backendApi.brand.setCampaignFallback(brandId, campaignId), {
-            body: {
-              reward_amount: String(fallback.rewardAmount),
-              is_enabled: fallback.isEnabled,
-              description: fallback.description || "",
-            },
-          });
+        if (!brandId) throw new Error("Select a brand before saving campaigns.");
+        const saved = campaignId
+          ? await apiClient.request<ApiRecord>(backendApi.brand.updateCampaign(brandId, campaignId), {
+              body: body as unknown as ApiRecord,
+            })
+          : await apiClient.request<ApiRecord>(backendApi.brand.createCampaign(brandId), {
+              body: body as unknown as ApiRecord,
+            });
+        const id = String(saved.id);
+        if (options.image) {
+          const form = new FormData();
+          form.append("image", options.image);
+          await apiClient.request(backendApi.brand.campaignImage(brandId, id), { body: form });
         }
-        if (isActive) {
-          // New campaigns go to Nibbl for review; approval puts them live.
-          await apiClient.request(backendApi.brand.submitCampaign(brandId, campaignId));
+        const reviewStatus = String(saved.review_status ?? "");
+        if (options.submit && (reviewStatus === "not_submitted" || reviewStatus === "changes_requested")) {
+          await apiClient.request(backendApi.brand.submitCampaign(brandId, id));
         }
-        const [campaigns, analyticsCampaigns] = await Promise.all([
-          apiClient.request<unknown>(backendApi.brand.campaigns(brandId)),
-          optionalRequest(
-            () => apiClient.request<unknown>(backendApi.brand.analyticsCampaigns(brandId)),
-            []
-          ),
-        ]);
-        set({
-          campaigns: listResults(campaigns),
-          analyticsCampaigns: listResults(analyticsCampaigns),
-        });
-        const access = await optionalRequest(
-          () => apiClient.request<ApiRecord>(backendApi.brand.campaignAccess(brandId, campaignId)),
-          {}
-        );
-        return {
-          ...access,
-          campaign,
-          campaign_id: campaignId,
-        };
+        await get().refreshCampaigns();
+        return get().campaigns.find((campaign) => String(campaign.id) === id) || saved;
       },
-      updateCampaign: async (
-        campaignId,
-        {
-          name,
-          description = "",
-          productIds,
-          dailyBudget,
-          startAt,
-          endAt,
-          isActive = true,
-          tiers = [],
-          fallback,
-        }
-      ) => {
+      campaignAction: async (campaignId, action) => {
         const brandId = get().selectedBrandId;
-        if (!brandId) throw new Error("Select a brand before editing campaigns.");
-        const currentCampaign = get().campaigns.find(
-          (campaign) => String(campaign.id ?? "") === campaignId
-        );
-        const currentStatus = String(currentCampaign?.status ?? "").toLowerCase();
-        await apiClient.request(backendApi.brand.updateCampaign(brandId, campaignId), {
-          body: {
-            name,
-            description,
-            ...(productIds ? { product: productIds } : {}),
-            daily_budget: String(dailyBudget),
-            start_at: startAt || null,
-            end_at: endAt || null,
-          },
-        });
-        if (tiers.length) {
-          await apiClient.request(backendApi.brand.setCampaignTiers(brandId, campaignId), {
-            body: {
-              tiers: tiers.map((tier) => ({
-                reward_amount: String(tier.rewardAmount),
-                allocation_percent: String(tier.allocationPercent),
-              })),
-            },
-          });
-        }
-        if (fallback) {
-          await apiClient.request(backendApi.brand.setCampaignFallback(brandId, campaignId), {
-            body: {
-              reward_amount: String(fallback.rewardAmount),
-              is_enabled: fallback.isEnabled,
-              description: fallback.description || "",
-            },
-          });
-        }
-        const reviewStatus = String(currentCampaign?.review_status ?? "approved");
-        if (isActive && currentStatus !== "active") {
-          if (reviewStatus === "approved") {
-            await apiClient.request(backendApi.brand.activateCampaign(brandId, campaignId));
-          } else if (reviewStatus === "not_submitted" || reviewStatus === "changes_requested") {
-            await apiClient.request(backendApi.brand.submitCampaign(brandId, campaignId));
-          }
-        } else if (!isActive && currentStatus === "active") {
-          await apiClient.request(backendApi.brand.pauseCampaign(brandId, campaignId));
-        }
+        if (!brandId) throw new Error("Select a brand first.");
+        const endpoint =
+          action === "submit"
+            ? backendApi.brand.submitCampaign(brandId, campaignId)
+            : action === "activate"
+              ? backendApi.brand.activateCampaign(brandId, campaignId)
+              : backendApi.brand.pauseCampaign(brandId, campaignId);
+        await apiClient.request(endpoint);
+        await get().refreshCampaigns();
+      },
+      loadCampaignExtras: async (campaignId) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) return { reviews: [], access: {} };
+        const [reviews, access] = await Promise.all([
+          optionalRequest(
+            () => apiClient.request<unknown>(backendApi.brand.campaignReviews(brandId, campaignId)),
+            []
+          ),
+          optionalRequest(
+            () => apiClient.request<ApiRecord>(backendApi.brand.campaignAccess(brandId, campaignId)),
+            {}
+          ),
+        ]);
+        return { reviews: listResults(reviews), access };
+      },
+      refreshCampaigns: async () => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) return;
         const [campaigns, analyticsCampaigns] = await Promise.all([
           apiClient.request<unknown>(backendApi.brand.campaigns(brandId)),
           optionalRequest(
@@ -778,15 +706,6 @@ export const useBrandApiStore = create<BrandApiState>()(
           campaigns: listResults(campaigns),
           analyticsCampaigns: listResults(analyticsCampaigns),
         });
-        const access = await optionalRequest(
-          () => apiClient.request<ApiRecord>(backendApi.brand.campaignAccess(brandId, campaignId)),
-          {}
-        );
-        return {
-          ...access,
-          campaign: get().campaigns.find((campaign) => String(campaign.id ?? "") === campaignId) || {},
-          campaign_id: campaignId,
-        };
       },
       createReviewCampaign: async ({
         name,

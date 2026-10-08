@@ -16,9 +16,10 @@ interface Campaign {
   name: string;
   category: string;
   scope: string;
-  dailyBudget: number;
-  purchases: number;
-  spendToday: number;
+  cycleClaims: number;
+  capacity: number;
+  redemptions: number;
+  rewardSpend: number;
   status: "ACTIVE" | "PAUSED" | "COMPLETED" | "IN_REVIEW";
   // Nibbl approval label, e.g. "Pending review" (rebate campaigns).
   reviewLabel?: string;

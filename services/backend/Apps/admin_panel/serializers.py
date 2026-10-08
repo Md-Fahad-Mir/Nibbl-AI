@@ -3,9 +3,22 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from Apps.campaigns.models import Campaign
-from Apps.common.models import AuditLog
+from Apps.common.models import AuditLog, PlatformSettings
 from Apps.receipts.models import FraudFlag
 from Apps.wallets.models import LedgerEntry
+
+
+class PlatformSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PlatformSettings
+        fields = [
+            "withdrawal_review_single",
+            "withdrawal_review_rolling",
+            "withdrawal_rolling_days",
+            "referrals_enabled",
+            "updated_at",
+        ]
+        read_only_fields = ["updated_at"]
 
 
 class PromoCreditSerializer(serializers.Serializer):

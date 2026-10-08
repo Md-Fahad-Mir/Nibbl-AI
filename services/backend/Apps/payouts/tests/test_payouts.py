@@ -54,6 +54,38 @@ class PayoutMethodTests(APITestCase):
             _method(u2, handle="shared@paypal.com")
 
 
+class WithdrawalReviewThresholdTests(APITestCase):
+    def test_over_single_threshold_needs_review(self):
+        user, _ = _funded_user(balance="100.00")
+        method = _method(user)
+        w = services.request_withdrawal(
+            user=user, payout_method_id=method.id, amount=Decimal("30.00")
+        )
+        self.assertTrue(w.needs_review)
+        self.assertEqual(w.status, WithdrawalRequest.Status.PENDING)
+
+    def test_under_thresholds_does_not_need_review(self):
+        user, _ = _funded_user(balance="100.00")
+        method = _method(user)
+        w = services.request_withdrawal(
+            user=user, payout_method_id=method.id, amount=Decimal("10.00")
+        )
+        self.assertFalse(w.needs_review)
+
+    def test_rolling_total_over_threshold_needs_review(self):
+        # Each $24 is under the $25 single cap, but the rolling total tips $100.
+        user, _ = _funded_user(balance="200.00")
+        method = _method(user)
+        for _ in range(4):
+            services.request_withdrawal(
+                user=user, payout_method_id=method.id, amount=Decimal("24.00")
+            )
+        w = services.request_withdrawal(
+            user=user, payout_method_id=method.id, amount=Decimal("24.00")
+        )  # 24*4 + 24 = 120 > 100
+        self.assertTrue(w.needs_review)
+
+
 class PayoutReviewTests(APITestCase):
     def test_first_method_approved_second_pending(self):
         user, _ = _funded_user()

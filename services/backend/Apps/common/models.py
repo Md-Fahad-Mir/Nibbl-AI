@@ -7,6 +7,7 @@ audit timestamps, and soft-delete semantics out of the box.
 """
 
 import uuid
+from decimal import Decimal
 
 from django.db import models
 from django.utils import timezone
@@ -143,3 +144,46 @@ class AuditLog(UUIDModel, TimeStampedModel):
 
     def __str__(self):
         return f"{self.action} {self.target_type}:{self.target_id} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class PlatformSettings(models.Model):
+    """Platform-wide, admin-configurable settings (a single row).
+
+    Holds runtime knobs the client wants admins to control: withdrawal-review
+    thresholds and the referral toggle. (Discovery-ranking config lands with
+    the ranking engine.)
+    """
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    # A withdrawal over this single amount is flagged for manual review.
+    withdrawal_review_single = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("25.00")
+    )
+    # A withdrawal is flagged if the user's rolling-window total exceeds this.
+    withdrawal_review_rolling = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("100.00")
+    )
+    withdrawal_rolling_days = models.PositiveIntegerField(default=30)
+    referrals_enabled = models.BooleanField(default=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Platform settings"
+        verbose_name_plural = "Platform settings"
+
+    def __str__(self):
+        return "Platform settings"
+
+    def save(self, *args, **kwargs):
+        self.id = 1  # enforce singleton
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(id=1)
+        return obj
+
+
+def get_platform_settings() -> "PlatformSettings":
+    return PlatformSettings.load()

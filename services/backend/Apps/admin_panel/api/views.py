@@ -14,6 +14,7 @@ from Apps.billing import serializers as billing_serializers
 from Apps.billing import services as billing_services
 from Apps.billing.models import PromoCode
 from Apps.brands.access import get_brand_or_404
+from Apps.common.models import PlatformSettings
 from Apps.common.permissions import IsPlatformAdmin
 
 
@@ -27,6 +28,30 @@ def _run(func, *args, **kwargs):
 # ---------------------------------------------------------------------------
 # Brand operations
 # ---------------------------------------------------------------------------
+@extend_schema(tags=["admin"])
+class AdminSettingsView(APIView):
+    """Get or update platform-wide settings (withdrawal thresholds, referrals)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(responses={200: s.PlatformSettingsSerializer})
+    def get(self, request):
+        return Response(s.PlatformSettingsSerializer(PlatformSettings.load()).data)
+
+    @extend_schema(
+        request=s.PlatformSettingsSerializer,
+        responses={200: s.PlatformSettingsSerializer},
+    )
+    def put(self, request):
+        settings_obj = PlatformSettings.load()
+        serializer = s.PlatformSettingsSerializer(
+            settings_obj, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(s.PlatformSettingsSerializer(settings_obj).data)
+
+
 @extend_schema(tags=["admin"])
 class AdminPromoCodeListCreateView(APIView):
     """Create and list reusable promo codes (platform admin)."""

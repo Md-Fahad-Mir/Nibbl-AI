@@ -51,7 +51,7 @@
 - [ ] 🟡 **28. Analytics to the specified definitions** — overview exists; cost-per-result / view→claim / 25-hour states missing
 
 ## Customers
-- [ ] 🟡 **29. Customer directory & consent handling** — directory + plan-based gating ✓; consent status / opt-out / CSV export missing
+- [ ] 🟡 **29. Customer directory & consent handling** — directory + plan-based gating ✓; **plan-gated CSV export ✓** (PII columns only for Pro/Scale); consent status / opt-in-out tracking still missing
 
 ## Brand Wallet
 - [ ] 🟡 **30. Balances (available, reserved, promotional)** — available/reserved ✓; promotional balance now tracked separately (`promotional`/`reward_available` on wallet API, shown on brand promo card); full three-way breakdown on the main balance card still pending
@@ -73,7 +73,7 @@
 ## Shopper Wallet, Withdrawals & Referrals
 - [ ] 🟡 **39. Wallet & withdrawals** — wallet + withdrawals ✓; **SMS-verified withdrawal: backend + website done, pending Twilio activation** *(this engagement)*
 - [ ] 🟡 **40. Referrals** — invite/code ✓; full qualification flow (join→claim→redeem→payout→withdraw) missing
-- [ ] 🟡 **41. Payout-account safeguards** — one PayPal/Venmo per user ✓; change-review / locking after verify partial
+- [x] ✅ **41. Payout-account safeguards** — one PayPal/Venmo per user ✓; first method auto-approved, later changes held for admin review (withdrawals blocked until approved); duplicate across users raises a fraud flag; admin review queue UI (approve/reject)
 
 ## Admin — Dashboard, Withdrawals, Brands, Approvals, Promo
 - [ ] 🟡 **42. Admin dashboard & revenue** — views exist; not to Master shape
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (10):** #2, #3, #12, #20, #31, #33, #34, #37, #43, #45.
+**Done to spec (11):** #2, #3, #12, #20, #31, #33, #34, #37, #41, #43, #45.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

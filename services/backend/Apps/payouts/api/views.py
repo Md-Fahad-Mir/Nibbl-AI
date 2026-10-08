@@ -13,6 +13,7 @@ from Apps.common.pagination import paginate, paginated_response_serializer
 from Apps.common.permissions import IsPlatformAdmin
 from Apps.payouts import serializers as s
 from Apps.payouts import services
+from Apps.payouts.models import PayoutMethod
 from Apps.payouts.selectors import (
     all_batches,
     all_withdrawals,
@@ -190,6 +191,54 @@ class AdminWithdrawalActionView(APIView):
             withdrawal = _run(fn, withdrawal=withdrawal, admin=request.user, reason=reason)
 
         return Response(s.WithdrawalSerializer(withdrawal).data)
+
+
+# ---------------------------------------------------------------------------
+# Admin: payout-method review
+# ---------------------------------------------------------------------------
+def _admin_payout_method(method_id):
+    method = PayoutMethod.objects.filter(id=method_id).select_related("user").first()
+    if method is None:
+        raise NotFound("Payout method not found.")
+    return method
+
+
+@extend_schema(tags=["admin-payouts"])
+class AdminPendingPayoutMethodListView(APIView):
+    """Payout methods awaiting review (new methods beyond a user's first)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(responses={200: s.AdminPayoutMethodSerializer(many=True)})
+    def get(self, request):
+        return Response(
+            s.AdminPayoutMethodSerializer(
+                services.list_pending_payout_methods(), many=True
+            ).data
+        )
+
+
+@extend_schema(tags=["admin-payouts"])
+class AdminPayoutMethodReviewView(APIView):
+    """Approve or reject a payout method held for review."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(
+        request=s.ReviewPayoutMethodSerializer,
+        responses={200: s.AdminPayoutMethodSerializer},
+    )
+    def post(self, request, method_id):
+        method = _admin_payout_method(method_id)
+        payload = s.ReviewPayoutMethodSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        method = _run(
+            services.review_payout_method,
+            method=method,
+            approve=payload.validated_data["approve"],
+            note=payload.validated_data.get("note", ""),
+        )
+        return Response(s.AdminPayoutMethodSerializer(method).data)
 
 
 # ---------------------------------------------------------------------------

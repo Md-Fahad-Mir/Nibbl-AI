@@ -5,7 +5,7 @@ import CustomerMetrics from "./CustomerMetrics";
 import CustomerLedger, { CustomerData } from "./CustomerLedger";
 import CustomerProfileView from "./CustomerProfileView";
 import SuspendCustomerModal from "./SuspendCustomerModal";
-import { ApiRecord, backendAssetUrl } from "@/lib/api/backendApi";
+import { ApiRecord, API_BASE_URL, backendAssetUrl, tokenStorage } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatDate, formatMoney, toNumber } from "../../utils/backendMappers";
 
@@ -72,9 +72,38 @@ export default function CustomersView() {
   const apiCustomers = useBrandApiStore((state) => state.customers);
   const suspendCustomer = useBrandApiStore((state) => state.suspendCustomer);
   const reactivateCustomer = useBrandApiStore((state) => state.reactivateCustomer);
+  const selectedBrandId = useBrandApiStore((state) => state.selectedBrandId);
   const [localStatuses, setLocalStatuses] = useState<Record<string, CustomerData["status"]>>({});
   const [actionError, setActionError] = useState("");
   const [isActioning, setIsActioning] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    if (!selectedBrandId || exporting) return;
+    setExporting(true);
+    setActionError("");
+    try {
+      const token = tokenStorage.getAccess();
+      const response = await fetch(
+        `${API_BASE_URL}/brands/${selectedBrandId}/customers/export/`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (!response.ok) throw new Error("Could not export customers.");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "customers.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not export customers.");
+    } finally {
+      setExporting(false);
+    }
+  };
   const customers = apiCustomers.map((customer) => {
     const mapped = mapCustomer(customer);
     return { ...mapped, status: localStatuses[mapped.id] || mapped.status };
@@ -127,6 +156,14 @@ export default function CustomersView() {
           <h2 className="text-3xl font-extrabold font-jakarta text-[#131B2E] tracking-tight leading-none">Customer Management</h2>
           <p className="text-xs text-[#454656] font-medium mt-1">Manage institutional ledgers and member status.</p>
         </div>
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting || customers.length === 0}
+          className="h-11 px-6 bg-white hover:bg-slate-50 text-[#001BD2] border border-[#001BD2]/20 font-bold text-sm rounded-full transition-colors active:scale-[0.98] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {exporting ? "Exporting…" : "Export CSV"}
+        </button>
       </div>
 
       {selectedCust ? (

@@ -23,12 +23,23 @@ class PayoutMethod(BaseModel):
         PAYPAL = "paypal", "PayPal"
         VENMO = "venmo", "Venmo"
 
+    class ReviewStatus(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payout_methods"
     )
     provider = models.CharField(max_length=10, choices=Provider.choices)
     handle = models.CharField(max_length=255)  # email / username / phone
     is_default = models.BooleanField(default=False)
+    # A new payout method beyond a user's first goes to a review hold (spec 2.7):
+    # it can't be used for a withdrawal until an admin approves it.
+    review_status = models.CharField(
+        max_length=10, choices=ReviewStatus.choices, default=ReviewStatus.PENDING
+    )
+    review_note = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["-is_default", "-created_at"]

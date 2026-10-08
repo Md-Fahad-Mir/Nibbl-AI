@@ -35,6 +35,11 @@ brand_patterns = [
         views.BrandCustomerListView.as_view(),
         name="customer-list",
     ),
+    path(
+        "<uuid:brand_id>/customers/export/",
+        views.BrandCustomerExportView.as_view(),
+        name="customer-export",
+    ),
 ]
 
 admin_patterns = [

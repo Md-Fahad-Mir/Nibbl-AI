@@ -235,6 +235,9 @@ interface AdminApiState {
   promoCodes: ApiRecord[];
   loadPromoCodes: () => Promise<void>;
   createPromoCode: (body: ApiRecord) => Promise<ApiRecord>;
+  pendingPayoutMethods: ApiRecord[];
+  loadPendingPayoutMethods: () => Promise<void>;
+  reviewPayoutMethod: (methodId: string, approve: boolean, note?: string) => Promise<void>;
 }
 
 export const useAdminApiStore = create<AdminApiState>()(
@@ -251,6 +254,7 @@ export const useAdminApiStore = create<AdminApiState>()(
       monthlyEarnings: [],
       stats: [],
       promoCodes: [],
+      pendingPayoutMethods: [],
       unreadCount: 0,
       status: "idle",
       error: null,
@@ -378,6 +382,16 @@ export const useAdminApiStore = create<AdminApiState>()(
         const created = await nibblApi.createAdminPromoCode(body);
         await get().loadPromoCodes();
         return created;
+      },
+      loadPendingPayoutMethods: async () => {
+        const response = await nibblApi.pendingPayoutMethods();
+        set({
+          pendingPayoutMethods: Array.isArray(response) ? response : listResults(response),
+        });
+      },
+      reviewPayoutMethod: async (methodId, approve, note = "") => {
+        await nibblApi.reviewPayoutMethod(methodId, { approve, note });
+        await get().loadPendingPayoutMethods();
       },
       loadBrands: async () => {
         const [brands, applications] = await Promise.all([

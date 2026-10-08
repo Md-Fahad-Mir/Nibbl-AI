@@ -54,6 +54,68 @@ class PayoutMethodTests(APITestCase):
             _method(u2, handle="shared@paypal.com")
 
 
+class PayoutReviewTests(APITestCase):
+    def test_first_method_approved_second_pending(self):
+        user, _ = _funded_user()
+        m1 = _method(user, handle="first@paypal.com")
+        self.assertEqual(m1.review_status, PayoutMethod.ReviewStatus.APPROVED)
+        m2 = services.add_payout_method(user=user, provider="venmo", handle="second-venmo")
+        self.assertEqual(m2.review_status, PayoutMethod.ReviewStatus.PENDING)
+
+    def test_withdrawal_blocked_on_pending_method(self):
+        user, _ = _funded_user(balance="100.00")
+        _method(user, handle="first@paypal.com")  # auto-approved
+        m2 = services.add_payout_method(user=user, provider="venmo", handle="pend-venmo")
+        with self.assertRaises(services.PayoutError):
+            services.request_withdrawal(
+                user=user, payout_method_id=m2.id, amount=Decimal("10.00")
+            )
+
+    def test_duplicate_across_users_raises_fraud_flag(self):
+        from Apps.receipts.models import FraudFlag
+
+        u1, _ = _funded_user("a@example.com")
+        u2, _ = _funded_user("b@example.com")
+        _method(u1, handle="shared@paypal.com")
+        with self.assertRaises(services.PayoutError):
+            _method(u2, handle="shared@paypal.com")
+        self.assertTrue(FraudFlag.objects.filter(user=u2).exists())
+
+    def test_admin_approves_then_withdrawal_allowed(self):
+        admin = _admin()
+        user, _ = _funded_user(balance="100.00")
+        _method(user, handle="first@paypal.com")
+        m2 = services.add_payout_method(user=user, provider="venmo", handle="pend2-venmo")
+
+        self.client.force_authenticate(admin)
+        listing = self.client.get(reverse("v1:payouts:admin-method-pending"))
+        self.assertEqual(listing.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(listing.data), 1)
+
+        resp = self.client.post(
+            reverse("v1:payouts:admin-method-review", args=[m2.id]),
+            {"approve": True}, format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["review_status"], "approved")
+
+        withdrawal = services.request_withdrawal(
+            user=user, payout_method_id=m2.id, amount=Decimal("10.00")
+        )
+        self.assertIsNotNone(withdrawal)
+
+    def test_non_admin_cannot_review(self):
+        user, _ = _funded_user()
+        _method(user, handle="first@paypal.com")
+        m2 = services.add_payout_method(user=user, provider="venmo", handle="pend3-venmo")
+        self.client.force_authenticate(user)
+        resp = self.client.post(
+            reverse("v1:payouts:admin-method-review", args=[m2.id]),
+            {"approve": True}, format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class RequestWithdrawalTests(APITestCase):
     def test_request_places_hold_and_reduces_available(self):
         user, wallet = _funded_user(balance="100.00")

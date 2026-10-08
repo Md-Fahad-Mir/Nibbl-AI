@@ -777,8 +777,8 @@ export const nibblApi = {
   logout: (refresh: string) =>
     requestEndpoint<null>(backendApi.auth.logout, { refresh }),
   me: () => requestEndpoint<ApiRecord>(backendApi.users.me),
-  addPhone: (phone: string) =>
-    requestEndpoint<null>(backendApi.users.addPhone, { phone }),
+  addPhone: (phone: string, country?: string) =>
+    requestEndpoint<null>(backendApi.users.addPhone, country ? { phone, country } : { phone }),
   verifyPhone: (code: string) =>
     requestEndpoint<ApiRecord>(backendApi.users.verifyPhone, { code }),
   updateMe: (body: ApiRecord | FormData) =>

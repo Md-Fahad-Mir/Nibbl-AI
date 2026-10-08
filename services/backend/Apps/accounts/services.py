@@ -206,21 +206,40 @@ def verify_email(*, email: str, code: str) -> User:
 # ---------------------------------------------------------------------------
 # Phone verification
 # ---------------------------------------------------------------------------
-def normalize_us_phone(raw: str) -> str:
-    """Return a US number in E.164 form (+1XXXXXXXXXX). Our SMS provider is
-    US-only, so anything else is rejected."""
-    digits = "".join(ch for ch in str(raw or "") if ch.isdigit())
-    if len(digits) == 11 and digits.startswith("1"):
-        digits = digits[1:]
-    if len(digits) != 10 or digits[0] in "01":
-        raise AccountError("Enter a valid US mobile number.")
-    return f"+1{digits}"
+def normalize_phone(raw: str, country: str | None = None) -> str:
+    """Validate a mobile number from any country and return it in E.164 form
+    (e.g. +8801712345678). Give either a full international number (+880…)
+    or a local number plus its ISO ``country`` (e.g. "01712…" + "BD"), so
+    each country's own rules — like a leading 0 — are applied. Numbers that
+    can't receive SMS — landlines, toll-free, premium-rate (a common
+    SMS-fraud vector) — are rejected."""
+    import phonenumbers
+    from phonenumbers import PhoneNumberType as T
+
+    value = str(raw or "").strip()
+    if value.startswith("00"):
+        value = "+" + value[2:]
+    region = (country or "").strip().upper() or None
+    if not value.startswith("+") and region is None:
+        raise AccountError("Include your country code, e.g. +1 (US) or +44 (UK).")
+    try:
+        number = phonenumbers.parse(value, None if value.startswith("+") else region)
+    except phonenumbers.NumberParseException:
+        raise AccountError("Enter a valid mobile number.")
+    if not phonenumbers.is_valid_number(number):
+        raise AccountError("Enter a valid mobile number.")
+    if phonenumbers.number_type(number) in {
+        T.FIXED_LINE, T.TOLL_FREE, T.PREMIUM_RATE, T.SHARED_COST,
+        T.PAGER, T.UAN, T.VOICEMAIL,
+    }:
+        raise AccountError("That number can't receive text messages. Use a mobile number.")
+    return phonenumbers.format_number(number, phonenumbers.PhoneNumberFormat.E164)
 
 
-def start_phone_verification(user: User, *, phone: str) -> None:
+def start_phone_verification(user: User, *, phone: str, country: str = "") -> None:
     from Apps.accounts import twilio_verify
 
-    phone = normalize_us_phone(phone)
+    phone = normalize_phone(phone, country)
     if (
         User.objects.filter(phone=phone, is_deleted=False)
         .exclude(pk=user.pk)

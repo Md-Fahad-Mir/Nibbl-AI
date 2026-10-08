@@ -42,20 +42,12 @@ def submit_for_review(campaign: Campaign, *, user=None) -> CampaignReview:
     # Every required field must be complete before submission.
     services.validate_ready(campaign)
 
-    now = timezone.now()
-    review = campaign.reviews.filter(
-        kind=CampaignReview.Kind.NEW, status=CampaignReview.Status.CHANGES_REQUESTED
-    ).first()
-    if review is not None:  # resubmission after changes were requested
-        review.status = CampaignReview.Status.PENDING
-        review.submitted_by = user
-        review.submitted_at = now
-        review.save(update_fields=["status", "submitted_by", "submitted_at", "updated_at"])
-    else:
-        review = CampaignReview.objects.create(
-            campaign=campaign, kind=CampaignReview.Kind.NEW,
-            submitted_by=user, submitted_at=now,
-        )
+    # Each (re)submission is its own entry, so the review history keeps every
+    # Nibbl decision and comment.
+    review = CampaignReview.objects.create(
+        campaign=campaign, kind=CampaignReview.Kind.NEW,
+        submitted_by=user, submitted_at=timezone.now(),
+    )
     campaign.review_status = RS.PENDING_REVIEW
     campaign.save(update_fields=["review_status", "updated_at"])
     services.ensure_access(campaign)  # URL + QR exist from submission on
@@ -118,33 +110,41 @@ def _actual_changes(campaign: Campaign, fields: dict) -> dict:
     return changed
 
 
+def open_revision(campaign: Campaign) -> CampaignReview | None:
+    """The campaign's latest revision while it's still undecided or waiting
+    on the brand (changes requested); None once approved/rejected."""
+    latest = campaign.reviews.filter(kind=CampaignReview.Kind.REVISION).order_by(
+        "-submitted_at"
+    ).first()
+    return latest if latest and latest.status in CampaignReview.OPEN else None
+
+
 @transaction.atomic
 def propose_revision(campaign: Campaign, fields: dict, *, user=None) -> CampaignReview | None:
     """Edits to an approved campaign wait for Nibbl review; the approved
     version stays live. Further edits merge into the open revision (and
-    resubmit it if Nibbl had requested changes)."""
+    resubmit it as a new entry if Nibbl had requested changes)."""
     if campaign.status in (Campaign.Status.COMPLETED, Campaign.Status.ARCHIVED):
         raise CampaignError("This campaign can no longer be edited.")
     fields = _actual_changes(campaign, fields)
-    review = campaign.reviews.filter(
-        kind=CampaignReview.Kind.REVISION, status__in=CampaignReview.OPEN
-    ).first()
+    review = open_revision(campaign)
     if not fields:
         return review  # nothing changed
     changes = {**(review.changes if review else {}), **_json_safe_dict(fields)}
     _validate_revision(campaign, changes)
 
     now = timezone.now()
-    if review is None:
+    if review is None or review.status == CampaignReview.Status.CHANGES_REQUESTED:
+        # New entry (a resubmission keeps the earlier decision in history).
         return CampaignReview.objects.create(
             campaign=campaign, kind=CampaignReview.Kind.REVISION,
             changes=changes, submitted_by=user, submitted_at=now,
         )
+    # Still undecided: fold the further edits into it.
     review.changes = changes
-    review.status = CampaignReview.Status.PENDING
     review.submitted_by = user
     review.submitted_at = now
-    review.save(update_fields=["changes", "status", "submitted_by", "submitted_at", "updated_at"])
+    review.save(update_fields=["changes", "submitted_by", "submitted_at", "updated_at"])
     return review
 
 

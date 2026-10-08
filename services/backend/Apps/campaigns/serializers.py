@@ -112,9 +112,9 @@ class CampaignSerializer(serializers.ModelSerializer):
         return first_product.name if first_product else ""
 
     def get_pending_revision(self, obj):
-        review = obj.reviews.filter(
-            kind=CampaignReview.Kind.REVISION, status__in=CampaignReview.OPEN
-        ).first()
+        from Apps.campaigns.approvals import open_revision
+
+        review = open_revision(obj)
         return CampaignReviewSerializer(review).data if review else None
 
     def get_image_url(self, obj):
@@ -124,27 +124,17 @@ class CampaignSerializer(serializers.ModelSerializer):
         return request.build_absolute_uri(obj.image.url) if request else obj.image.url
 
     def get_review_comment(self, obj) -> str:
-        review = (
-            obj.reviews.exclude(comment="")
-            .filter(status__in=(
-                CampaignReview.Status.CHANGES_REQUESTED, CampaignReview.Status.REJECTED,
-            ))
-            .order_by("-reviewed_at")
-            .first()
-        )
-        if review is None:
+        # Only while it still applies: the latest review is waiting on the
+        # brand (changes requested) or rejected the campaign itself.
+        latest = obj.reviews.order_by("-submitted_at").first()
+        if latest is None or not latest.comment:
             return ""
-        # Only while it still applies: the campaign (or its revision) is
-        # waiting on the brand, or was rejected.
-        if review.kind == CampaignReview.Kind.NEW and obj.review_status not in (
-            Campaign.ReviewStatus.CHANGES_REQUESTED, Campaign.ReviewStatus.REJECTED
+        if latest.status == CampaignReview.Status.CHANGES_REQUESTED or (
+            latest.status == CampaignReview.Status.REJECTED
+            and latest.kind == CampaignReview.Kind.NEW
         ):
-            return ""
-        if review.kind == CampaignReview.Kind.REVISION and (
-            review.status != CampaignReview.Status.CHANGES_REQUESTED
-        ):
-            return ""
-        return review.comment
+            return latest.comment
+        return ""
 
     def get_current_cycle_claims(self, obj) -> int:
         from Apps.campaigns import deals

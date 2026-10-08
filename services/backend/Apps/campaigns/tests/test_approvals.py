@@ -143,9 +143,14 @@ class ApprovalWorkflowTests(_ApprovalBase):
         resubmitted = self._submit().data
         self.assertEqual(resubmitted["review_status"], RS.PENDING_REVIEW)
         self.assertEqual(resubmitted["review_comment"], "")  # no longer applies
+        # The history keeps both entries, with Nibbl's comment.
         review.refresh_from_db()
-        self.assertEqual(review.status, CampaignReview.Status.PENDING)
-        self.assertEqual(CampaignReview.objects.count(), 1)
+        self.assertEqual(review.status, CampaignReview.Status.CHANGES_REQUESTED)
+        history = self.client.get(self._brand_url("campaign-reviews")).data
+        self.assertEqual(
+            [(h["status"], h["comment"]) for h in history],
+            [("pending", ""), ("changes_requested", "Lower the max rebate.")],
+        )
 
     def test_rejected_campaign_cannot_be_resubmitted(self):
         self._submit()
@@ -204,6 +209,26 @@ class ApprovalWorkflowTests(_ApprovalBase):
         )
         revision = CampaignReview.objects.get(kind=CampaignReview.Kind.REVISION)
         self.assertEqual(revision.changes, {"max_rebate": "6.00"})
+
+    def test_revision_resubmitted_after_changes_requested_keeps_history(self):
+        self._live()
+        campaign_services.update_campaign(self.campaign, max_rebate=Decimal("8.00"))
+        first = CampaignReview.objects.get(kind=CampaignReview.Kind.REVISION)
+        approvals.request_changes(first, admin=self.admin, comment="Max $7.")
+        self.client.force_authenticate(self.owner)
+        detail = self.client.get(self._brand_url("campaign-detail")).data
+        self.assertEqual(detail["review_comment"], "Max $7.")
+        self.assertEqual(detail["pending_revision"]["status"], "changes_requested")
+
+        campaign_services.update_campaign(self.campaign, max_rebate=Decimal("7.00"))
+        second = CampaignReview.objects.filter(kind=CampaignReview.Kind.REVISION).exclude(pk=first.pk).get()
+        self.assertEqual(second.status, CampaignReview.Status.PENDING)
+        self.assertEqual(second.changes, {"max_rebate": "7.00"})
+        first.refresh_from_db()
+        self.assertEqual(first.status, CampaignReview.Status.CHANGES_REQUESTED)
+        detail = self.client.get(self._brand_url("campaign-detail")).data
+        self.assertEqual(detail["review_comment"], "")
+        self.assertEqual(detail["pending_revision"]["id"], str(second.id))
 
     def test_rejected_revision_is_discarded(self):
         self._live()

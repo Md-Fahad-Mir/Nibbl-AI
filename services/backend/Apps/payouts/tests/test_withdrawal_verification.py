@@ -41,18 +41,8 @@ def _method(user, handle):
     return services.add_payout_method(user=user, provider="paypal", handle=handle)
 
 
-def _sms_switch(on=True):
-    """Flip the admin 'withdrawals require SMS' switch."""
-    from Apps.common.models import PlatformSettings
-
-    cfg = PlatformSettings.load()
-    cfg.withdrawal_sms_required = on
-    cfg.save()
-
 
 class SendCodeTests(APITestCase):
-    def setUp(self):
-        _sms_switch(True)
     @override_settings(**TWILIO_ON)
     @patch("Apps.accounts.twilio_verify.start_verification")
     def test_send_code_returns_masked_phone(self, mock_start):
@@ -106,9 +96,6 @@ class SendCodeTests(APITestCase):
 
 
 class WithdrawalCodeEnforcementTests(APITestCase):
-    def setUp(self):
-        _sms_switch(True)
-
     @override_settings(**TWILIO_ON)
     @patch("Apps.accounts.twilio_verify.check_verification", return_value=True)
     def test_valid_code_creates_withdrawal(self, _mock):
@@ -149,30 +136,11 @@ class WithdrawalCodeEnforcementTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
 
 
-class SmsRolloutTests(APITestCase):
-    """Phase 1 of the rollout: SMS sending configured, enforcement still off."""
-
-    @override_settings(**TWILIO_ON)
-    def test_twilio_configured_but_switch_off_means_no_code(self):
-        user = _user("g@example.com", None, verified=False)
-        method = _method(user, "g@paypal.com")
-        self.client.force_authenticate(user)
-        code_resp = self.client.post(
-            reverse("v1:payouts:withdrawal-send-code"),
-            {"payout_method": str(method.id), "amount": "10.00"},
-            format="json",
-        )
-        self.assertEqual(code_resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-        resp = self.client.post(
-            reverse("v1:payouts:withdrawal-list"),
-            {"payout_method": str(method.id), "amount": "10.00"},
-            format="json",
-        )
-        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+class PhoneGateTests(APITestCase):
+    """With SMS on, withdrawals need a verified phone and honour the 48h pause."""
 
     @override_settings(**TWILIO_ON)
     def test_missing_phone_returns_machine_readable_code(self):
-        _sms_switch(True)
         user = _user("h@example.com", None, verified=False)
         method = _method(user, "h@paypal.com")
         self.client.force_authenticate(user)
@@ -190,7 +158,6 @@ class SmsRolloutTests(APITestCase):
     def test_changing_verified_phone_pauses_withdrawals_48h(self, _check, _start):
         from Apps.accounts import services as account_services
 
-        _sms_switch(True)
         user = _user("i@example.com", None, verified=False)
         method = _method(user, "i@paypal.com")
         # First number: verified, no pause.

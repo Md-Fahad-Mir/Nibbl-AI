@@ -39,6 +39,7 @@ class PhoneVerificationTests(APITestCase):
     def test_add_and_verify_without_twilio_uses_logged_code(self):
         resp = self.client.post(reverse("v1:accounts:users:add-phone"), {"phone": "+880 1712-345604"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(resp.data["phone"], "+8801712345604")  # normalized number echoed back
         code = VerificationCode.objects.filter(
             user=self.user, purpose=VerificationCode.Purpose.PHONE_VERIFY
         ).latest("created_at").code

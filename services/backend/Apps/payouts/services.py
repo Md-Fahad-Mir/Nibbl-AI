@@ -132,12 +132,9 @@ class PhoneVerificationRequired(PayoutError):
 
 
 def sms_required() -> bool:
-    """Withdrawals need an SMS code only when the admin switch is on AND SMS
-    sending is configured (the switch can't be enabled without it)."""
-    return (
-        get_platform_settings().withdrawal_sms_required
-        and twilio_verify.is_configured()
-    )
+    """Withdrawals need an SMS code whenever SMS sending (Twilio Verify) is
+    configured."""
+    return twilio_verify.is_configured()
 
 
 def _require_verified_phone(user) -> str:

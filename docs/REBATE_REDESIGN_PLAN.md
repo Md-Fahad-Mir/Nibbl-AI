@@ -44,6 +44,6 @@ can't be confirmed, the receipt goes to **manual review** — never auto-rejecte
    term snapshot, reserve-max / pay-actual, cooldown semantics. API changes additive only.
 2. ✅ **Approval workflow** (done 2026-10-08; migration 0007 grandfathers running campaigns) — submit/review statuses, revisions (approved version stays
    live), admin approval queue (#44).
-3. **Brand builder UI** — new campaign builder + campaign detail page
+3. ✅ **Brand builder UI** (done 2026-10-08) — new campaign builder + campaign detail page
    (status banner, "Current cycle claims X of Y", review activity).
 4. **Shopper side** — headline/description on offer pages, "Going fast"; app guide.

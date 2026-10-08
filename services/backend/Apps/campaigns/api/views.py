@@ -3,6 +3,7 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -37,7 +38,9 @@ class CampaignListCreateView(APIView):
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand)
         return Response(
-            s.CampaignSerializer(campaigns_for_brand(brand), many=True).data
+            s.CampaignSerializer(
+                campaigns_for_brand(brand), many=True, context={"request": request}
+            ).data
         )
 
     @extend_schema(request=s.CampaignCreateSerializer, responses={201: s.CampaignSerializer})
@@ -54,7 +57,7 @@ class CampaignListCreateView(APIView):
             **data,
         )
         return Response(
-            s.CampaignSerializer(campaign).data, status=status.HTTP_201_CREATED
+            s.CampaignSerializer(campaign, context={"request": request}).data, status=status.HTTP_201_CREATED
         )
 
 
@@ -66,7 +69,9 @@ class CampaignDetailView(APIView):
     def get(self, request, brand_id, campaign_id):
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand)
-        return Response(s.CampaignSerializer(_get_campaign(brand, campaign_id)).data)
+        return Response(s.CampaignSerializer(
+            _get_campaign(brand, campaign_id), context={"request": request}
+        ).data)
 
     @extend_schema(request=s.CampaignUpdateSerializer, responses={200: s.CampaignSerializer})
     def patch(self, request, brand_id, campaign_id):
@@ -79,7 +84,7 @@ class CampaignDetailView(APIView):
             services.update_campaign, campaign,
             submitted_by=request.user, **serializer.validated_data,
         )
-        return Response(s.CampaignSerializer(campaign).data)
+        return Response(s.CampaignSerializer(campaign, context={"request": request}).data)
 
     @extend_schema(responses={204: None})
     def delete(self, request, brand_id, campaign_id):
@@ -138,7 +143,7 @@ class CampaignActivateView(APIView):
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand, manager=True, active=True)
         campaign = _run(services.activate_campaign, _get_campaign(brand, campaign_id))
-        return Response(s.CampaignSerializer(campaign).data)
+        return Response(s.CampaignSerializer(campaign, context={"request": request}).data)
 
 
 @extend_schema(tags=["campaigns"])
@@ -154,7 +159,28 @@ class CampaignSubmitView(APIView):
         campaign = _get_campaign(brand, campaign_id)
         _run(approvals.submit_for_review, campaign, user=request.user)
         campaign.refresh_from_db()
-        return Response(s.CampaignSerializer(campaign).data)
+        return Response(s.CampaignSerializer(campaign, context={"request": request}).data)
+
+
+@extend_schema(tags=["campaigns"])
+class CampaignImageView(APIView):
+    """Upload the campaign image (multipart, field ``image``)."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(request=s.CampaignImageSerializer, responses={200: s.CampaignSerializer})
+    def put(self, request, brand_id, campaign_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True, active=True)
+        campaign = _get_campaign(brand, campaign_id)
+        serializer = s.CampaignImageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        campaign = _run(
+            services.set_image, campaign, serializer.validated_data["image"],
+            submitted_by=request.user,
+        )
+        return Response(s.CampaignSerializer(campaign, context={"request": request}).data)
 
 
 @extend_schema(tags=["campaigns"])
@@ -180,7 +206,7 @@ class CampaignPauseView(APIView):
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand, manager=True, active=True)
         campaign = _run(services.pause_campaign, _get_campaign(brand, campaign_id))
-        return Response(s.CampaignSerializer(campaign).data)
+        return Response(s.CampaignSerializer(campaign, context={"request": request}).data)
 
 
 @extend_schema(tags=["campaigns"])

@@ -49,6 +49,8 @@ class CampaignMetricSerializer(serializers.Serializer):
     approvals = serializers.IntegerField()
     rejected_receipts = serializers.IntegerField()
     redemptions = serializers.IntegerField()
+    pending_review = serializers.IntegerField()
+    redemption_rate = serializers.FloatField(allow_null=True)
     reward_spend = serializers.DecimalField(max_digits=14, decimal_places=2)
     fee_spend = serializers.DecimalField(max_digits=14, decimal_places=2)
     total_spend = serializers.DecimalField(max_digits=14, decimal_places=2)

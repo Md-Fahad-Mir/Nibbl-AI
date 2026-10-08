@@ -81,6 +81,7 @@ DEAL_FIELDS = (
     "deal_type", "max_rebate", "fixed_reward", "required_quantity",
     "offer_headline", "offer_description", "desired_redemptions",
     "estimated_redemption_rate", "cooldown_days", "one_time_only",
+    "allowed_merchants",
 )
 
 
@@ -205,6 +206,29 @@ def apply_update(campaign: Campaign, **fields) -> Campaign:
     return campaign
 
 
+def set_image(campaign: Campaign, image, *, submitted_by=None) -> Campaign:
+    """Upload the campaign image. On an approved campaign the new image is
+    stored and reviewed as part of a revision; the live image stays."""
+    if campaign.status in (Campaign.Status.COMPLETED, Campaign.Status.ARCHIVED):
+        raise CampaignError("This campaign can no longer be edited.")
+    if campaign.review_status == Campaign.ReviewStatus.APPROVED:
+        from django.core.files.storage import default_storage
+
+        from Apps.campaigns import approvals
+
+        field = Campaign._meta.get_field("image")
+        name = default_storage.save(field.generate_filename(campaign, image.name), image)
+        approvals.propose_revision(campaign, {"image": name}, user=submitted_by)
+        return campaign
+    if campaign.review_status in (
+        Campaign.ReviewStatus.PENDING_REVIEW, Campaign.ReviewStatus.REJECTED
+    ):
+        raise CampaignError("This campaign can't be edited right now.")
+    campaign.image = image
+    campaign.save(update_fields=["image", "updated_at"])
+    return campaign
+
+
 def archive_campaign(campaign: Campaign) -> Campaign:
     campaign.status = Campaign.Status.ARCHIVED
     campaign.auto_paused = False
@@ -306,6 +330,11 @@ def validate_ready(campaign: Campaign) -> None:
         raise CampaignError("Add reward tiers before activating.")
     if not campaign.products.filter(is_active=True).exists():
         raise CampaignError("All products in this campaign are archived.")
+    categories = {
+        c.strip().lower() for c in campaign.products.values_list("category", flat=True) if c.strip()
+    }
+    if len(categories) > 1:
+        raise CampaignError("All eligible products must belong to the same category.")
     if not deals.max_reward(campaign):
         raise CampaignError("Set the offer's reward before activating.")
     if not campaign.claim_capacity:
@@ -346,8 +375,10 @@ def activate_campaign(campaign: Campaign) -> Campaign:
     campaign.auto_paused = False
     fields = ["status", "auto_paused", "updated_at"]
     if campaign.activated_at is None:
-        # 25-hour claim cycles are anchored to the first activation.
-        campaign.activated_at = timezone.now()
+        # 25-hour claim cycles are anchored to when the campaign first
+        # becomes active — its start date if that is still ahead.
+        now = timezone.now()
+        campaign.activated_at = max(now, campaign.start_at) if campaign.start_at else now
         fields.append("activated_at")
     campaign.save(update_fields=fields)
     return campaign

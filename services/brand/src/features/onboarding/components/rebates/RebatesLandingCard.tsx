@@ -6,9 +6,10 @@ interface Campaign {
   name: string;
   category: string;
   scope: string;
-  dailyBudget: number;
-  purchases: number;
-  spendToday: number;
+  cycleClaims: number;
+  capacity: number;
+  redemptions: number;
+  rewardSpend: number;
   status: "ACTIVE" | "PAUSED" | "COMPLETED" | "IN_REVIEW";
   // Nibbl approval label, e.g. "Pending review" (rebate campaigns).
   reviewLabel?: string;
@@ -22,8 +23,8 @@ interface RebatesLandingCardProps {
 }
 
 export default function RebatesLandingCard({ campaign, onEdit }: RebatesLandingCardProps) {
-  const spendRatio = campaign.dailyBudget ? campaign.spendToday / campaign.dailyBudget : 0;
-  const isNearLimit = spendRatio >= 0.9;
+  const cycleRatio = campaign.capacity ? campaign.cycleClaims / campaign.capacity : 0;
+  const isNearLimit = cycleRatio >= 0.8; // "Going fast" threshold
   const isPaused = campaign.status === "PAUSED";
   const isCompleted = campaign.status === "COMPLETED";
   const inReview = campaign.status === "IN_REVIEW";
@@ -62,7 +63,7 @@ export default function RebatesLandingCard({ campaign, onEdit }: RebatesLandingC
         <button
           onClick={() => onEdit(campaign)}
           className="w-8 h-8 rounded-full bg-[#001BD2] hover:bg-blue-700 transition-colors flex items-center justify-center shadow-md active:scale-95 cursor-pointer"
-          aria-label="Edit campaign"
+          aria-label="View campaign"
         >
           <Pencil className="w-3.5 h-3.5 text-white" strokeWidth={2.4} />
         </button>
@@ -80,27 +81,27 @@ export default function RebatesLandingCard({ campaign, onEdit }: RebatesLandingC
       {/* Grid boxes info */}
       <div className="grid grid-cols-2 gap-4 mt-4 font-manrope">
         <div className="bg-[#FAF8FF] p-3 rounded-xl border border-[#C5C5D9]/5 flex flex-col gap-0.5">
-          <span className="text-[9px] font-bold text-[#454656]/50 uppercase tracking-wider">DAILY BUDGET</span>
-          <span className="text-sm font-extrabold text-[#131B2E]">${campaign.dailyBudget.toFixed(2)}</span>
+          <span className="text-[9px] font-bold text-[#454656]/50 uppercase tracking-wider">REDEMPTIONS</span>
+          <span className="text-sm font-extrabold text-[#131B2E]">{campaign.redemptions}</span>
         </div>
         <div className="bg-[#FAF8FF] p-3 rounded-xl border border-[#C5C5D9]/5 flex flex-col gap-0.5">
-          <span className="text-[9px] font-bold text-[#454656]/50 uppercase tracking-wider">PURCHASES</span>
-          <span className="text-sm font-extrabold text-[#131B2E]">{campaign.purchases}</span>
+          <span className="text-[9px] font-bold text-[#454656]/50 uppercase tracking-wider">REWARD SPEND</span>
+          <span className="text-sm font-extrabold text-[#131B2E]">${campaign.rewardSpend.toFixed(2)}</span>
         </div>
       </div>
 
-      {/* Budget spend status bottom bar */}
+      {/* Current 25-hour cycle claims */}
       <div className="flex flex-col gap-1.5 mt-4 font-manrope">
         <div className="flex justify-between items-center text-[10px] font-bold text-[#454656]">
-          <span>SPEND TODAY</span>
+          <span>CURRENT CYCLE CLAIMS</span>
           <span className="text-[#131B2E]">
-            ${campaign.spendToday.toFixed(2)} / ${campaign.dailyBudget}
+            {campaign.cycleClaims} of {campaign.capacity || "—"}
           </span>
         </div>
         <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
           <div
             className={`absolute left-0 top-0 bottom-0 rounded-full transition-all duration-300 ${progressBg}`}
-            style={{ width: `${Math.min(spendRatio * 100, 100)}%` }}
+            style={{ width: `${Math.min(cycleRatio * 100, 100)}%` }}
           ></div>
         </div>
       </div>

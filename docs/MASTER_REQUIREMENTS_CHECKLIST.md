@@ -16,10 +16,10 @@
 - [x] ✅ **3. Delete-product safeguard & ratings link** — "type DELETE" confirmation + history preserved (backend archive); clickable product rating (new `avg_rating`/`review_count` on product API) opens Review Management filtered to that product
 
 ## Rebate Campaigns
-- [ ] 🟡 **4. 25-Hour Claim Capacity** — backend done (desired ÷ rate, rounded up; cycles anchored at activation; expired claims don't refund a slot; "Going fast"); brand builder UI pending (Phase 3)
-- [ ] 🟡 **5. Offer types w/ locked reward math** — backend done (all 4 types, suggested wording, unclear price → review); brand builder UI pending (Phase 3)
+- [x] ✅ **4. 25-Hour Claim Capacity** — desired ÷ rate (rounded up), cycles from activation (or start date), consumed slots never return; builder shows the live calculation, card + detail page show "Current cycle claims X of Y"
+- [x] ✅ **5. Offer types w/ locked reward math** — Free / BOGO Free / B1G1-50% / Buy X Get $Y; builder with suggested (editable) wording, locked system-rules summary, live shopper preview
 - [ ] 🟡 **6. Tier allocation must total 100%** — superseded by offer types; old tier builder still accepted and mapped (top tier → max rebate)
-- [ ] 🟡 **7. Nibbl campaign approval workflow** — backend done (submit → approve / reject / request changes; edits to approved campaigns become revisions while the approved version stays live; audited + brand notified; existing campaigns grandfathered). Brand UI: submit on publish, review statuses, Nibbl comment on card + edit screen; full campaign detail page with review activity pending (Phase 3)
+- [x] ✅ **7. Nibbl campaign approval workflow** — Save draft / Submit; approve / reject (final) / request changes with comments; revisions keep the approved version live; campaign detail page with status banner, assets, performance, review activity
 - [x] ✅ **8. Reservation rule snapshot** — each claim stores its deal terms, products, merchants and cooldown; later edits apply to new claims only
 - [x] ✅ **9. Reserved reward funding** — claim reserves the max reward; approval pays the actual reward and returns the difference; cooldown starts at the approved redemption
 - [ ] ⬜ **10. Retailer availability, featured retailers, receipt eligibility**
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (18):** #2, #3, #8, #9, #12, #17, #18, #20, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
+**Done to spec (21):** #2, #3, #4, #5, #7, #8, #9, #12, #17, #18, #20, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

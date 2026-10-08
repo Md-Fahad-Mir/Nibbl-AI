@@ -41,11 +41,13 @@ const FIELD_LABELS: Record<string, string> = {
   start_at: "Start",
   end_at: "End",
   daily_budget: "Daily budget",
+  image: "Campaign image",
 };
 
 const display = (key: string, value: unknown): string => {
   if (value === null || value === undefined || value === "") return "—";
   if (key === "deal_type") return DEAL_LABELS[String(value)] ?? String(value);
+  if (key === "image") return "New image uploaded";
   if (["max_rebate", "fixed_reward", "daily_budget"].includes(key)) return money(value);
   if (key === "start_at" || key === "end_at") return dateTime(value);
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -139,9 +141,24 @@ const ReviewCard = ({
                 <tr key={key} className="border-t border-amber-100">
                   <td className="py-1.5 pr-4 font-medium text-[#454656]">{FIELD_LABELS[key] ?? key}</td>
                   <td className="py-1.5 pr-4 text-[#6B6B80]">
-                    {display(key, key === "product" ? campaign.products : campaign[key])}
+                    {key === "image"
+                      ? campaign.image_url
+                        ? "Current image"
+                        : "—"
+                      : display(key, key === "product" ? campaign.products : campaign[key])}
                   </td>
-                  <td className="py-1.5 font-semibold text-[#1A1A2E]">{display(key, value)}</td>
+                  <td className="py-1.5 font-semibold text-[#1A1A2E]">
+                    {key === "image" && review.proposed_image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={String(review.proposed_image_url)}
+                        alt="Proposed campaign image"
+                        className="w-24 h-24 object-cover rounded-lg border border-amber-100"
+                      />
+                    ) : (
+                      display(key, value)
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

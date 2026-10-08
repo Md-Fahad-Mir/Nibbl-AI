@@ -56,6 +56,9 @@ class ReservationSerializer(serializers.ModelSerializer):
 
 class CreateReservationSerializer(serializers.Serializer):
     campaign = serializers.UUIDField()
+    # Two separate, optional marketing consents (email + SMS each).
+    consent_nibbl = serializers.BooleanField(required=False, default=False)
+    consent_brand = serializers.BooleanField(required=False, default=False)
 
 
 class ClaimSlotsSerializer(serializers.Serializer):

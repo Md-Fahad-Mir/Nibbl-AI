@@ -238,3 +238,65 @@ class ReservationApiTests(APITestCase):
             reverse("v1:reservations:reservation-detail", args=[reservation.id])
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class ConsentCaptureTests(APITestCase):
+    def _claim(self, user, campaign, **consents):
+        self.client.force_authenticate(user)
+        return self.client.post(
+            reverse("v1:reservations:reservation-list"),
+            {"campaign": str(campaign.id), **consents},
+            format="json",
+        )
+
+    def test_two_consents_are_stored_separately(self):
+        from Apps.accounts.models import MarketingConsent
+
+        brand, campaign, _ = _campaign(slug="consenta")
+        user = _user("consent@example.com")
+        resp = self._claim(user, campaign, consent_nibbl=True, consent_brand=False)
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+        reservation = Reservation.objects.get(user=user)
+        self.assertTrue(reservation.consent_nibbl_marketing)
+        self.assertFalse(reservation.consent_brand_marketing)
+        self.assertTrue(
+            MarketingConsent.objects.filter(user=user, brand__isnull=True, opted_in=True).exists()
+        )
+        self.assertFalse(MarketingConsent.objects.filter(user=user, brand=brand).exists())
+
+    def test_brand_consent_is_scoped_to_that_brand(self):
+        from Apps.accounts.models import MarketingConsent
+
+        brand, campaign, _ = _campaign(slug="consentb")
+        user = _user("consent2@example.com")
+        self._claim(user, campaign, consent_brand=True)
+        consent = MarketingConsent.objects.get(user=user, brand=brand)
+        self.assertTrue(consent.opted_in)
+        self.assertIsNotNone(consent.consented_at)
+        self.assertFalse(MarketingConsent.objects.filter(user=user, brand__isnull=True).exists())
+
+    def test_consents_default_to_not_given(self):
+        from Apps.accounts.models import MarketingConsent
+
+        _, campaign, _ = _campaign(slug="consentc")
+        user = _user("consent3@example.com")
+        resp = self._claim(user, campaign)  # old clients send no consent fields
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(MarketingConsent.objects.filter(user=user).exists())
+
+    def test_failed_claim_does_not_record_consent(self):
+        from Apps.accounts.models import MarketingConsent
+
+        _, campaign, wallet = _campaign(slug="consentd", premium="5.00", fund="1000.00")
+        # Drain the wallet so the escrow hold fails after the consent is recorded.
+        wallet_services.debit(
+            wallet=wallet, amount=Decimal("1000.00"),
+            category=LedgerEntry.Category.ADJUSTMENT,
+        )
+        user = _user("consent4@example.com")
+        with self.assertRaises(services.ReservationError):
+            services.create_reservation(
+                user=user, campaign_id=campaign.id, consent_nibbl=True, consent_brand=True
+            )
+        self.assertFalse(MarketingConsent.objects.filter(user=user).exists())

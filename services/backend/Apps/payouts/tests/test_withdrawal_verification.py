@@ -180,3 +180,19 @@ class PhoneGateTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("paused", resp.data["detail"])
+
+
+class SmsDeliveryFailureTests(APITestCase):
+    @override_settings(**TWILIO_ON)
+    @patch("Apps.accounts.twilio_verify.start_verification", side_effect=Exception("Twilio 400: geo permission"))
+    def test_twilio_send_failure_is_a_clear_400_not_a_crash(self, _start):
+        user = _user("z@example.com", "+12125550199")
+        method = _method(user, "z@paypal.com")
+        self.client.force_authenticate(user)
+        resp = self.client.post(
+            reverse("v1:payouts:withdrawal-send-code"),
+            {"payout_method": str(method.id), "amount": "10.00"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("couldn't send", resp.data["detail"])

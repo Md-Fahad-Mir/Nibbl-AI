@@ -62,6 +62,32 @@ class BrandWalletApiTests(APITestCase):
         self.assertEqual(tx.data["count"], 1)
         self.assertEqual(tx.data["results"][0]["category"], "funding")
 
+    def test_ledger_csv_export(self):
+        self.client.force_authenticate(self.owner)
+        wallet = wallet_services.get_or_create_brand_wallet(self.brand)
+        wallet_services.credit(
+            wallet=wallet, amount=Decimal("250.00"),
+            category=LedgerEntry.Category.FUNDING,
+            description="Wallet funding via Stripe",
+        )
+        resp = self.client.get(
+            reverse("v1:wallets:brand-wallet-ledger-export", args=[self.brand.id])
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp["Content-Type"], "text/csv")
+        self.assertIn("attachment", resp["Content-Disposition"])
+        body = resp.content.decode()
+        self.assertIn("date,type,category,amount", body)
+        self.assertIn("funding", body)
+        self.assertIn("250.00", body)
+
+    def test_non_member_cannot_export_ledger(self):
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.get(
+            reverse("v1:wallets:brand-wallet-ledger-export", args=[self.brand.id])
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
 
 class CustomerWalletApiTests(APITestCase):
     def test_customer_wallet_is_created_on_first_access(self):

@@ -64,6 +64,50 @@ class BrandWalletTransactionsView(generics.ListAPIView):
         return ledger_for_wallet(wallet)
 
 
+@extend_schema(tags=["wallets"])
+class BrandWalletLedgerExportView(APIView):
+    """CSV export of the brand wallet's full ledger (detailed statement export)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id):
+        import csv
+        import io
+
+        from django.http import HttpResponse
+
+        brand = _brand_or_404(brand_id)
+        _require_membership(request.user, brand)
+        wallet = services.get_or_create_brand_wallet(brand)
+        entries = ledger_for_wallet(wallet).order_by("created_at")
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow([
+            "date", "type", "category", "amount", "balance_after",
+            "promotional", "reference_type", "reference_id", "description",
+        ])
+        for entry in entries:
+            writer.writerow([
+                entry.created_at.isoformat(),
+                entry.entry_type,
+                entry.category,
+                str(entry.signed_amount),
+                str(entry.balance_after),
+                "yes" if entry.is_promotional else "no",
+                entry.reference_type,
+                entry.reference_id,
+                entry.description,
+            ])
+
+        response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = (
+            f'attachment; filename="{brand.slug}-wallet-ledger.csv"'
+        )
+        return response
+
+
 # ---------------------------------------------------------------------------
 # Customer wallet
 # ---------------------------------------------------------------------------

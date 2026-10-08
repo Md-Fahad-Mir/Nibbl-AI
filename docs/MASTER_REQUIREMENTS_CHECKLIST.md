@@ -56,7 +56,7 @@
 ## Brand Wallet
 - [ ] 🟡 **30. Balances (available, reserved, promotional)** — available/reserved ✓; promotional balance now tracked separately (`promotional`/`reward_available` on wallet API, shown on brand promo card); full three-way breakdown on the main balance card still pending
 - [x] ✅ **31. Automatic refill (Stripe)** — 25% of 7-day estimate, recommended amount, in-app failure notification *(done this engagement)*
-- [ ] 🟡 **32. Statements & ledger export** — statement exists; weekly statements + detailed export missing
+- [ ] 🟡 **32. Statements & ledger export** — statement exists; **detailed ledger CSV export ✓** (brand wallet, `GET /brands/<id>/wallet/transactions/export/` + Export button on the ledger tab); recurring weekly statements still missing
 
 ## Plans
 - [x] ✅ **33. Plan definitions & data access** — Starter/Pro/Scale, fees, data-access tiers (enforced)

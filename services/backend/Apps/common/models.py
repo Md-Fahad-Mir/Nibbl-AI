@@ -165,6 +165,10 @@ class PlatformSettings(models.Model):
     )
     withdrawal_rolling_days = models.PositiveIntegerField(default=30)
     referrals_enabled = models.BooleanField(default=True)
+    # Require an SMS code (sent to the shopper's verified phone) on every
+    # withdrawal. Off by default; can only be turned on once SMS sending is
+    # configured, so shoppers can verify phones before it's enforced.
+    withdrawal_sms_required = models.BooleanField(default=False)
 
     updated_at = models.DateTimeField(auto_now=True)
 

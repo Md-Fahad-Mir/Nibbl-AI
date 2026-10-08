@@ -26,6 +26,15 @@ def _config():
     return sid, token, service
 
 
+def is_configured() -> bool:
+    """True when real SMS can be sent (all Twilio Verify credentials present)."""
+    return bool(
+        settings.TWILIO_ACCOUNT_SID
+        and settings.TWILIO_AUTH_TOKEN
+        and settings.TWILIO_VERIFY_SERVICE_SID
+    )
+
+
 def start_verification(phone: str) -> None:
     """Send an SMS verification code to ``phone`` via Twilio Verify."""
     sid, token, service = _config()

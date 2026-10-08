@@ -206,7 +206,21 @@ def verify_email(*, email: str, code: str) -> User:
 # ---------------------------------------------------------------------------
 # Phone verification
 # ---------------------------------------------------------------------------
+def normalize_us_phone(raw: str) -> str:
+    """Return a US number in E.164 form (+1XXXXXXXXXX). Our SMS provider is
+    US-only, so anything else is rejected."""
+    digits = "".join(ch for ch in str(raw or "") if ch.isdigit())
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) != 10 or digits[0] in "01":
+        raise AccountError("Enter a valid US mobile number.")
+    return f"+1{digits}"
+
+
 def start_phone_verification(user: User, *, phone: str) -> None:
+    from Apps.accounts import twilio_verify
+
+    phone = normalize_us_phone(phone)
     if (
         User.objects.filter(phone=phone, is_deleted=False)
         .exclude(pk=user.pk)
@@ -218,6 +232,15 @@ def start_phone_verification(user: User, *, phone: str) -> None:
     user.is_phone_verified = False
     user.save(update_fields=["phone", "is_phone_verified", "updated_at"])
 
+    if twilio_verify.is_configured():
+        # Twilio Verify generates, sends, expires and rate-limits the code.
+        try:
+            twilio_verify.start_verification(phone)
+        except Exception:
+            raise AccountError("We couldn't send a code to that number. Check it and try again.")
+        return
+
+    # No SMS provider (dev/staging): issue our own code; it's logged, not sent.
     code = _issue_code(user, VerificationCode.Purpose.PHONE_VERIFY, phone)
     emails.send_sms_code(
         to_phone=phone,
@@ -227,9 +250,47 @@ def start_phone_verification(user: User, *, phone: str) -> None:
 
 
 def verify_phone(user: User, *, code: str) -> User:
-    _verify_code(user, VerificationCode.Purpose.PHONE_VERIFY, code)
+    from Apps.accounts import twilio_verify
+
+    if not user.phone:
+        raise AccountError("Add a phone number first.")
+    if twilio_verify.is_configured():
+        if not twilio_verify.check_verification(user.phone, code):
+            raise AccountError("Invalid or expired code.")
+    else:
+        _verify_code(user, VerificationCode.Purpose.PHONE_VERIFY, code)
+
+    now = timezone.now()
+    fields = ["is_phone_verified", "phone_verified_at", "last_verified_phone", "updated_at"]
+    # Verifying a different number than the last verified one is a phone
+    # change: pause withdrawals (account-takeover guard).
+    if user.last_verified_phone and user.last_verified_phone != user.phone:
+        user.withdrawals_paused_until = now + dt.timedelta(
+            hours=settings.PHONE_CHANGE_WITHDRAWAL_PAUSE_HOURS
+        )
+        fields.append("withdrawals_paused_until")
     user.is_phone_verified = True
-    user.save(update_fields=["is_phone_verified", "updated_at"])
+    user.phone_verified_at = now
+    user.last_verified_phone = user.phone
+    user.save(update_fields=fields)
+    return user
+
+
+@transaction.atomic
+def reset_phone(*, user: User, admin: User, reason: str = "") -> User:
+    """Admin: clear a shopper's phone (e.g. lost phone) so they can add a new
+    one. The next number they verify counts as a change (48h pause)."""
+    user.phone = None
+    user.is_phone_verified = False
+    user.save(update_fields=["phone", "is_phone_verified", "updated_at"])
+    AuditLog.objects.create(
+        action=AuditLog.Action.UPDATE,
+        actor_type="admin",
+        actor_id=str(admin.id),
+        target_type="user",
+        target_id=str(user.id),
+        metadata={"event": "phone_reset", "reason": reason},
+    )
     return user
 
 

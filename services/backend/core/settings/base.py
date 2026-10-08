@@ -150,6 +150,8 @@ RECEIPT_ALLOW_MISSING_NUMBER = env.bool("RECEIPT_ALLOW_MISSING_NUMBER", default=
 
 # Payouts: minimum customer withdrawal amount.
 PAYOUT_MIN_AMOUNT = env("PAYOUT_MIN_AMOUNT", default="1.00")
+# After a shopper verifies a NEW phone number, withdrawals pause this long.
+PHONE_CHANGE_WITHDRAWAL_PAUSE_HOURS = env.int("PHONE_CHANGE_WITHDRAWAL_PAUSE_HOURS", default=48)
 
 # Notifications. Empty FCM key → push is mocked (logged) in dev.
 FCM_SERVER_KEY = env("FCM_SERVER_KEY", default="")

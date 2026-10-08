@@ -33,6 +33,7 @@ export default function VerifyPhoneModal({
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [country, setCountry] = useState("US");
   const [phone, setPhone] = useState(initialPhone);
+  const [sentTo, setSentTo] = useState("");
   const countries = useMemo(
     () =>
       COUNTRY_DIAL_CODES.map(([code, dial]) => ({ code, dial, name: countryName(code) })).sort(
@@ -61,7 +62,7 @@ export default function VerifyPhoneModal({
 
   const sendCode = () =>
     run(async () => {
-      await addPhone(phone, isInternational ? undefined : country);
+      setSentTo(await addPhone(phone, isInternational ? undefined : country));
       setCode("");
       setStep("code");
     });
@@ -86,7 +87,7 @@ export default function VerifyPhoneModal({
             <span className="text-[14px] font-normal leading-[20px] text-[#555]">
               {step === "phone"
                 ? reason
-                : `We sent a 6-digit code to ${phone}. It expires in 10 minutes.`}
+                : `We sent a 6-digit code to ${sentTo || phone}. It expires in 10 minutes.`}
             </span>
           </div>
 

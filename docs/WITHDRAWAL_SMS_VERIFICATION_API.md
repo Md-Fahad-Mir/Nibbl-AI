@@ -77,7 +77,7 @@ Authorization: Bearer <access>
 | `400` | `Invalid or missing verification code.` | Wrong or expired code → let them re-enter or resend (call send-code again). |
 | `400` | `Minimum withdrawal is …` / `Insufficient available balance.` | Standard withdrawal validation (same as before). |
 | `401` | — | Not authenticated. |
-| `503` | `SMS verification is not available right now.` | SMS isn't required right now → call `POST /withdrawals/` **without** a code. |
+| `503` | `SMS verification is not available right now.` | SMS is switched off on this server (dev/staging) → call `POST /withdrawals/` **without** a code. |
 
 ---
 
@@ -89,7 +89,7 @@ when a withdrawal returns `code: "phone_verification_required"` (then resume
 the withdrawal).
 
 ```
-1. POST /api/v1/users/me/phone/          { "phone": "01712-345678", "country": "BD" }   → 202 (code texted)
+1. POST /api/v1/users/me/phone/          { "phone": "01712-345678", "country": "BD" }   → 202 { "phone": "+8801712345678" }
 2. POST /api/v1/users/me/phone/verify/   { "code": "123456" }            → 200 (updated user)
 ```
 
@@ -109,17 +109,17 @@ the withdrawal).
 
 ---
 
-## Important: timing / rollout
+## Status: live
 
-SMS-verified withdrawals are switched on by an **admin setting**, separate from
-SMS sending, so shoppers can verify phones before it's enforced:
+SMS verification is **on in production** (Twilio Verify). Every withdrawal needs
+a code sent to the shopper's **verified** phone:
 
-1. **Now:** not required → `send-code` returns **503**, `POST /withdrawals/` works without a `code`.
-2. **SMS sending goes live:** phone verification texts real codes; withdrawals still don't require one.
-3. **Admin turns on "Withdrawals require an SMS code":** `send-code` texts the verified phone and `code` becomes required.
+1. `POST /withdrawals/send-code/` → if it returns `phone_verification_required`,
+   run the phone-verification screen, then call send-code again.
+2. `POST /withdrawals/` with the `code`.
 
-**Build the full flow now** (phone screen + two-step withdrawal + the 503
-fallback) — it keeps working through all three phases with no app update.
+Keep the **503 fallback** (withdraw without a code) — it applies whenever SMS
+is switched off on the server (e.g. local/staging environments).
 
 ---
 
@@ -129,7 +129,7 @@ fallback) — it keeps working through all three phases with no app update.
 |---|---|---|---|
 | `/withdrawals/send-code/` | POST | `payout_method`, `amount` | `{ phone }` (masked) |
 | `/withdrawals/` | POST | `payout_method`, `amount`, `code` | the created withdrawal |
-| `/users/me/phone/` | POST | `phone`, optional `country` | 202 — code texted |
+| `/users/me/phone/` | POST | `phone`, optional `country` | 202 `{ phone }` — normalized number the code was texted to |
 | `/users/me/phone/verify/` | POST | `code` | the updated user |
 
 ---

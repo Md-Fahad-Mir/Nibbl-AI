@@ -55,7 +55,8 @@ export interface ConsumerApiState {
   logout: () => Promise<void>;
   validateSession: () => Promise<boolean>;
   loadProfile: () => Promise<void>;
-  addPhone: (phone: string, country?: string) => Promise<void>;
+  /** Sends the code; resolves to the normalized number it was sent to. */
+  addPhone: (phone: string, country?: string) => Promise<string>;
   verifyPhone: (code: string) => Promise<void>;
   loadHome: (search?: string, category?: string, page?: number) => Promise<void>;
   loadOfferDetails: (campaignId: string) => Promise<void>;
@@ -400,7 +401,8 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
         }
       },
       addPhone: async (phone, country) => {
-        await nibblApi.addPhone(phone, country);
+        const result = await nibblApi.addPhone(phone, country);
+        return result?.phone || phone;
       },
       verifyPhone: async (code) => {
         // Returns the updated user (phone + is_phone_verified).

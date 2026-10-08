@@ -54,7 +54,7 @@
 - [ ] 🟡 **29. Customer directory & consent handling** — directory + plan-based gating ✓; consent status / opt-out / CSV export missing
 
 ## Brand Wallet
-- [ ] 🟡 **30. Balances (available, reserved, promotional)** — available/reserved ✓; promotional-credit *tracked balance* partial
+- [ ] 🟡 **30. Balances (available, reserved, promotional)** — available/reserved ✓; promotional balance now tracked separately (`promotional`/`reward_available` on wallet API, shown on brand promo card); full three-way breakdown on the main balance card still pending
 - [x] ✅ **31. Automatic refill (Stripe)** — 25% of 7-day estimate, recommended amount, in-app failure notification *(done this engagement)*
 - [ ] 🟡 **32. Statements & ledger export** — statement exists; weekly statements + detailed export missing
 
@@ -79,7 +79,7 @@
 - [ ] 🟡 **42. Admin dashboard & revenue** — views exist; not to Master shape
 - [x] ✅ **43. Withdrawal batch processing** — batches + approve/reject/mark-paid
 - [ ] ⬜ **44. Campaign approval queue**
-- [ ] ⬜ **45. Promo codes** — reusable codes (direct promo credit exists)
+- [x] ✅ **45. Promo codes** — reusable admin-created codes (amount, validity dates, usage limits, once-per-brand) redeemed by brands for *promotional* credit; promo money covers fees/subscription (promo-first) but never shopper rewards (wallet real/promo split enforced); admin create/list UI + brand redeem UI
 - [ ] 🟡 **46. Shopper management & suspensions** — user suspend ✓; per-brand + repeated-suspension alerts missing
 - [ ] ⬜ **47. Referral management / flag review**
 - [ ] ⬜ **48. Receipt brand discovery** — unpartnered-brand leads
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (9):** #2, #3, #12, #20, #31, #33, #34, #37, #43.
+**Done to spec (10):** #2, #3, #12, #20, #31, #33, #34, #37, #43, #45.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

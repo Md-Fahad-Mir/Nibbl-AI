@@ -202,6 +202,11 @@ export const backendApi = {
       path: "/withdrawals/",
       auth: true,
     },
+    sendWithdrawalCode: {
+      method: "POST",
+      path: "/withdrawals/send-code/",
+      auth: true,
+    },
     withdrawalDetail: (withdrawalId: string): ApiEndpoint => ({
       method: "GET",
       path: `/withdrawals/${withdrawalId}/`,
@@ -874,8 +879,10 @@ export const nibblApi = {
   payoutMethods: () => requestEndpoint<ApiRecord[]>(backendApi.consumer.payoutMethods),
   createPayoutMethod: (body: ApiRecord) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.createPayoutMethod, body),
-  createWithdrawal: (body: { payout_method: string; amount: string }) =>
+  createWithdrawal: (body: { payout_method: string; amount: string; code?: string }) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.createWithdrawal, body),
+  sendWithdrawalCode: (body: { payout_method: string; amount: string }) =>
+    requestEndpoint<{ phone: string }>(backendApi.consumer.sendWithdrawalCode, body),
   activity: (query?: RequestOptions["query"]) =>
     requestEndpoint<PaginatedResponse<ApiRecord>>(
       backendApi.consumer.activity,

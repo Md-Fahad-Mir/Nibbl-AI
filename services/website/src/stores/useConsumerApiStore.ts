@@ -73,7 +73,8 @@ export interface ConsumerApiState {
   ) => Promise<ApiRecord>;
   inviteFriend: (fullName: string, contact: string) => Promise<void>;
   createPayoutMethod: (provider: "paypal" | "venmo", handle: string) => Promise<ApiRecord>;
-  requestWithdrawal: (payoutMethodId: string, amount: string) => Promise<ApiRecord>;
+  sendWithdrawalCode: (payoutMethodId: string, amount: string) => Promise<{ phone: string }>;
+  requestWithdrawal: (payoutMethodId: string, amount: string, code?: string) => Promise<ApiRecord>;
   updateNotificationPreferences: (body: ApiRecord) => Promise<void>;
 }
 
@@ -630,13 +631,17 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
         await get().loadWallet();
         return payoutMethod;
       },
-      requestWithdrawal: async (payoutMethodId, amount) => {
+      sendWithdrawalCode: async (payoutMethodId, amount) => {
+        return nibblApi.sendWithdrawalCode({ payout_method: payoutMethodId, amount });
+      },
+      requestWithdrawal: async (payoutMethodId, amount, code) => {
         if (Number(amount) < 0.01) {
           throw new Error("You need at least $0.01 available before requesting a withdrawal.");
         }
         const withdrawal = await nibblApi.createWithdrawal({
           payout_method: payoutMethodId,
           amount,
+          ...(code ? { code } : {}),
         });
         await get().loadWallet();
         return withdrawal;

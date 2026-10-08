@@ -259,3 +259,49 @@ class BrandCustomerListView(APIView):
         brand = _get_brand_or_404(brand_id)
         _require_membership(request.user, brand)
         return Response(brand_customers(brand))
+
+
+class BrandCustomerExportView(APIView):
+    """CSV export of the brand's customer directory. PII columns are included
+    only for full-access plans (Pro/Scale); anonymized plans export the opaque
+    reference and aggregate activity, matching the on-screen directory."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id):
+        import csv
+        import io
+
+        from django.http import HttpResponse
+
+        from Apps.brands.customers import brand_customers
+
+        brand = _get_brand_or_404(brand_id)
+        _require_membership(request.user, brand)
+
+        data = brand_customers(brand)
+        full = data["data_access_level"] == "full"
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        base_header = ["customer_ref", "redemptions", "reviews", "total_earned"]
+        writer.writerow((["full_name", "email"] + base_header) if full else base_header)
+        for row in data["customers"]:
+            base = [
+                row["customer_ref"],
+                row["redemptions"],
+                row["reviews"],
+                row["total_earned"],
+            ]
+            writer.writerow(
+                ([row.get("full_name") or "", row.get("email") or ""] + base)
+                if full
+                else base
+            )
+
+        response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = (
+            f'attachment; filename="{brand.slug}-customers.csv"'
+        )
+        return response

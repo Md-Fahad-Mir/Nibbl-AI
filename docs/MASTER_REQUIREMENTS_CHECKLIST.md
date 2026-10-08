@@ -51,7 +51,7 @@
 - [ ] 🟡 **28. Analytics to the specified definitions** — overview exists; cost-per-result / view→claim / 25-hour states missing
 
 ## Customers
-- [ ] 🟡 **29. Customer directory & consent handling** — directory + plan-based gating ✓; consent status / opt-out / CSV export missing
+- [ ] 🟡 **29. Customer directory & consent handling** — directory + plan-based gating ✓; **plan-gated CSV export ✓** (PII columns only for Pro/Scale); consent status / opt-in-out tracking still missing
 
 ## Brand Wallet
 - [ ] 🟡 **30. Balances (available, reserved, promotional)** — available/reserved ✓; promotional balance now tracked separately (`promotional`/`reward_available` on wallet API, shown on brand promo card); full three-way breakdown on the main balance card still pending

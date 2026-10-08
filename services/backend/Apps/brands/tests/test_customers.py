@@ -67,3 +67,33 @@ class CustomersPlanGatingTests(APITestCase):
         self.client.force_authenticate(outsider)
         resp = self.client.get(reverse("v1:brands:customer-list", args=[brand.id]))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class CustomerCsvExportTests(APITestCase):
+    def test_pro_export_includes_pii_columns(self):
+        owner, brand, customer = _brand_with_customer("pro")
+        self.client.force_authenticate(owner)
+        resp = self.client.get(reverse("v1:brands:customer-export", args=[brand.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp["Content-Type"], "text/csv")
+        self.assertIn("attachment", resp["Content-Disposition"])
+        body = resp.content.decode()
+        self.assertIn("full_name,email", body)
+        self.assertIn("shopper@example.com", body)
+
+    def test_starter_export_masks_pii(self):
+        owner, brand, customer = _brand_with_customer("starter")
+        self.client.force_authenticate(owner)
+        resp = self.client.get(reverse("v1:brands:customer-export", args=[brand.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        body = resp.content.decode()
+        self.assertNotIn("email", body.splitlines()[0])  # no PII header
+        self.assertNotIn("shopper@example.com", body)
+        self.assertIn("cust_", body)
+
+    def test_non_member_cannot_export(self):
+        owner, brand, customer = _brand_with_customer("pro")
+        outsider = User.objects.create_user(email="out2@example.com", password="x", full_name="X")
+        self.client.force_authenticate(outsider)
+        resp = self.client.get(reverse("v1:brands:customer-export", args=[brand.id]))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)

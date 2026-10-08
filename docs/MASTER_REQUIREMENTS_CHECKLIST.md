@@ -80,7 +80,7 @@
 - [x] ✅ **43. Withdrawal batch processing** — batches + approve/reject/mark-paid
 - [ ] ⬜ **44. Campaign approval queue**
 - [x] ✅ **45. Promo codes** — reusable admin-created codes (amount, validity dates, usage limits, once-per-brand) redeemed by brands for *promotional* credit; promo money covers fees/subscription (promo-first) but never shopper rewards (wallet real/promo split enforced); admin create/list UI + brand redeem UI
-- [ ] 🟡 **46. Shopper management & suspensions** — user suspend ✓; per-brand + repeated-suspension alerts missing
+- [x] ✅ **46. Shopper management & suspensions** — global suspend ✓; **per-brand suspension** (brand Customers → Suspend/Reactivate, blocks claims on that brand only; anonymized plans act by `cust_` ref); **repeated-suspension fraud alert** (`REPEATED_SUSPENSION_ALERT`, default 3); shopper wallet adjustments now **require a reason** + ledger entry
 - [ ] ⬜ **47. Referral management / flag review**
 - [ ] ⬜ **48. Receipt brand discovery** — unpartnered-brand leads
 - [ ] 🟡 **49. Revenue analytics** — partial; subscription/rebate/review-fee breakdowns missing
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (12):** #2, #3, #12, #18, #20, #31, #33, #34, #37, #41, #43, #45.
+**Done to spec (13):** #2, #3, #12, #18, #20, #31, #33, #34, #37, #41, #43, #45, #46.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

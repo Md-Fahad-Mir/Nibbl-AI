@@ -143,3 +143,41 @@ class BrandApplication(BaseModel):
 
     def __str__(self):
         return f"{self.brand_name} ({self.status})"
+
+
+class BrandCustomerSuspension(BaseModel):
+    """A shopper suspended from one brand's offers (not a global suspension).
+
+    One row per (brand, user); reactivating flips ``is_active`` so the history
+    and ``times_suspended`` count survive for repeated-suspension alerts.
+    """
+
+    brand = models.ForeignKey(
+        Brand, on_delete=models.CASCADE, related_name="customer_suspensions"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="brand_suspensions",
+    )
+    is_active = models.BooleanField(default=True)
+    reason = models.CharField(max_length=255, blank=True)
+    times_suspended = models.PositiveIntegerField(default=1)
+    suspended_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["brand", "user"], name="uniq_brand_customer_suspension"
+            ),
+        ]
+
+    def __str__(self):
+        state = "suspended" if self.is_active else "reactivated"
+        return f"{self.user_id} {state} at {self.brand_id}"

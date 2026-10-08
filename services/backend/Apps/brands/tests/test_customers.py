@@ -97,3 +97,79 @@ class CustomerCsvExportTests(APITestCase):
         self.client.force_authenticate(outsider)
         resp = self.client.get(reverse("v1:brands:customer-export", args=[brand.id]))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class PerBrandSuspensionTests(APITestCase):
+    def _url(self, brand, customer_id, action):
+        return reverse("v1:brands:customer-action", args=[brand.id, customer_id, action])
+
+    def test_directory_exposes_user_id_and_suspension_state(self):
+        owner, brand, customer = _brand_with_customer("pro")
+        self.client.force_authenticate(owner)
+        row = self.client.get(
+            reverse("v1:brands:customer-list", args=[brand.id])
+        ).data["customers"][0]
+        self.assertEqual(row["user_id"], str(customer.id))
+        self.assertFalse(row["is_suspended"])
+
+    def test_suspend_blocks_claims_on_this_brand_only(self):
+        from Apps.reservations.services import ReservationError
+
+        owner, brand, customer = _brand_with_customer("pro")
+        self.client.force_authenticate(owner)
+        resp = self.client.post(self._url(brand, customer.id, "suspend"), {"reason": "abuse"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        row = self.client.get(
+            reverse("v1:brands:customer-list", args=[brand.id])
+        ).data["customers"][0]
+        self.assertTrue(row["is_suspended"])
+        # Still active globally — this is per-brand only.
+        customer.refresh_from_db()
+        self.assertTrue(customer.is_active)
+
+        campaign = brand.campaigns.first()
+        with self.assertRaises(ReservationError):
+            reservation_services.create_reservation(user=customer, campaign_id=campaign.id)
+
+        resp = self.client.post(self._url(brand, customer.id, "reactivate"), format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        row = self.client.get(
+            reverse("v1:brands:customer-list", args=[brand.id])
+        ).data["customers"][0]
+        self.assertFalse(row["is_suspended"])
+
+    def test_anonymized_plan_suspends_by_ref(self):
+        owner, brand, customer = _brand_with_customer("starter")
+        self.client.force_authenticate(owner)
+        row = self.client.get(
+            reverse("v1:brands:customer-list", args=[brand.id])
+        ).data["customers"][0]
+        self.assertTrue(row["user_id"].startswith("cust_"))  # no real id leaked
+        resp = self.client.post(self._url(brand, row["user_id"], "suspend"), format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_unknown_customer_is_404(self):
+        owner, brand, _ = _brand_with_customer("pro")
+        stranger = User.objects.create_user(email="x@example.com", password="x", full_name="X")
+        self.client.force_authenticate(owner)
+        resp = self.client.post(self._url(brand, stranger.id, "suspend"), format="json")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_repeated_suspensions_raise_fraud_flag(self):
+        from django.test import override_settings
+
+        from Apps.brands import customers as customer_services
+        from Apps.receipts.models import FraudFlag
+
+        owner, brand, customer = _brand_with_customer("pro")
+        with override_settings(REPEATED_SUSPENSION_ALERT=2):
+            customer_services.suspend_customer(brand=brand, user=customer)
+            self.assertFalse(FraudFlag.objects.filter(user=customer).exists())
+            customer_services.reactivate_customer(brand=brand, user=customer)
+            customer_services.suspend_customer(brand=brand, user=customer)
+        self.assertTrue(
+            FraudFlag.objects.filter(
+                user=customer, detail__startswith="Repeated suspensions"
+            ).exists()
+        )

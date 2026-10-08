@@ -130,6 +130,16 @@ class PlanChangeTests(APITestCase):
 
 
 class UserWalletCreditTests(APITestCase):
+    def test_wallet_adjustment_requires_a_reason(self):
+        target = User.objects.create_user(email="r@example.com", password="pw12345!", full_name="R")
+        self.client.force_authenticate(_admin())
+        resp = self.client.post(
+            reverse("v1:admin_panel:user-wallet-credit", args=[target.id]),
+            {"amount": "10.00"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_admin_can_credit_user_wallet_and_audits(self):
         target = User.objects.create_user(email="u@example.com", password="pw12345!", full_name="User")
         admin = _admin()

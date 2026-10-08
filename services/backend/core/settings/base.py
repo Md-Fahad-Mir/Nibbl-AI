@@ -101,6 +101,10 @@ MAX_ACTIVE_CLAIMS = env.int("MAX_ACTIVE_CLAIMS", default=25)
 # claims a shopper can have open at once.
 ACTIVE_CLAIM_SLOTS = env.int("ACTIVE_CLAIM_SLOTS", default=5)
 
+# Shopper suspensions (spec 5.7): raise a fraud alert once a shopper has been
+# suspended this many times across brands.
+REPEATED_SUSPENSION_ALERT = env.int("REPEATED_SUSPENSION_ALERT", default=3)
+
 # Reviews module: flat reward per AI-generated review (Apps.reviews).
 REVIEW_REWARD_AMOUNT = env("REVIEW_REWARD_AMOUNT", default="1.00")
 

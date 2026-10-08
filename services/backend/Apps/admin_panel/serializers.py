@@ -32,7 +32,8 @@ class UserWalletCreditSerializer(serializers.Serializer):
     amount = serializers.DecimalField(
         max_digits=14, decimal_places=2, min_value=Decimal("0.01")
     )
-    note = serializers.CharField(required=False, allow_blank=True, default="")
+    # Shopper wallet adjustments must record why (spec 5.7).
+    note = serializers.CharField(max_length=255, allow_blank=False)
 
 
 class ChangePlanSerializer(serializers.Serializer):

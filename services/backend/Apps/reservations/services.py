@@ -96,6 +96,12 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE) -> Re
     if campaign is None or not campaign.is_live or not campaign.brand.is_operational:
         raise ReservationError("This offer is not available.")
 
+    # A shopper suspended by this brand can't claim its offers.
+    from Apps.brands.customers import is_suspended_from_brand
+
+    if is_suspended_from_brand(user, campaign.brand):
+        raise ReservationError("This offer is not available.")
+
     # One active reservation per user per campaign.
     if Reservation.objects.filter(
         user=user, campaign=campaign, status=Reservation.Status.ACTIVE

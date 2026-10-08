@@ -1,11 +1,40 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowUpRight, ArrowDownLeft, Calendar } from "lucide-react";
+import { ArrowUpRight, ArrowDownLeft, Calendar, Download } from "lucide-react";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
+import { API_BASE_URL, tokenStorage } from "@/lib/api/backendApi";
 import { formatDate, formatMoney, formatTime, titleCase, toNumber } from "../../utils/backendMappers";
 
 export default function WalletDetails() {
+  const selectedBrandId = useBrandApiStore((state) => state.selectedBrandId);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportLedger = async () => {
+    if (!selectedBrandId || exporting) return;
+    setExporting(true);
+    try {
+      const token = tokenStorage.getAccess();
+      const response = await fetch(
+        `${API_BASE_URL}/brands/${selectedBrandId}/wallet/transactions/export/`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (!response.ok) throw new Error("Export failed.");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "wallet-ledger.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Non-fatal: the ledger stays on screen if the export can't be fetched.
+    } finally {
+      setExporting(false);
+    }
+  };
   const [activePage, setActivePage] = useState(1);
   const [typeFilter, setTypeFilter] = useState("All Types");
   const [statusFilter, setStatusFilter] = useState("Status");
@@ -67,6 +96,15 @@ export default function WalletDetails() {
           <Calendar className="w-3.5 h-3.5 text-[#001BD2]" />
           <span>All Time</span>
         </div>
+        <button
+          type="button"
+          onClick={handleExportLedger}
+          disabled={exporting}
+          className="bg-[#001BD2] hover:bg-blue-700 text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-sm text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>{exporting ? "Exporting…" : "Export CSV"}</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full items-stretch">

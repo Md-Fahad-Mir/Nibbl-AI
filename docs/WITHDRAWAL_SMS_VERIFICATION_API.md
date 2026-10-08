@@ -89,12 +89,18 @@ when a withdrawal returns `code: "phone_verification_required"` (then resume
 the withdrawal).
 
 ```
-1. POST /api/v1/users/me/phone/          { "phone": "(555) 123-4567" }   → 202 (code texted)
+1. POST /api/v1/users/me/phone/          { "phone": "01712-345678", "country": "BD" }   → 202 (code texted)
 2. POST /api/v1/users/me/phone/verify/   { "code": "123456" }            → 200 (updated user)
 ```
 
-- **US mobile numbers only.** Send it in any common format; it's stored as
-  `+15551234567`. Invalid/non-US → `400 "Enter a valid US mobile number."`
+- **Any country.** Show a country picker and send the number as the shopper
+  writes it locally plus the ISO `country` code (e.g. `"01712-345678"` + `"BD"`,
+  `"07911 123456"` + `"GB"`) — the server applies that country's rules (like a
+  leading 0). Or send a full international number (`"+8801712345678"`) with no
+  `country`. It's stored as E.164, e.g. `+8801712345678`.
+- Landlines, toll-free and premium-rate numbers are rejected
+  (`400 "That number can't receive text messages. Use a mobile number."`);
+  invalid numbers → `400 "Enter a valid mobile number."`.
 - A number already used by another account → `400 "That phone number is already in use."`
 - Wrong/expired code → `400 "Invalid or expired code."` — offer "Resend" (repeat step 1).
 - `GET /users/me/` returns `phone` and `is_phone_verified` — show a "Verified" badge.
@@ -123,7 +129,7 @@ fallback) — it keeps working through all three phases with no app update.
 |---|---|---|---|
 | `/withdrawals/send-code/` | POST | `payout_method`, `amount` | `{ phone }` (masked) |
 | `/withdrawals/` | POST | `payout_method`, `amount`, `code` | the created withdrawal |
-| `/users/me/phone/` | POST | `phone` | 202 — code texted |
+| `/users/me/phone/` | POST | `phone`, optional `country` | 202 — code texted |
 | `/users/me/phone/verify/` | POST | `code` | the updated user |
 
 ---

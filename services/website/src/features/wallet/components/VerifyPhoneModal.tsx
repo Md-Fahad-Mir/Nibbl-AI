@@ -1,7 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
+import { COUNTRY_DIAL_CODES } from "../lib/countryDialCodes";
+
+const countryName = (() => {
+  try {
+    const names = new Intl.DisplayNames(["en"], { type: "region" });
+    return (code: string) => names.of(code) || code;
+  } catch {
+    return (code: string) => code;
+  }
+})();
 
 interface VerifyPhoneModalProps {
   /** Why we're asking — shown under the title. */
@@ -12,7 +22,7 @@ interface VerifyPhoneModalProps {
   onClose: () => void;
 }
 
-/** Two steps: enter a US mobile number → enter the 6-digit SMS code. */
+/** Two steps: pick country + enter a mobile number → enter the 6-digit SMS code. */
 export default function VerifyPhoneModal({
   reason = "We'll text you a 6-digit code to confirm it's yours.",
   initialPhone = "",
@@ -21,7 +31,18 @@ export default function VerifyPhoneModal({
 }: VerifyPhoneModalProps) {
   const { addPhone, verifyPhone } = useConsumerApiStore();
   const [step, setStep] = useState<"phone" | "code">("phone");
+  const [country, setCountry] = useState("US");
   const [phone, setPhone] = useState(initialPhone);
+  const countries = useMemo(
+    () =>
+      COUNTRY_DIAL_CODES.map(([code, dial]) => ({ code, dial, name: countryName(code) })).sort(
+        (a, b) => a.name.localeCompare(b.name)
+      ),
+    []
+  );
+  const dial = countries.find((c) => c.code === country)?.dial ?? "";
+  // A number typed with its own "+" code is already international.
+  const isInternational = phone.trim().startsWith("+") || phone.trim().startsWith("00");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -40,7 +61,7 @@ export default function VerifyPhoneModal({
 
   const sendCode = () =>
     run(async () => {
-      await addPhone(phone);
+      await addPhone(phone, isInternational ? undefined : country);
       setCode("");
       setStep("code");
     });
@@ -70,15 +91,35 @@ export default function VerifyPhoneModal({
           </div>
 
           {step === "phone" ? (
-            <input
-              type="tel"
-              autoFocus
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && phone.trim() && void sendCode()}
-              placeholder="(555) 123-4567"
-              className="w-full max-w-[279px] h-[48px] text-center text-[18px] font-medium text-[#1F1D1D] border border-[#D0D0D0] rounded-[12px] outline-none focus:border-[#3E3EDF]"
-            />
+            <div className="w-full max-w-[340px] flex flex-col gap-3">
+              <select
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                disabled={isInternational}
+                aria-label="Country"
+                className="w-full h-[44px] px-3 text-[15px] text-[#1F1D1D] border border-[#D0D0D0] rounded-[12px] outline-none focus:border-[#3E3EDF] bg-white disabled:opacity-50"
+              >
+                {countries.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name} (+{c.dial})
+                  </option>
+                ))}
+              </select>
+              <div className="flex items-center h-[48px] border border-[#D0D0D0] rounded-[12px] focus-within:border-[#3E3EDF] overflow-hidden">
+                {!isInternational && (
+                  <span className="pl-3 pr-1 text-[18px] font-medium text-[#777]">+{dial}</span>
+                )}
+                <input
+                  type="tel"
+                  autoFocus
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && phone.trim() && void sendCode()}
+                  placeholder="Mobile number"
+                  className="flex-1 h-full px-2 text-[18px] font-medium text-[#1F1D1D] outline-none"
+                />
+              </div>
+            </div>
           ) : (
             <input
               inputMode="numeric"
@@ -93,7 +134,9 @@ export default function VerifyPhoneModal({
           )}
 
           {step === "phone" && (
-            <p className="text-[12px] text-[#777] text-center -mt-4">US mobile numbers only.</p>
+            <p className="text-[12px] text-[#777] text-center -mt-4">
+              Pick your country, then enter your mobile number as you&apos;d normally write it.
+            </p>
           )}
 
           {error && (

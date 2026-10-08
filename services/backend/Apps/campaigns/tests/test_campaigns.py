@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from Apps.accounts.models import User
+from Apps.billing.models import Plan
 from Apps.brands.models import Brand, BrandMembership
 from Apps.campaigns import services
 from Apps.campaigns.models import Campaign, Restriction, RewardTier
@@ -311,3 +312,51 @@ class TenantIsolationTests(APITestCase):
             reverse("v1:campaigns:campaign-list", args=[brand.id])
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ActiveCampaignLimitTests(APITestCase):
+    """Per-plan active-campaign limit (Starter 1 / Pro 3 / Scale 10)."""
+
+    def setUp(self):
+        self.owner, self.brand, self.product = _setup_brand()
+        _fund(self.brand, "10000.00")
+        self.client.force_authenticate(self.owner)
+
+    def _activatable(self, name):
+        c = services.create_campaign(
+            brand=self.brand, product_ids=[self.product.id],
+            name=name, daily_budget=Decimal("10.00"),
+        )
+        services.set_tiers(
+            c, [{"reward_amount": "5.00", "allocation_percent": "100.00"}]
+        )
+        return c
+
+    def _activate(self, c):
+        return self.client.post(
+            reverse("v1:campaigns:campaign-activate", args=[self.brand.id, c.id])
+        )
+
+    def test_starter_allows_only_one_active(self):
+        self.brand.plan = Plan.objects.get(slug="starter")  # limit 1
+        self.brand.save()
+        c1, c2 = self._activatable("C1"), self._activatable("C2")
+        self.assertEqual(self._activate(c1).status_code, status.HTTP_200_OK)
+        self.assertEqual(self._activate(c2).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_pro_allows_three_active(self):
+        self.brand.plan = Plan.objects.get(slug="pro")  # limit 3
+        self.brand.save()
+        cs = [self._activatable(f"C{i}") for i in range(4)]
+        for c in cs[:3]:
+            self.assertEqual(self._activate(c).status_code, status.HTTP_200_OK)
+        self.assertEqual(self._activate(cs[3]).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_pausing_frees_a_slot(self):
+        self.brand.plan = Plan.objects.get(slug="starter")  # limit 1
+        self.brand.save()
+        c1, c2 = self._activatable("C1"), self._activatable("C2")
+        self._activate(c1)
+        c1.refresh_from_db()
+        services.pause_campaign(c1)
+        self.assertEqual(self._activate(c2).status_code, status.HTTP_200_OK)

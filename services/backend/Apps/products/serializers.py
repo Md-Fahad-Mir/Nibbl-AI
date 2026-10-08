@@ -1,3 +1,4 @@
+from django.db.models import Avg
 from rest_framework import serializers
 
 from Apps.products.models import Product, ProductAlias, Tag
@@ -5,6 +6,8 @@ from Apps.products.models import Product, ProductAlias, Tag
 
 class ProductSerializer(serializers.ModelSerializer):
     alias_count = serializers.IntegerField(source="aliases.count", read_only=True)
+    review_count = serializers.IntegerField(source="reviews.count", read_only=True)
+    avg_rating = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -20,9 +23,17 @@ class ProductSerializer(serializers.ModelSerializer):
             "size_volume",
             "is_active",
             "alias_count",
+            "review_count",
+            "avg_rating",
             "created_at",
         ]
-        read_only_fields = ["id", "is_active", "alias_count", "created_at"]
+        read_only_fields = [
+            "id", "is_active", "alias_count", "review_count", "avg_rating", "created_at"
+        ]
+
+    def get_avg_rating(self, obj):
+        avg = obj.reviews.aggregate(value=Avg("rating"))["value"]
+        return round(avg, 1) if avg is not None else None
 
 
 class ProductWriteSerializer(serializers.ModelSerializer):

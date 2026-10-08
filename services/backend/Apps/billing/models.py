@@ -44,6 +44,10 @@ class Plan(BaseModel):
         default=False,
         help_text="Whether the brand can access the Customers module.",
     )
+    max_active_campaigns = models.PositiveIntegerField(
+        default=1,
+        help_text="How many campaigns a brand on this plan may run at once.",
+    )
 
     is_active = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=0)

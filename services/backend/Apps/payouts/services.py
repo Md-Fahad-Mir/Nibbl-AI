@@ -138,6 +138,11 @@ def _mask_phone(phone: str) -> str:
 def start_withdrawal_verification(*, user, payout_method_id, amount) -> str:
     """Validate the pending withdrawal and send an SMS code (returns masked phone)."""
     _validate_withdrawal(user=user, payout_method_id=payout_method_id, amount=amount)
+    # Report "SMS verification unavailable" (→ 503, clients skip the SMS step)
+    # before demanding a verified phone; otherwise shoppers without one could
+    # never withdraw while verification is switched off.
+    if not settings.TWILIO_VERIFY_SERVICE_SID:
+        raise twilio_verify.TwilioNotConfigured("Twilio Verify is not configured.")
     phone = _require_verified_phone(user)
     twilio_verify.start_verification(phone)
     return _mask_phone(phone)

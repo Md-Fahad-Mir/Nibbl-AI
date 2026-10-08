@@ -227,7 +227,8 @@ class AddPhoneView(APIView):
         serializer = s.AddPhoneSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         _run(services.start_phone_verification, request.user, **serializer.validated_data)
-        return Response(status=status.HTTP_202_ACCEPTED)
+        # The normalized number the code was sent to, e.g. "+8801617078998".
+        return Response({"phone": request.user.phone}, status=status.HTTP_202_ACCEPTED)
 
 
 @extend_schema(tags=["users"])

@@ -264,28 +264,7 @@ class PlatformSettingsTests(APITestCase):
         self.assertIsNone(ws.maybe_credit_referral_bonus(invited))
 
 
-class SmsSwitchAndPhoneResetTests(APITestCase):
-    def test_cannot_require_sms_until_sms_is_configured(self):
-        self.client.force_authenticate(_admin())
-        resp = self.client.put(
-            reverse("v1:admin_panel:settings"), {"withdrawal_sms_required": True}, format="json"
-        )
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertFalse(self.client.get(reverse("v1:admin_panel:settings")).data["sms_configured"])
-
-    def test_can_require_sms_once_configured(self):
-        from django.test import override_settings
-
-        self.client.force_authenticate(_admin())
-        with override_settings(
-            TWILIO_ACCOUNT_SID="AC", TWILIO_AUTH_TOKEN="t", TWILIO_VERIFY_SERVICE_SID="VA"
-        ):
-            resp = self.client.put(
-                reverse("v1:admin_panel:settings"), {"withdrawal_sms_required": True}, format="json"
-            )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertTrue(resp.data["withdrawal_sms_required"])
-
+class PhoneResetTests(APITestCase):
     def test_admin_resets_phone_and_audits(self):
         shopper = User.objects.create_user(email="ph@example.com", password="x", full_name="Ph")
         shopper.phone = "+15552010009"

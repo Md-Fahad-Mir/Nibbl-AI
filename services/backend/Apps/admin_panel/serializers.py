@@ -9,9 +9,6 @@ from Apps.wallets.models import LedgerEntry
 
 
 class PlatformSettingsSerializer(serializers.ModelSerializer):
-    # Read-only: whether SMS can actually be sent (Twilio configured).
-    sms_configured = serializers.SerializerMethodField()
-
     class Meta:
         model = PlatformSettings
         fields = [
@@ -19,25 +16,9 @@ class PlatformSettingsSerializer(serializers.ModelSerializer):
             "withdrawal_review_rolling",
             "withdrawal_rolling_days",
             "referrals_enabled",
-            "withdrawal_sms_required",
-            "sms_configured",
             "updated_at",
         ]
-        read_only_fields = ["updated_at", "sms_configured"]
-
-    def get_sms_configured(self, obj) -> bool:
-        from Apps.accounts import twilio_verify
-
-        return twilio_verify.is_configured()
-
-    def validate_withdrawal_sms_required(self, value):
-        from Apps.accounts import twilio_verify
-
-        if value and not twilio_verify.is_configured():
-            raise serializers.ValidationError(
-                "SMS sending isn't configured yet, so withdrawals can't require it."
-            )
-        return value
+        read_only_fields = ["updated_at"]
 
 
 class PromoCreditSerializer(serializers.Serializer):

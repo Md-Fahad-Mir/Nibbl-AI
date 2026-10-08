@@ -16,6 +16,7 @@ import SettingsView from "./settings/SettingsView";
 import WalletView from "./wallet/WalletView";
 import AnalyticsView from "./analytics/AnalyticsView";
 import CustomersView from "./customers/CustomersView";
+import TagGeneratorView from "./tag-generator/TagGeneratorView";
 import { Product } from "../utils/mockData";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
@@ -46,6 +47,7 @@ const tabs = [
   "Customers",
   "Wallet",
   "Settings",
+  "Tag Generator",
 ];
 
 const readStoredTab = () => {
@@ -109,6 +111,7 @@ export default function OnboardingView() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [reviewProductFilter, setReviewProductFilter] = useState("");
   const {
     products: apiProducts,
     campaigns: rebateCampaigns,
@@ -235,6 +238,13 @@ export default function OnboardingView() {
     setSelectedProduct(null);
   };
 
+  const handleViewProductReviews = (productName: string) => {
+    setReviewProductFilter(productName);
+    setActiveTab("Reviews");
+    setViewMode("list");
+    setSelectedProduct(null);
+  };
+
   const handleSaveProduct = async (newProd: ProductFormValues) => {
     const created = await createProduct(productPayload(newProd));
     if (newProd.aliases.length) {
@@ -315,7 +325,12 @@ export default function OnboardingView() {
           
               {visibleTab === "Rebate" && <RebatesView />}
           
-              {visibleTab === "Reviews" && <ReviewsView />}
+              {visibleTab === "Reviews" && (
+                <ReviewsView
+                  initialProductFilter={reviewProductFilter}
+                  onFilterConsumed={() => setReviewProductFilter("")}
+                />
+              )}
           
               {visibleTab === "Redemptions" && <RedemptionsView />}
           
@@ -326,7 +341,9 @@ export default function OnboardingView() {
               {visibleTab === "Analytics" && <AnalyticsView />}
 
               {visibleTab === "Customers" && <CustomersView />}
-          
+
+              {visibleTab === "Tag Generator" && <TagGeneratorView />}
+
               {visibleTab === "Product Library" && visibleViewMode === "list" && (
                 <ProductLibraryView
                   products={productsWithCampaignCounts}
@@ -345,6 +362,7 @@ export default function OnboardingView() {
                   onEditAliases={handleEditAliases}
                   onDelete={handleDeleteProduct}
                   onViewAllCampaigns={handleViewAllProductCampaigns}
+                  onViewReviews={handleViewProductReviews}
                 />
               )}
 

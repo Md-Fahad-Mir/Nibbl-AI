@@ -1,9 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ApiRecord } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
+import DeleteProductModal from "./DeleteProductModal";
 import { formatDate, formatInteger, formatMoney, toNumber } from "../../utils/backendMappers";
 
 interface Product {
@@ -19,6 +20,8 @@ interface Product {
   sku?: string;
   aliases: string[];
   activeCampaigns: number;
+  avgRating?: number | null;
+  reviewCount?: number;
 }
 interface ProductDetailsProps {
   product: Product;
@@ -27,6 +30,7 @@ interface ProductDetailsProps {
   onEditAliases: (prod: Product) => void | Promise<void>;
   onDelete: (prodId: string) => void;
   onViewAllCampaigns: (type: "REBATE" | "REVIEW") => void;
+  onViewReviews: (productName: string) => void;
 }
 
 const campaignId = (campaign: ApiRecord) =>
@@ -58,7 +62,9 @@ export default function ProductDetailsView({
   onEditAliases,
   onDelete,
   onViewAllCampaigns,
+  onViewReviews,
 }: ProductDetailsProps) {
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const campaigns = useBrandApiStore((state) => state.campaigns);
   const reviewCampaigns = useBrandApiStore((state) => state.reviewCampaigns);
   const analyticsCampaigns = useBrandApiStore((state) => state.analyticsCampaigns);
@@ -129,9 +135,25 @@ export default function ProductDetailsView({
           <span className="bg-[#ECFDF5] text-[#059669] text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 uppercase">
             <span className="w-1.5 h-1.5 bg-[#10B981] rounded-full"></span>Active
           </span>
+          {typeof product.reviewCount === "number" && product.reviewCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => onViewReviews(product.name)}
+              title="View this product's reviews"
+              className="group flex items-center gap-1.5 text-sm font-bold text-[#131B2E] hover:text-[#001BD2] transition-colors cursor-pointer"
+            >
+              <span className="text-[#F59E0B]">★</span>
+              <span>{product.avgRating?.toFixed(1)}</span>
+              <span className="text-xs font-semibold text-[#64748B] group-hover:text-[#001BD2] group-hover:underline">
+                ({product.reviewCount} review{product.reviewCount === 1 ? "" : "s"})
+              </span>
+            </button>
+          ) : (
+            <span className="text-xs font-semibold text-[#94A3B8] font-manrope">No reviews yet</span>
+          )}
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => onDelete(product.id)} className="px-6 h-11 bg-[#001BD2] hover:bg-blue-700 text-white font-bold text-sm rounded-full transition-colors active:scale-[0.98] cursor-pointer">Delete</button>
+          <button onClick={() => setShowDeleteModal(true)} className="px-6 h-11 bg-[#001BD2] hover:bg-blue-700 text-white font-bold text-sm rounded-full transition-colors active:scale-[0.98] cursor-pointer">Delete</button>
           <button onClick={() => onEditProduct(product)} className="px-6 h-11 bg-white hover:bg-slate-50 text-[#001BD2] border border-[#001BD2]/20 font-bold text-sm rounded-full transition-colors active:scale-[0.98] cursor-pointer flex items-center gap-2">
             <img src="/ProductLibary/editIcon.svg" alt="Edit" className="w-[14px] h-[14px] object-contain" />Edit Product
           </button>
@@ -253,6 +275,17 @@ export default function ProductDetailsView({
           </div>
         </div>
       </div>
+
+      {showDeleteModal && (
+        <DeleteProductModal
+          productName={product.name}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={() => {
+            setShowDeleteModal(false);
+            onDelete(product.id);
+          }}
+        />
+      )}
     </div>
   );
 }

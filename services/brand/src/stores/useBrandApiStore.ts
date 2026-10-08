@@ -138,6 +138,8 @@ const mapProduct = (item: ApiRecord, index: number, fallbackBrandName = ""): Pro
         }))
     : [],
   activeCampaigns: Number(item.active_campaigns ?? item.campaign_count ?? 0),
+  avgRating: item.avg_rating == null ? null : Number(item.avg_rating),
+  reviewCount: Number(item.review_count ?? 0),
 });
 
 const loadReviewsForProducts = async (products: Product[]) => {

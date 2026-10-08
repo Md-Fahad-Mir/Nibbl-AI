@@ -23,6 +23,7 @@ const menuItems = [
   { name: "Customers", icon: "/sidebarIcon/customers.svg" },
   { name: "Wallet", icon: "/sidebarIcon/wallets.svg" },
   { name: "Settings", icon: "/sidebarIcon/settings.svg" },
+  { name: "Tag Generator", icon: "/sidebarIcon/tagGenerator.svg" },
 ];
 
 export default function Sidebar({

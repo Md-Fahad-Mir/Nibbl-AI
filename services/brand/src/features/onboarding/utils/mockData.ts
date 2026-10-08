@@ -23,6 +23,8 @@ export interface Product {
   aliasCount?: number;
   aliasRecords?: { id: string; alias_text: string }[];
   activeCampaigns: number;
+  avgRating?: number | null;
+  reviewCount?: number;
 }
 
 export const initialNotifications: NotificationItem[] = [

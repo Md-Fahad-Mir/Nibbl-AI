@@ -13,7 +13,7 @@
 
 ## Product Library
 - [x] ✅ **2. Product records & identity** — per-flavor Product ID + aliases
-- [ ] 🟡 **3. Delete-product safeguard & ratings link** — "type DELETE" guard + product→reviews link missing
+- [x] ✅ **3. Delete-product safeguard & ratings link** — "type DELETE" confirmation + history preserved (backend archive); clickable product rating (new `avg_rating`/`review_count` on product API) opens Review Management filtered to that product
 
 ## Rebate Campaigns
 - [ ] ⬜ **4. 25-Hour Claim Capacity** — currently $ daily_budget; needs redesign
@@ -36,7 +36,7 @@
 - [ ] ⬜ **17. Consent capture** — two checkboxes (Nibbl + Brand email/SMS)
 - [ ] ⬜ **18. Active claim slots** — per-shopper "3 of 5"
 - [ ] 🟡 **19. Receipt validation / duplicate fingerprint / quantity allocation** — basic dup; richer fingerprint (store/register/txn#) + per-line qty missing
-- [ ] 🟡 **20. Reminder schedule (48h / 12h before expiry)** — reminder cron now scheduled, but logic isn't 48h/12h yet
+- [x] ✅ **20. Reminder schedule (48h / 12h before expiry)** — fires at 48h and 12h before the reservation's exact deadline (each once, never extends it)
 - [ ] 🟡 **21. Manual-review decisioning** — queue + approve/decline; select-lines / system-calculated reward / standardized reasons missing
 - [ ] ⬜ **22. Seven-day automatic approval** — at max reward (cron scheduler ready; job not built)
 
@@ -65,7 +65,7 @@
 
 ## Settings & Tag Generator
 - [ ] 🟡 **36. Settings** — roles (no Viewer), per-member notif prefs, Meta Pixel ID validation, session security
-- [ ] ⬜ **37. Tag Generator** — build as "Coming Soon" static page (per spec)
+- [x] ✅ **37. Tag Generator** — "Coming Soon" static page in brand dashboard (per spec; no backend)
 
 ## Brand Onboarding
 - [ ] 🟡 **38. Guided onboarding** — application + approval ✓; guided plan→checkout→wallet-funding missing
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (5):** #2, #12, #31, #33, #43.
+**Done to spec (9):** #2, #3, #12, #20, #31, #33, #34, #37, #43.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

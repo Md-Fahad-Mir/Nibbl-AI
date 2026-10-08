@@ -33,6 +33,7 @@ interface ReviewItem {
 
 interface ReviewManagementProps {
   onBack: () => void;
+  initialProductFilter?: string;
 }
 
 const reviewDateFilters: ReviewDateFilter[] = ["All Time", "Last 30 Days", "Last 90 Days"];
@@ -104,9 +105,10 @@ const mapReview = (review: ApiRecord): ReviewItem => {
   };
 };
 
-export default function ReviewManagement({ onBack }: ReviewManagementProps) {
+export default function ReviewManagement({ onBack, initialProductFilter }: ReviewManagementProps) {
   const [activeTab, setActiveTab] = useState<"All" | "Pending">("All");
-  const [productFilter, setProductFilter] = useState("All Products");
+  const [productFilter, setProductFilter] = useState(initialProductFilter || "All Products");
+
   const [dateFilter, setDateFilter] = useState<ReviewDateFilter>("All Time");
   const [activePage, setActivePage] = useState(1);
   const [localStatuses, setLocalStatuses] = useState<Record<string, ReviewItem["status"]>>({});

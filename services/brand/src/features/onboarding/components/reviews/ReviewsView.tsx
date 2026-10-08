@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ReviewsLanding from "./ReviewsLanding";
 import ReviewDetails from "./ReviewDetails";
 import CreateReviewStep1 from "./CreateReviewStep1";
@@ -44,10 +44,29 @@ const parseMoney = (value: string) => {
   return Number.isFinite(amount) && amount > 0 ? amount : 2;
 };
 
-export default function ReviewsView() {
-  const [step, setStep] = useState<0 | 1 | 2 | 3 | 5 | 6 | 7>(0);
+interface ReviewsViewProps {
+  initialProductFilter?: string;
+  onFilterConsumed?: () => void;
+}
+
+export default function ReviewsView({
+  initialProductFilter = "",
+  onFilterConsumed,
+}: ReviewsViewProps = {}) {
+  const [step, setStep] = useState<0 | 1 | 2 | 3 | 5 | 6 | 7>(
+    initialProductFilter ? 7 : 0
+  );
+  // Captured once at mount so clearing the parent intent can't reset it.
+  const [managementFilter] = useState(initialProductFilter);
   const [selectedCamp, setSelectedCamp] = useState<CampaignItem | null>(null);
   const [submitError, setSubmitError] = useState("");
+
+  // The product-filter intent is one-shot: clear it in the parent after mount
+  // so normal navigation back to Reviews opens the landing, not this filter.
+  useEffect(() => {
+    if (initialProductFilter) onFilterConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const apiCampaigns = useBrandApiStore((state) => state.reviewCampaigns);
   const apiProducts = useBrandApiStore((state) => state.products);
   const apiReviews = useBrandApiStore((state) => state.reviews);
@@ -199,7 +218,7 @@ export default function ReviewsView() {
       )}
 
       {step === 7 && (
-        <ReviewManagement onBack={() => setStep(0)} />
+        <ReviewManagement onBack={() => setStep(0)} initialProductFilter={managementFilter} />
       )}
     </div>
   );

@@ -64,7 +64,23 @@ class Reservation(BaseModel):
 
     kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.REBATE)
     offer_type = models.CharField(max_length=10, choices=OfferType.choices)
+    # Amount reserved (held) for this claim. For deal-model claims this is the
+    # MAXIMUM possible reward; the actual payout is decided on approval and
+    # the unused difference is returned (Apps.rebates.services.issue_reward).
     reward_amount = models.DecimalField(**MONEY_FIELD)
+
+    # Rule snapshot (Master: "Existing Reservation Rule Snapshot") — the terms
+    # that applied when this claim was made. Later campaign edits apply only
+    # to new claims. Blank deal_type = a claim made before the deal model,
+    # which keeps its original fixed reward.
+    deal_type = models.CharField(max_length=20, blank=True)
+    max_rebate = models.DecimalField(null=True, blank=True, **MONEY_FIELD)
+    fixed_reward = models.DecimalField(null=True, blank=True, **MONEY_FIELD)
+    required_quantity = models.PositiveSmallIntegerField(null=True, blank=True)
+    eligible_product_ids = models.JSONField(default=list, blank=True)
+    allowed_merchants = models.TextField(blank=True)
+    cooldown_days = models.PositiveIntegerField(null=True, blank=True)
+    one_time_only = models.BooleanField(default=False)
 
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.ACTIVE

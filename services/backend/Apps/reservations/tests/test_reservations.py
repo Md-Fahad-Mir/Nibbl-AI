@@ -74,8 +74,8 @@ class ClaimTests(APITestCase):
         self.assertEqual(wallet.held_amount(), Decimal("5.00"))
         self.assertEqual(Hold.objects.filter(status=Hold.Status.ACTIVE).count(), 1)
 
-        # Premium claim started the cooldown.
-        self.assertTrue(
+        # Cooldown starts at the approved redemption, not at the claim.
+        self.assertFalse(
             CooldownRecord.objects.filter(user=user, campaign=campaign).exists()
         )
 
@@ -160,16 +160,15 @@ class DailyBudgetTests(APITestCase):
 
 
 class FallbackClaimTests(APITestCase):
-    def test_cooldown_user_claims_fallback(self):
+    def test_cooldown_user_cannot_claim_even_with_fallback(self):
+        # The deal model retires the fallback offer: in cooldown = no claim.
         brand, campaign, _ = _campaign(
             daily="100.00", premium="5.00", fallback="1.00", fallback_on=True
         )
         user = _user("c@example.com")
-        # Put the user in cooldown so premium is unavailable.
         offer_services.enter_cooldown(user, campaign)
-        reservation = services.create_reservation(user=user, campaign_id=campaign.id)
-        self.assertEqual(reservation.offer_type, Reservation.OfferType.FALLBACK)
-        self.assertEqual(reservation.reward_amount, Decimal("1.00"))
+        with self.assertRaises(services.ReservationError):
+            services.create_reservation(user=user, campaign_id=campaign.id)
 
     def test_cooldown_user_without_fallback_cannot_claim(self):
         brand, campaign, _ = _campaign(premium="5.00")

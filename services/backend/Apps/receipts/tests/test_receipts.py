@@ -60,7 +60,7 @@ class UploadAutoVerifyTests(APITestCase):
         user, reservation = _claim(campaign, "c@example.com")
         receipt = services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META, merchant="Acme",
-            items=[{"description": "Cola 12oz", "quantity": 1}],
+            items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],
         )
         self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
         self.assertTrue(receipt.matched)
@@ -72,7 +72,7 @@ class UploadAutoVerifyTests(APITestCase):
         user, reservation = _claim(campaign, "c@example.com")
         receipt = services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "Mystery Snack", "quantity": 1}],
+            items=[{"description": "Mystery Snack", "quantity": 1, "unit_price": "10.00"}],
         )
         self.assertEqual(receipt.status, Receipt.Status.PENDING)
         self.assertTrue(
@@ -89,7 +89,7 @@ class UploadAutoVerifyTests(APITestCase):
         user, reservation = _claim(campaign, "c@example.com")
         receipt = services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "Cola 12oz", "quantity": 1}],  # need 2
+            items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],  # need 2
         )
         self.assertEqual(receipt.status, Receipt.Status.PENDING)
 
@@ -99,7 +99,7 @@ class DuplicateTests(APITestCase):
         _, brand, product, campaign = _world()
         u1, r1 = _claim(campaign, "a@example.com")
         u2, r2 = _claim(campaign, "b@example.com")
-        items = [{"description": "Cola 12oz", "quantity": 1}]
+        items = [{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}]
         meta = dict(merchant="Acme", total=Decimal("9.99"), items=items)
 
         first = services.upload_receipt(user=u1, reservation_id=r1.id, **RECEIPT_META, **meta)
@@ -120,14 +120,14 @@ class DuplicateTests(APITestCase):
         user, reservation = _claim(campaign, "c@example.com")
         services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "Cola 12oz", "quantity": 1}],
+            items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],
         )
         from Apps.receipts.services import ReceiptError
 
         with self.assertRaises(ReceiptError):
             services.upload_receipt(
                 user=user, reservation_id=reservation.id, **RECEIPT_META,
-                items=[{"description": "Cola 12oz", "quantity": 1}],
+                items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],
             )
 
 
@@ -138,7 +138,7 @@ class ManualReviewApiTests(APITestCase):
         # Unmatched -> goes to review queue.
         self.receipt = services.upload_receipt(
             user=self.user, reservation_id=self.reservation.id, **RECEIPT_META,
-            items=[{"description": "CLA 12 OZ", "quantity": 1}],
+            items=[{"description": "CLA 12 OZ", "quantity": 1, "unit_price": "10.00"}],
         )
         self.item = ManualReviewItem.objects.get(receipt=self.receipt)
 
@@ -266,7 +266,7 @@ class ReceiptHistoryTests(APITestCase):
         u1, r1 = _claim(campaign, "a@example.com")
         services.upload_receipt(
             user=u1, reservation_id=r1.id, **RECEIPT_META,
-            items=[{"description": "Cola 12oz", "quantity": 1}],
+            items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],
         )
         other = User.objects.create_user(
             email="other@example.com", password="x", full_name="Other"

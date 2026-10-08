@@ -15,8 +15,7 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from Apps.campaigns.models import Campaign
-from Apps.common.money import ZERO, to_money
-from Apps.offers.services import enter_cooldown, is_in_cooldown
+from Apps.offers.services import is_in_cooldown
 from Apps.reservations.models import Reservation
 from Apps.wallets import services as wallet_services
 
@@ -48,43 +47,23 @@ def _lock_campaign(campaign_id):
 # ---------------------------------------------------------------------------
 # Daily budget usage (computed by summing reservations)
 # ---------------------------------------------------------------------------
-def _reserved_today(campaign, *, tier=None):
-    today = timezone.localdate()
-    qs = Reservation.objects.filter(
-        campaign=campaign,
-        created_at__date=today,
-        status__in=Reservation.BUDGET_CONSUMING,
-    )
-    qs = qs.filter(tier=tier) if tier is not None else qs
-    total = ZERO
-    for amount in qs.values_list("reward_amount", flat=True):
-        total += amount
-    return total
+def _claim_terms(campaign, user, now):
+    """Check the deal is claimable for this shopper right now and return the
+    amount to reserve (the maximum possible reward)."""
+    from Apps.campaigns import deals
 
-
-def _select_claimable_offer(campaign, user):
-    """Pick the offer to reserve: waterfall premium tier (within daily budget)
-    or the fallback offer (during cooldown / when premium is exhausted)."""
-    in_cd = is_in_cooldown(user, campaign)
-    daily = campaign.daily_budget
-    total_today = _reserved_today(campaign)
-
-    if not in_cd:
-        for tier in campaign.tiers.all():  # ordered high → low (waterfall)
-            tier_alloc = to_money(daily * tier.allocation_percent / 100)
-            tier_used = _reserved_today(campaign, tier=tier)
-            if (
-                tier_used + tier.reward_amount <= tier_alloc
-                and total_today + tier.reward_amount <= daily
-            ):
-                return Reservation.OfferType.PREMIUM, tier, tier.reward_amount
-
-    fallback = getattr(campaign, "fallback_offer", None)
-    if fallback and fallback.is_enabled:
-        if total_today + fallback.reward_amount <= daily:
-            return Reservation.OfferType.FALLBACK, None, fallback.reward_amount
-
-    raise ReservationError("This offer is not currently available.")
+    # Cooldown starts at an approved redemption (one-time = forever).
+    if is_in_cooldown(user, campaign):
+        raise ReservationError("You've already redeemed this offer recently.")
+    remaining = deals.capacity_remaining(campaign, now)
+    if remaining is not None and remaining <= 0:
+        raise ReservationError(
+            "Current rebates have been claimed. This offer is temporarily unavailable."
+        )
+    reward = deals.max_reward(campaign)
+    if not reward:
+        raise ReservationError("This offer is not currently available.")
+    return reward
 
 
 # ---------------------------------------------------------------------------
@@ -142,20 +121,27 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE,
             "Reservation capacity reached. Please try again later."
         )
 
-    offer_type, tier, reward = _select_claimable_offer(campaign, user)
-
     now = timezone.now()
+    reward = _claim_terms(campaign, user, now)
     expires_at = _expiry_from(now)
 
     reservation = Reservation.objects.create(
         user=user,
         campaign=campaign,
-        tier=tier,
         kind=kind,
-        offer_type=offer_type,
-        reward_amount=reward,
+        offer_type=Reservation.OfferType.PREMIUM,
+        reward_amount=reward,  # reserve the maximum; actual decided on approval
         status=Reservation.Status.ACTIVE,
         expires_at=expires_at,
+        # Rule snapshot: later campaign edits apply only to new claims.
+        deal_type=campaign.deal_type,
+        max_rebate=campaign.max_rebate,
+        fixed_reward=campaign.fixed_reward,
+        required_quantity=campaign.min_purchase_units,
+        eligible_product_ids=[str(pid) for pid in campaign.products.values_list("id", flat=True)],
+        allowed_merchants=campaign.allowed_merchants,
+        cooldown_days=campaign.cooldown_days,
+        one_time_only=campaign.one_time_only,
         consent_nibbl_marketing=bool(consent_nibbl),
         consent_brand_marketing=bool(consent_brand),
     )
@@ -182,11 +168,7 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE,
 
     reservation.hold = hold
     reservation.save(update_fields=["hold", "updated_at"])
-
-    # Claiming a premium reward starts the per-campaign cooldown.
-    if offer_type == Reservation.OfferType.PREMIUM:
-        enter_cooldown(user, campaign)
-
+    # Cooldown now starts at the approved redemption (Apps.rebates.services).
     return reservation
 
 

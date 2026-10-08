@@ -58,7 +58,7 @@ def _full_flow(brand, *, email="c@example.com"):
     reservation = reservation_services.create_reservation(user=user, campaign_id=rebate.id)
     receipt_services.upload_receipt(
         user=user, reservation_id=reservation.id, **RECEIPT_META,
-        items=[{"description": "Cola", "quantity": 1}],
+        items=[{"description": "Cola", "quantity": 1, "unit_price": "10.00"}],
     )  # auto-verifies -> redemption
 
     with patch("httpx.post", return_value=_generated_review_response()):

@@ -93,16 +93,16 @@ class CooldownResolutionTests(APITestCase):
             email="c@example.com", password="x", full_name="C"
         )
 
-    def test_cooldown_hides_premium_and_shows_fallback_when_enabled(self):
+    def test_cooldown_is_not_claimable_even_with_fallback_enabled(self):
+        # The deal model retires the fallback offer.
         _, _, campaign = _active_campaign(
             premium="5.00", fallback="1.00", fallback_enabled=True
         )
         offer_services.enter_cooldown(self.user, campaign)
         offer = offer_services.resolve_offer(campaign, self.user)
         self.assertTrue(offer["in_cooldown"])
-        self.assertEqual(offer["offer_type"], "fallback")
-        self.assertEqual(offer["reward_amount"], "1.00")
-        self.assertTrue(offer["claimable"])
+        self.assertIsNone(offer["offer_type"])
+        self.assertFalse(offer["claimable"])
 
     def test_cooldown_without_fallback_is_not_claimable(self):
         _, _, campaign = _active_campaign(premium="5.00")

@@ -33,6 +33,9 @@ class FallbackOfferSerializer(serializers.ModelSerializer):
 
 class CampaignSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField(read_only=True)
+    # 25-hour cycle state for the brand ("Current Cycle Claims: 12 of 34").
+    current_cycle_claims = serializers.SerializerMethodField(read_only=True)
+    current_cycle_started_at = serializers.SerializerMethodField(read_only=True)
     products = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     tiers = RewardTierSerializer(many=True, read_only=True)
     restriction = RestrictionSerializer(read_only=True)
@@ -58,6 +61,20 @@ class CampaignSerializer(serializers.ModelSerializer):
             "restriction",
             "fallback_offer",
             "created_at",
+            # Deal model (additive).
+            "deal_type",
+            "max_rebate",
+            "fixed_reward",
+            "required_quantity",
+            "offer_headline",
+            "offer_description",
+            "desired_redemptions",
+            "estimated_redemption_rate",
+            "claim_capacity",
+            "one_time_only",
+            "activated_at",
+            "current_cycle_claims",
+            "current_cycle_started_at",
         ]
         read_only_fields = fields
 
@@ -65,13 +82,46 @@ class CampaignSerializer(serializers.ModelSerializer):
         first_product = obj.products.first()
         return first_product.name if first_product else ""
 
+    def get_current_cycle_claims(self, obj) -> int:
+        from Apps.campaigns import deals
 
-class CampaignCreateSerializer(serializers.Serializer):
+        return deals.claims_this_cycle(obj)
+
+    def get_current_cycle_started_at(self, obj):
+        from Apps.campaigns import deals
+
+        return deals.cycle_start(obj)
+
+
+class _DealInputMixin(serializers.Serializer):
+    """Deal-model inputs (Master builder ③④⑦⑧). All optional so the old
+    builder keeps working; sending deal_type switches to the deal model."""
+
+    deal_type = serializers.ChoiceField(choices=Campaign.DealType.choices, required=False)
+    max_rebate = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01"), required=False, allow_null=True
+    )
+    fixed_reward = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01"), required=False, allow_null=True
+    )
+    required_quantity = serializers.IntegerField(min_value=1, max_value=3, required=False)
+    offer_headline = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    offer_description = serializers.CharField(required=False, allow_blank=True)
+    desired_redemptions = serializers.IntegerField(min_value=1, required=False)
+    estimated_redemption_rate = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=Decimal("0.01"),
+        max_value=Decimal("100"), required=False,
+    )
+    one_time_only = serializers.BooleanField(required=False)
+
+
+class CampaignCreateSerializer(_DealInputMixin):
     product = serializers.ListField(child=serializers.UUIDField())
     name = serializers.CharField(max_length=255)
     description = serializers.CharField(required=False, allow_blank=True, default="")
+    # Old builder only; the deal model uses the 25-hour claim capacity.
     daily_budget = serializers.DecimalField(
-        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01"), required=False
     )
     min_purchase_units = serializers.IntegerField(min_value=1, default=1)
     is_bogo = serializers.BooleanField(default=False)
@@ -80,7 +130,7 @@ class CampaignCreateSerializer(serializers.Serializer):
     end_at = serializers.DateTimeField(required=False, allow_null=True)
 
 
-class CampaignUpdateSerializer(serializers.Serializer):
+class CampaignUpdateSerializer(_DealInputMixin):
     product = serializers.ListField(
         child=serializers.UUIDField(),
         required=False,

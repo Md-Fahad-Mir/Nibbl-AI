@@ -8,6 +8,7 @@ from django.utils import timezone
 from Apps.billing import services as billing_services
 from Apps.common.exceptions import DomainError
 from Apps.common.money import ZERO
+from Apps.rebates import reward_math
 from Apps.rebates.models import Redemption, RewardIssuance
 from Apps.reservations import services as reservation_services
 from Apps.reservations.models import Reservation
@@ -17,6 +18,45 @@ from Apps.wallets.models import Hold, LedgerEntry
 
 class RedemptionError(DomainError):
     """Expected, user-facing redemption errors (mapped to HTTP 400)."""
+
+
+# ---------------------------------------------------------------------------
+# Locked reward math applied to a receipt (deal-model claims)
+# ---------------------------------------------------------------------------
+def eligible_unit_prices(receipt, reservation) -> list:
+    """Unit prices of the claim's eligible products on the receipt — a line
+    with quantity 2 contributes two units; None = price not confirmed."""
+    eligible = {str(pid) for pid in reservation.eligible_product_ids}
+    prices = []
+    for item in receipt.line_items.all():
+        if item.matched_product_id and str(item.matched_product_id) in eligible:
+            prices.extend([item.unit_price] * max(item.quantity, 1))
+    return prices
+
+
+def decide_reward(receipt, reservation) -> reward_math.RewardDecision | None:
+    """Decision under the terms snapshotted on the claim; None for claims made
+    before the deal model (they keep their fixed reward)."""
+    if not reservation.deal_type:
+        return None
+    return reward_math.decide(
+        deal_type=reservation.deal_type,
+        unit_prices=eligible_unit_prices(receipt, reservation),
+        max_rebate=reservation.max_rebate,
+        fixed_reward=reservation.fixed_reward,
+        required_quantity=reservation.required_quantity or 1,
+    )
+
+
+def payout_amount(receipt, reservation):
+    """What to pay for an approved receipt: the calculated reward (never more
+    than was reserved). A legacy claim, or one a reviewer approved although
+    the price/quantity couldn't be read, pays the reserved amount — until
+    reviewers can pick the qualifying lines themselves (Master #21)."""
+    decision = decide_reward(receipt, reservation)
+    if decision is not None and decision.qualifies:
+        return min(decision.amount, reservation.reward_amount)
+    return reservation.reward_amount
 
 
 @transaction.atomic
@@ -42,7 +82,9 @@ def issue_reward(receipt) -> Redemption | None:
 
     campaign = reservation.campaign
     brand = campaign.brand
-    reward = reservation.reward_amount
+    # Pay the actual reward; capturing less than the hold returns the unused
+    # difference to the brand's available funds.
+    reward = payout_amount(receipt, reservation)
 
     plan = brand.plan
     fee = billing_services.rebate_processing_fee(plan, reward) if plan else ZERO
@@ -53,6 +95,7 @@ def issue_reward(receipt) -> Redemption | None:
     # 1) Capture the hold → brand pays the reward.
     brand_reward_entry = wallet_services.capture_hold(
         hold=reservation.hold,
+        amount=reward,
         category=LedgerEntry.Category.REBATE_REWARD,
         description=f"Rebate reward — {campaign.name}",
         idempotency_key=f"redeem-reward:{reservation.id}",
@@ -107,6 +150,14 @@ def issue_reward(receipt) -> Redemption | None:
         reward_amount=reward,
         fee_amount=fee,
     )
+    if reservation.deal_type:
+        # Cooldown begins at the approved redemption, under the claim's terms.
+        from Apps.offers.services import enter_cooldown
+
+        enter_cooldown(
+            receipt.user, campaign,
+            days=reservation.cooldown_days, one_time=reservation.one_time_only,
+        )
     return redemption
 
 

@@ -89,10 +89,10 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
     # Hard rejections (unaccepted merchant / wrong product / outside the
     # campaign window) raise. Soft problems return a note that blocks
     # auto-reward and sends the receipt to the brand's manual review queue.
-    merchant_note = _check_merchant(extracted, campaign=campaign)
+    merchant_note = _check_merchant(extracted, campaign=campaign, reservation=reservation)
     date_note = _check_purchase_window(extracted, campaign=campaign)
     eligible_product, matched_units, eligible_description = _match_eligible_product(
-        extracted, campaign=campaign
+        extracted, campaign=campaign, reservation=reservation
     )
     # The specific line's description that satisfied the claim — this, not
     # the whole receipt, is what "claimed product" identifies for duplicate
@@ -274,12 +274,19 @@ def _aware(value: dt.datetime | None):
 # ---------------------------------------------------------------------------
 # Validation steps
 # ---------------------------------------------------------------------------
-def _allowed_merchants(campaign) -> list[str]:
-    raw = campaign.allowed_merchants or ""
+def _uses_snapshot(reservation) -> bool:
+    """Deal-model claims carry their own rule snapshot (Master: later campaign
+    edits apply only to new claims); older claims read the campaign."""
+    return bool(reservation is not None and reservation.deal_type)
+
+
+def _allowed_merchants(campaign, reservation=None) -> list[str]:
+    source = reservation if _uses_snapshot(reservation) else campaign
+    raw = source.allowed_merchants or ""
     return [normalize_text(m) for m in raw.split(",") if m.strip()]
 
 
-def _check_merchant(extracted, *, campaign) -> str:
+def _check_merchant(extracted, *, campaign, reservation=None) -> str:
     """Check the OCR-extracted merchant against the campaign's restriction,
     when one is configured.
 
@@ -292,7 +299,7 @@ def _check_merchant(extracted, *, campaign) -> str:
     manual review instead of raising — the same posture as an unreadable
     purchase date.
     """
-    allowed = _allowed_merchants(campaign)
+    allowed = _allowed_merchants(campaign, reservation)
     if not allowed:
         return ""
 
@@ -325,7 +332,7 @@ def _check_purchase_window(extracted, *, campaign) -> str:
     return ""
 
 
-def _match_eligible_product(extracted, *, campaign):
+def _match_eligible_product(extracted, *, campaign, reservation=None):
     """Find the campaign's eligible product on the receipt.
 
     Only the claimed campaign's product needs to appear — every other line on
@@ -349,7 +356,11 @@ def _match_eligible_product(extracted, *, campaign):
       existing add-alias-from-review flow is built on. No reward is issued
       either way; a human decides.
     """
-    targets = {p.id: p for p in campaign.products.all()}
+    if _uses_snapshot(reservation):
+        eligible_products = Product.objects.filter(id__in=reservation.eligible_product_ids)
+    else:
+        eligible_products = campaign.products.all()
+    targets = {p.id: p for p in eligible_products}
     matched_units = 0
     eligible = None
     eligible_description = ""
@@ -409,9 +420,21 @@ def _create_line_items(receipt: Receipt, extracted) -> None:
 
 def _decide(receipt: Receipt, *, matched_units: int, review_note: str) -> None:
     """Auto-verify, or route to the brand's manual review queue."""
-    required = getattr(
-        receipt.campaign.restriction, "min_units", receipt.campaign.min_purchase_units
-    )
+    reservation = receipt.reservation
+    if _uses_snapshot(reservation):
+        from Apps.rebates.reward_math import NEEDS_REVIEW
+        from Apps.rebates.services import decide_reward
+
+        # The claim's locked rules: quantity from its snapshot, and an
+        # unclear price/quantity goes to manual review — never auto-rejected.
+        required = reservation.required_quantity or 1
+        decision = decide_reward(receipt, reservation)
+        if decision.status == NEEDS_REVIEW and not review_note:
+            review_note = decision.reason
+    else:
+        required = getattr(
+            receipt.campaign.restriction, "min_units", receipt.campaign.min_purchase_units
+        )
 
     active_claims = Reservation.objects.filter(
         user=receipt.user, status=Reservation.Status.ACTIVE

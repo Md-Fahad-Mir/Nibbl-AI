@@ -40,6 +40,8 @@ class ReservationListCreateView(APIView):
             reservation = services.create_reservation(
                 user=request.user,
                 campaign_id=serializer.validated_data["campaign"],
+                consent_nibbl=serializer.validated_data["consent_nibbl"],
+                consent_brand=serializer.validated_data["consent_brand"],
             )
         except ReservationError as exc:
             raise ValidationError({"detail": str(exc)})

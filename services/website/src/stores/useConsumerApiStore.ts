@@ -64,7 +64,10 @@ export interface ConsumerApiState {
   updateProfile: (body: ApiRecord | FormData) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   saveOffer: (campaignId: string) => Promise<ApiRecord>;
-  claimOffer: (campaignId: string) => Promise<ApiRecord>;
+  claimOffer: (
+    campaignId: string,
+    consents?: { consent_nibbl?: boolean; consent_brand?: boolean }
+  ) => Promise<ApiRecord>;
   uploadReceipt: (reservationId: string, file: File) => Promise<ApiRecord>;
   submitReview: (
     opportunity: ApiRecord,
@@ -572,10 +575,10 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
           set({ status: "error", error: readError(error) });
         }
       },
-      claimOffer: async (campaignId) => {
+      claimOffer: async (campaignId, consents = {}) => {
         set({ status: "loading", error: null });
         try {
-          const reservation = await nibblApi.createReservation(campaignId);
+          const reservation = await nibblApi.createReservation(campaignId, consents);
           await get().loadRewardsHub();
           set({ status: "success", error: null });
           return reservation;

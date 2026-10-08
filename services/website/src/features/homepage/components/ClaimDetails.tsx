@@ -17,6 +17,9 @@ interface ClaimDetailsProps {
 export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChange }: ClaimDetailsProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // Two separate, optional marketing consents (email + SMS each).
+  const [consentNibbl, setConsentNibbl] = useState(false);
+  const [consentBrand, setConsentBrand] = useState(false);
   const {
     accessToken,
     selectedOffer,
@@ -51,7 +54,10 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
     }
 
     try {
-      const reservation = await claimOffer(id);
+      const reservation = await claimOffer(id, {
+        consent_nibbl: consentNibbl,
+        consent_brand: consentBrand,
+      });
       const reservationId = String(reservation.id || reservation.reservation || "");
       setMessage("Offer claimed. Upload your receipt to complete the reward.");
       onTabChange("scan", reservationId ? `claim:${reservationId}` : undefined);
@@ -138,6 +144,30 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
               <p className="text-[#4D4D4D] text-[14px] font-normal leading-[17px] text-center w-full max-w-[335px]">
                 {details?.description || "Claim this backend offer and upload your receipt to receive the reward."}
               </p>
+
+              {/* Marketing consents — two separate, optional checkboxes */}
+              <div className="w-full max-w-[335px] flex flex-col gap-2 text-left">
+                <label className="flex items-start gap-2 text-[12px] leading-[16px] text-[#4D4D4D] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={consentNibbl}
+                    onChange={(e) => setConsentNibbl(e.target.checked)}
+                    className="mt-[2px] accent-[#3E3EDF]"
+                  />
+                  <span>Send me NibblAI offers and updates by email and SMS.</span>
+                </label>
+                <label className="flex items-start gap-2 text-[12px] leading-[16px] text-[#4D4D4D] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={consentBrand}
+                    onChange={(e) => setConsentBrand(e.target.checked)}
+                    className="mt-[2px] accent-[#3E3EDF]"
+                  />
+                  <span>
+                    Send me offers and updates from {details?.brand || "this brand"} by email and SMS.
+                  </span>
+                </label>
+              </div>
 
               {/* CTA Large Claim button (Frame 2147229219) */}
               <button

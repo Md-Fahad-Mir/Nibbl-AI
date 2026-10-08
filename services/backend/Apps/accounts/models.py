@@ -209,3 +209,44 @@ class SocialAccount(BaseModel):
 
     def __str__(self):
         return f"{self.provider}:{self.provider_user_id}"
+
+
+class MarketingConsent(BaseModel):
+    """A shopper's current email+SMS marketing consent, kept separately for
+    Nibbl (``brand`` is null) and for each brand (spec 1.9 / 1.13).
+
+    Granted from the consent checkboxes at reservation; ``revoked_at`` is set
+    on opt-out so the record (and its history) is kept.
+    """
+
+    user = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="marketing_consents"
+    )
+    brand = models.ForeignKey(
+        "brands.Brand",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="marketing_consents",
+    )
+    opted_in = models.BooleanField(default=True)
+    consented_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(brand__isnull=True),
+                name="uniq_nibbl_marketing_consent",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "brand"],
+                condition=models.Q(brand__isnull=False),
+                name="uniq_brand_marketing_consent",
+            ),
+        ]
+
+    def __str__(self):
+        scope = f"brand {self.brand_id}" if self.brand_id else "Nibbl"
+        return f"{self.user_id} → {scope}: {'in' if self.opted_in else 'out'}"

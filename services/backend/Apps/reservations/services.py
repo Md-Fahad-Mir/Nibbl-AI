@@ -90,10 +90,33 @@ def _select_claimable_offer(campaign, user):
 # ---------------------------------------------------------------------------
 # Claim (create reservation)
 # ---------------------------------------------------------------------------
+def _record_marketing_consent(*, user, brand, now) -> None:
+    """Grant (or re-grant) email+SMS marketing consent for one scope. A box
+    left unticked on a later claim never revokes an earlier consent — opting
+    out is a separate, explicit action."""
+    from Apps.accounts.models import MarketingConsent
+
+    consent, created = MarketingConsent.objects.get_or_create(
+        user=user, brand=brand, defaults={"opted_in": True, "consented_at": now}
+    )
+    if not created and not consent.opted_in:
+        consent.opted_in = True
+        consent.consented_at = now
+        consent.revoked_at = None
+        consent.save(update_fields=["opted_in", "consented_at", "revoked_at", "updated_at"])
+
+
 @transaction.atomic
-def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE) -> Reservation:
+def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE,
+                       consent_nibbl=False, consent_brand=False) -> Reservation:
     campaign = _lock_campaign(campaign_id)
     if campaign is None or not campaign.is_live or not campaign.brand.is_operational:
+        raise ReservationError("This offer is not available.")
+
+    # A shopper suspended by this brand can't claim its offers.
+    from Apps.brands.customers import is_suspended_from_brand
+
+    if is_suspended_from_brand(user, campaign.brand):
         raise ReservationError("This offer is not available.")
 
     # One active reservation per user per campaign.
@@ -133,7 +156,13 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE) -> Re
         reward_amount=reward,
         status=Reservation.Status.ACTIVE,
         expires_at=expires_at,
+        consent_nibbl_marketing=bool(consent_nibbl),
+        consent_brand_marketing=bool(consent_brand),
     )
+    if consent_nibbl:
+        _record_marketing_consent(user=user, brand=None, now=now)
+    if consent_brand:
+        _record_marketing_consent(user=user, brand=campaign.brand, now=now)
 
     # Escrow the reward on the brand wallet.
     wallet = wallet_services.get_or_create_brand_wallet(campaign.brand)

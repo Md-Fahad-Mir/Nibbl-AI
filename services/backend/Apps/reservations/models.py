@@ -70,6 +70,11 @@ class Reservation(BaseModel):
         max_length=10, choices=Status.choices, default=Status.ACTIVE
     )
     expires_at = models.DateTimeField()
+    # Marketing consents ticked on THIS claim (spec 1.9) — two separate boxes:
+    # Nibbl email+SMS and the brand's email+SMS. Snapshot for the audit trail;
+    # the shopper's current consent lives in accounts.MarketingConsent.
+    consent_nibbl_marketing = models.BooleanField(default=False)
+    consent_brand_marketing = models.BooleanField(default=False)
     redeemed_at = models.DateTimeField(null=True, blank=True)
     expired_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)

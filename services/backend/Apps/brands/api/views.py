@@ -261,6 +261,42 @@ class BrandCustomerListView(APIView):
         return Response(brand_customers(brand))
 
 
+class BrandCustomerSuspendView(APIView):
+    """Suspend or reactivate a shopper for THIS brand only (not globally).
+
+    ``customer_id`` is the ``user_id`` from the customer directory: the real
+    user id on full-access plans, the opaque ``cust_`` ref on anonymized ones.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request, brand_id, customer_id, action):
+        from Apps.brands import customers
+
+        if action not in ("suspend", "reactivate"):
+            raise NotFound("Unknown action.")
+        brand = _get_brand_or_404(brand_id)
+        _require_membership(request.user, brand, manager=True, active=True)
+        user = customers.resolve_customer(brand, customer_id)
+        if user is None:
+            raise NotFound("Customer not found.")
+        try:
+            if action == "suspend":
+                customers.suspend_customer(
+                    brand=brand, user=user,
+                    reason=str(request.data.get("reason", ""))[:255],
+                    actor=request.user,
+                )
+            else:
+                customers.reactivate_customer(brand=brand, user=user)
+        except customers.CustomerError as exc:
+            raise ValidationError({"detail": str(exc)})
+        return Response(
+            {"user_id": str(customer_id), "is_suspended": action == "suspend"}
+        )
+
+
 class BrandCustomerExportView(APIView):
     """CSV export of the brand's customer directory. PII columns are included
     only for full-access plans (Pro/Scale); anonymized plans export the opaque

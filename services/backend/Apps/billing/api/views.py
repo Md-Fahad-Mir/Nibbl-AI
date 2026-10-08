@@ -15,6 +15,7 @@ from Apps.billing.models import Plan
 from Apps.billing.serializers import PlanSerializer
 from Apps.billing.stripe_gateway import StripeNotConfigured
 from Apps.brands.access import get_brand_or_404, require_membership
+from Apps.wallets import services as wallet_services
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,39 @@ class AutoRefillView(APIView):
         except services.BillingError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(s.AutoRefillStatusSerializer(services.auto_refill_status(brand)).data)
+
+
+@extend_schema(
+    tags=["billing"],
+    request=s.RedeemPromoCodeSerializer,
+    responses=s.PromoRedemptionResultSerializer,
+)
+class RedeemPromoCodeView(APIView):
+    """Redeem a promo code for promotional wallet credit (brand side)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, brand_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True, active=True)
+        payload = s.RedeemPromoCodeSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        try:
+            redemption = services.redeem_promo_code(
+                brand=brand, code=payload.validated_data["code"]
+            )
+        except services.BillingError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        wallet = wallet_services.get_or_create_brand_wallet(brand)
+        return Response(
+            s.PromoRedemptionResultSerializer(
+                {
+                    "code": redemption.promo_code.code,
+                    "amount": redemption.amount,
+                    "promotional_balance": wallet.promo_balance(),
+                }
+            ).data
+        )
 
 
 @extend_schema(tags=["billing"], request=None, responses={200: None})

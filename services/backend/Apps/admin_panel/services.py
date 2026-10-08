@@ -45,6 +45,7 @@ def promo_credit(*, brand, amount, note, admin) -> LedgerEntry:
         category=LedgerEntry.Category.ADJUSTMENT,
         reference_type="promo_credit", reference_id=brand.id,
         description=note or "Promotional credit",
+        is_promotional=True,  # promo credit covers fees only, never rewards
     )
     _audit(
         admin=admin, action=AuditLog.Action.UPDATE,

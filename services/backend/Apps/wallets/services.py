@@ -65,7 +65,7 @@ def _existing_hold(idempotency_key):
 
 
 def _post_entry(wallet, *, entry_type, amount, category, reference_type,
-                reference_id, description, idempotency_key):
+                reference_id, description, idempotency_key, is_promotional=False):
     return LedgerEntry.objects.create(
         wallet=wallet,
         entry_type=entry_type,
@@ -76,6 +76,7 @@ def _post_entry(wallet, *, entry_type, amount, category, reference_type,
         reference_id=str(reference_id) if reference_id else "",
         description=description,
         idempotency_key=idempotency_key,
+        is_promotional=is_promotional,
     )
 
 
@@ -84,7 +85,7 @@ def _post_entry(wallet, *, entry_type, amount, category, reference_type,
 # ---------------------------------------------------------------------------
 @transaction.atomic
 def credit(*, wallet, amount, category, reference_type="", reference_id="",
-           description="", idempotency_key=None) -> LedgerEntry:
+           description="", idempotency_key=None, is_promotional=False) -> LedgerEntry:
     amount = to_money(amount)
     if amount <= ZERO:
         raise WalletError("Amount must be positive.")
@@ -105,12 +106,18 @@ def credit(*, wallet, amount, category, reference_type="", reference_id="",
         reference_id=reference_id,
         description=description,
         idempotency_key=idempotency_key,
+        is_promotional=is_promotional,
     )
 
 
 @transaction.atomic
 def debit(*, wallet, amount, category, reference_type="", reference_id="",
-          description="", idempotency_key=None, allow_negative=False) -> LedgerEntry:
+          description="", idempotency_key=None, allow_negative=False,
+          real_only=False) -> LedgerEntry:
+    """Debit the wallet. ``real_only`` restricts the charge to real
+    (non-promotional) funds — used for shopper rewards, which promo credit may
+    never back. Eligible platform charges should use ``charge_eligible`` so
+    they spend promo first."""
     amount = to_money(amount)
     if amount <= ZERO:
         raise WalletError("Amount must be positive.")
@@ -120,7 +127,8 @@ def debit(*, wallet, amount, category, reference_type="", reference_id="",
         return existing
 
     wallet = _lock_wallet(wallet.pk)
-    if not allow_negative and amount > wallet.available():
+    spendable = wallet.reward_available() if real_only else wallet.available()
+    if not allow_negative and amount > spendable:
         raise InsufficientFunds("Insufficient available balance.")
 
     wallet.balance = to_money(wallet.balance - amount)
@@ -138,6 +146,67 @@ def debit(*, wallet, amount, category, reference_type="", reference_id="",
 
 
 @transaction.atomic
+def charge_eligible(*, wallet, amount, category, reference_type="", reference_id="",
+                    description="", idempotency_key=None) -> list[LedgerEntry]:
+    """Charge an eligible platform cost (processing fee, subscription), spending
+    promotional credit first and real funds for the remainder. Posts up to two
+    ledger entries (a promotional debit and/or a real debit) and returns them.
+    Raises InsufficientFunds only if real funds can't cover the non-promo part.
+    """
+    amount = to_money(amount)
+    if amount <= ZERO:
+        raise WalletError("Amount must be positive.")
+
+    if idempotency_key:
+        existing = list(
+            LedgerEntry.objects.filter(
+                idempotency_key__in=[f"{idempotency_key}:promo", f"{idempotency_key}:real"]
+            )
+        )
+        if existing:
+            return existing
+
+    wallet = _lock_wallet(wallet.pk)
+    promo = wallet.promo_balance()
+    promo_part = min(amount, promo) if promo > ZERO else ZERO
+    real_part = to_money(amount - promo_part)
+
+    if real_part > wallet.reward_available():
+        raise InsufficientFunds("Insufficient available balance.")
+
+    entries = []
+    if promo_part > ZERO:
+        wallet.balance = to_money(wallet.balance - promo_part)
+        wallet.save(update_fields=["balance", "updated_at"])
+        entries.append(_post_entry(
+            wallet,
+            entry_type=LedgerEntry.EntryType.DEBIT,
+            amount=promo_part,
+            category=category,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            description=description,
+            idempotency_key=f"{idempotency_key}:promo" if idempotency_key else None,
+            is_promotional=True,
+        ))
+    if real_part > ZERO:
+        wallet.balance = to_money(wallet.balance - real_part)
+        wallet.save(update_fields=["balance", "updated_at"])
+        entries.append(_post_entry(
+            wallet,
+            entry_type=LedgerEntry.EntryType.DEBIT,
+            amount=real_part,
+            category=category,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            description=description,
+            idempotency_key=f"{idempotency_key}:real" if idempotency_key else None,
+            is_promotional=False,
+        ))
+    return entries
+
+
+@transaction.atomic
 def place_hold(*, wallet, amount, reference_type="", reference_id="",
                expires_at=None, idempotency_key=None) -> Hold:
     amount = to_money(amount)
@@ -149,7 +218,9 @@ def place_hold(*, wallet, amount, reference_type="", reference_id="",
         return existing
 
     wallet = _lock_wallet(wallet.pk)
-    if amount > wallet.available():
+    # Holds escrow shopper rewards, so they draw on real funds only — promo
+    # credit can never be reserved for a reward.
+    if amount > wallet.reward_available():
         raise InsufficientFunds("Insufficient available balance to reserve.")
 
     return Hold.objects.create(
@@ -186,6 +257,7 @@ def capture_hold(*, hold, category, amount=None, description="",
 
     wallet.balance = to_money(wallet.balance - capture_amount)
     wallet.save(update_fields=["balance", "updated_at"])
+    # A hold is only ever placed against real funds, so its capture is real.
     return _post_entry(
         wallet,
         entry_type=LedgerEntry.EntryType.DEBIT,
@@ -195,6 +267,7 @@ def capture_hold(*, hold, category, amount=None, description="",
         reference_id=hold.reference_id,
         description=description,
         idempotency_key=idempotency_key,
+        is_promotional=False,
     )
 
 

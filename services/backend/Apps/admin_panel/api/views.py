@@ -10,6 +10,9 @@ from Apps.admin_panel import selectors
 from Apps.admin_panel import serializers as s
 from Apps.admin_panel import services
 from Apps.admin_panel.services import AdminError
+from Apps.billing import serializers as billing_serializers
+from Apps.billing import services as billing_services
+from Apps.billing.models import PromoCode
 from Apps.brands.access import get_brand_or_404
 from Apps.common.permissions import IsPlatformAdmin
 
@@ -24,6 +27,36 @@ def _run(func, *args, **kwargs):
 # ---------------------------------------------------------------------------
 # Brand operations
 # ---------------------------------------------------------------------------
+@extend_schema(tags=["admin"])
+class AdminPromoCodeListCreateView(APIView):
+    """Create and list reusable promo codes (platform admin)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(responses={200: billing_serializers.PromoCodeSerializer(many=True)})
+    def get(self, request):
+        codes = PromoCode.objects.all()
+        return Response(billing_serializers.PromoCodeSerializer(codes, many=True).data)
+
+    @extend_schema(
+        request=billing_serializers.CreatePromoCodeSerializer,
+        responses={201: billing_serializers.PromoCodeSerializer},
+    )
+    def post(self, request):
+        payload = billing_serializers.CreatePromoCodeSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        try:
+            promo = billing_services.create_promo_code(
+                created_by=request.user, **payload.validated_data
+            )
+        except billing_services.BillingError as exc:
+            raise ValidationError({"detail": str(exc)})
+        return Response(
+            billing_serializers.PromoCodeSerializer(promo).data,
+            status=201,
+        )
+
+
 @extend_schema(tags=["admin"])
 class PromoCreditView(APIView):
     permission_classes = [IsPlatformAdmin]

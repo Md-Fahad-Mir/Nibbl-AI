@@ -5,6 +5,7 @@ from Apps.admin_panel.api import views
 app_name = "admin_panel"
 
 urlpatterns = [
+    path("admin/promo-codes/", views.AdminPromoCodeListCreateView.as_view(), name="promo-codes"),
     path("admin/brands/<uuid:brand_id>/wallet/credit/", views.PromoCreditView.as_view(), name="promo-credit"),
     path("admin/brands/<uuid:brand_id>/plan/", views.ChangePlanView.as_view(), name="change-plan"),
     path("admin/users/", views.AdminUserListView.as_view(), name="user-list"),

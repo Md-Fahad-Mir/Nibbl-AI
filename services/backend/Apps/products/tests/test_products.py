@@ -37,6 +37,31 @@ class ProductCrudTests(APITestCase):
         )
         self.assertEqual(len(listing.data), 1)
 
+    def test_product_exposes_avg_rating_and_review_count(self):
+        from Apps.reviews.models import Review
+
+        product = create_product(brand=self.brand, name="Cola")
+        # No reviews yet: avg is null, count is 0.
+        detail = self.client.get(
+            reverse("v1:products:product-detail", args=[self.brand.id, product.id])
+        )
+        self.assertIsNone(detail.data["avg_rating"])
+        self.assertEqual(detail.data["review_count"], 0)
+
+        for stars in (5, 4, 3):
+            reviewer = User.objects.create_user(
+                email=f"r{stars}@example.com", password="x", full_name=f"R{stars}"
+            )
+            Review.objects.create(
+                product=product, brand=self.brand, user=reviewer, rating=stars
+            )
+
+        detail = self.client.get(
+            reverse("v1:products:product-detail", args=[self.brand.id, product.id])
+        )
+        self.assertEqual(detail.data["review_count"], 3)
+        self.assertEqual(detail.data["avg_rating"], 4.0)
+
     def test_duplicate_name_rejected(self):
         create_product(brand=self.brand, name="Cola")
         resp = self.client.post(

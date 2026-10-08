@@ -94,36 +94,51 @@ def _recently_notified(user, notification_type, *, reference_id="", hours=None) 
 # Reminder / re-engagement generators
 # ---------------------------------------------------------------------------
 def generate_receipt_reminders() -> int:
+    """Remind shoppers to upload a receipt at 48h and 12h before the exact
+    reservation deadline (Master spec). Each stage fires once, in its own
+    window, using the reservation's original deadline (never extended).
+    """
     from Apps.receipts.models import Receipt
     from Apps.reservations.models import Reservation
 
-    cutoff = timezone.now() - dt.timedelta(
-        hours=settings.NOTIFY_RECEIPT_REMINDER_AFTER_HOURS
-    )
-    stale = (
-        Reservation.objects.filter(
-            status=Reservation.Status.ACTIVE,
-            kind=Reservation.Kind.REBATE,
-            created_at__lte=cutoff,
-        )
-        .select_related("user", "campaign", "campaign__brand")
-    )
+    now = timezone.now()
+    # (stage marker, window OPENS this far before expiry, CLOSES this far before)
+    stages = [
+        ("48h", dt.timedelta(hours=48), dt.timedelta(hours=12)),  # first reminder
+        ("12h", dt.timedelta(hours=12), dt.timedelta(0)),          # final reminder
+    ]
+    active = Reservation.objects.filter(
+        status=Reservation.Status.ACTIVE,
+        kind=Reservation.Kind.REBATE,
+        expires_at__gt=now,
+    ).select_related("user", "campaign", "campaign__brand")
+
     sent = 0
-    for reservation in stale:
+    for reservation in active:
         if reservation.receipts.exclude(status=Receipt.Status.REJECTED).exists():
             continue
-        if _recently_notified(
-            reservation.user, NotificationType.RECEIPT_REMINDER, reference_id=reservation.id
-        ):
-            continue
-        notify(
-            user=reservation.user,
-            notification_type=NotificationType.RECEIPT_REMINDER,
-            context={"brand": reservation.campaign.brand.name},
-            reference_type="reservation",
-            reference_id=reservation.id,
-        )
-        sent += 1
+        for stage, opens_lead, closes_lead in stages:
+            window_open = reservation.expires_at - opens_lead
+            window_close = reservation.expires_at - closes_lead
+            if not (window_open <= now < window_close):
+                continue
+            # Each stage fires at most once per reservation.
+            already = Notification.objects.filter(
+                user=reservation.user,
+                type=NotificationType.RECEIPT_REMINDER,
+                reference_id=str(reservation.id),
+                data__stage=stage,
+            ).exists()
+            if already:
+                continue
+            notify(
+                user=reservation.user,
+                notification_type=NotificationType.RECEIPT_REMINDER,
+                context={"brand": reservation.campaign.brand.name, "stage": stage},
+                reference_type="reservation",
+                reference_id=reservation.id,
+            )
+            sent += 1
     return sent
 
 

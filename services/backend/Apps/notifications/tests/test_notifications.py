@@ -73,7 +73,9 @@ class NotifyTests(APITestCase):
 
 
 class ReceiptReminderTests(APITestCase):
-    def _stale_reservation(self):
+    def _reservation(self, *, hours_to_expiry):
+        """Create an active rebate reservation whose deadline is
+        `hours_to_expiry` from now (reminders fire at 48h and 12h before)."""
         owner = _user("owner@example.com")
         brand = Brand.objects.create(name="Acme", slug="acme")
         BrandMembership.objects.create(brand=brand, user=owner, role=BrandMembership.Role.OWNER)
@@ -89,14 +91,14 @@ class ReceiptReminderTests(APITestCase):
         user = _user("buyer@example.com")
         from Apps.reservations import services as reservation_services
         reservation = reservation_services.create_reservation(user=user, campaign_id=campaign.id)
-        # Backdate so it counts as stale.
         Reservation.objects.filter(id=reservation.id).update(
-            created_at=timezone.now() - dt.timedelta(hours=48)
+            expires_at=timezone.now() + dt.timedelta(hours=hours_to_expiry)
         )
+        reservation.refresh_from_db()
         return user, reservation
 
-    def test_stale_reservation_without_receipt_triggers_reminder(self):
-        user, reservation = self._stale_reservation()
+    def test_reminder_fires_in_48h_window(self):
+        user, reservation = self._reservation(hours_to_expiry=40)
         sent = services.generate_receipt_reminders()
         self.assertEqual(sent, 1)
         self.assertTrue(
@@ -105,8 +107,8 @@ class ReceiptReminderTests(APITestCase):
             ).exists()
         )
 
-    def test_reminder_is_deduped(self):
-        user, reservation = self._stale_reservation()
+    def test_48h_reminder_is_deduped(self):
+        self._reservation(hours_to_expiry=40)
         services.generate_receipt_reminders()
         again = services.generate_receipt_reminders()
         self.assertEqual(again, 0)
@@ -114,22 +116,25 @@ class ReceiptReminderTests(APITestCase):
             Notification.objects.filter(type=NotificationType.RECEIPT_REMINDER).count(), 1
         )
 
-    def test_fresh_reservation_not_reminded(self):
-        # Create one but don't backdate.
-        owner = _user("owner@example.com")
-        brand = Brand.objects.create(name="Acme", slug="acme")
-        BrandMembership.objects.create(brand=brand, user=owner, role=BrandMembership.Role.OWNER)
-        product = create_product(brand=brand, name="Cola")
-        campaign = campaign_services.create_campaign(
-            brand=brand, product_ids=[product.id], name="Deal", daily_budget=Decimal("100.00")
+    def test_both_reminders_fire_across_windows(self):
+        user, reservation = self._reservation(hours_to_expiry=40)
+        # 48h window now.
+        self.assertEqual(services.generate_receipt_reminders(), 1)
+        # Advance into the final (12h) window; the 48h one stays deduped.
+        Reservation.objects.filter(id=reservation.id).update(
+            expires_at=timezone.now() + dt.timedelta(hours=8)
         )
-        campaign_services.set_tiers(campaign, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
-        wallet = wallet_services.get_or_create_brand_wallet(brand)
-        wallet_services.credit(wallet=wallet, amount=Decimal("100.00"), category=LedgerEntry.Category.FUNDING)
-        campaign_services.activate_campaign(campaign)
-        from Apps.reservations import services as reservation_services
-        reservation_services.create_reservation(user=_user("b@example.com"), campaign_id=campaign.id)
+        self.assertEqual(services.generate_receipt_reminders(), 1)
+        self.assertEqual(
+            Notification.objects.filter(
+                user=user, type=NotificationType.RECEIPT_REMINDER
+            ).count(),
+            2,
+        )
 
+    def test_reservation_outside_windows_not_reminded(self):
+        # Full 7-day lifetime: far from either reminder window.
+        self._reservation(hours_to_expiry=160)
         self.assertEqual(services.generate_receipt_reminders(), 0)
 
 

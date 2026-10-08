@@ -22,7 +22,7 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
   const [verify, setVerify] = useState<{ phone: string; methodId: string } | null>(null);
   const [verifySubmitting, setVerifySubmitting] = useState(false);
   const [verifyError, setVerifyError] = useState("");
-  const { wallet, redemptions, unreadCount, loadWallet, createPayoutMethod, sendWithdrawalCode, requestWithdrawal } =
+  const { wallet, redemptions, payoutMethods, unreadCount, loadWallet, createPayoutMethod, sendWithdrawalCode, requestWithdrawal } =
     useConsumerApiStore();
 
   useEffect(() => {
@@ -32,11 +32,36 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
   const available = Number(wallet?.available ?? wallet?.balance ?? 0);
   const canWithdraw = available >= 0.01;
 
+  // Only approved payout accounts can be withdrawn to (methods pending review
+  // are held until an admin approves them).
+  const approvedMethods = payoutMethods
+    .filter((method) => String(method.review_status ?? "approved") === "approved")
+    .map((method) => ({
+      id: String(method.id),
+      label: `${String(method.provider ?? "").toUpperCase()} · ${String(method.handle ?? "")}`,
+    }));
+
   const finalizeWithdrawal = (methodId: string, code?: string) =>
     requestWithdrawal(methodId, available.toFixed(2), code).then(() => {
       setVerify(null);
       setWalletMessage("Withdrawal request submitted.");
     });
+
+  // Start a withdrawal on an approved method: request an SMS code, or (when
+  // SMS verification isn't enabled) submit the withdrawal directly.
+  const startWithdrawal = async (methodId: string) => {
+    try {
+      const { phone } = await sendWithdrawalCode(methodId, available.toFixed(2));
+      setVerifyError("");
+      setVerify({ phone, methodId });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 503) {
+        await finalizeWithdrawal(methodId);
+      } else {
+        throw err;
+      }
+    }
+  };
 
   return (
     <div className="w-full bg-[#FEFEFE] min-h-screen flex flex-col font-sans select-none">
@@ -75,8 +100,16 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
       {isWithdrawModalOpen && (
         <WithdrawFundsModal
           amount={available}
+          methods={approvedMethods}
           onClose={() => setIsWithdrawModalOpen(false)}
-          onConfirm={() => {
+          onConfirm={(methodId) => {
+            setIsWithdrawModalOpen(false);
+            setWalletMessage(null);
+            void startWithdrawal(methodId).catch((error: unknown) => {
+              setWalletMessage(error instanceof Error ? error.message : "Withdrawal request failed.");
+            });
+          }}
+          onAddNew={() => {
             setIsWithdrawModalOpen(false);
             setIsBankModalOpen(true);
           }}
@@ -94,19 +127,15 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
             }
             void createPayoutMethod(details.provider, details.handle)
               .then(async (method) => {
-                const methodId = String(method.id);
-                try {
-                  const { phone } = await sendWithdrawalCode(methodId, available.toFixed(2));
-                  setVerifyError("");
-                  setVerify({ phone, methodId }); // open the SMS verify step
-                } catch (err) {
-                  // Twilio not enabled yet → skip verification and proceed.
-                  if (err instanceof ApiError && err.status === 503) {
-                    await finalizeWithdrawal(methodId);
-                  } else {
-                    throw err; // e.g. 400 "verify your mobile number first"
-                  }
+                // A newly added account beyond the first is held for review and
+                // can't be withdrawn to until an admin approves it.
+                if (String(method.review_status ?? "approved") !== "approved") {
+                  setWalletMessage(
+                    "Your payout account was added and is pending review. You can withdraw once it's approved."
+                  );
+                  return;
                 }
+                await startWithdrawal(String(method.id));
               })
               .catch((error: unknown) => {
                 setWalletMessage(error instanceof Error ? error.message : "Withdrawal request failed.");

@@ -62,7 +62,7 @@ class HappyPathTests(APITestCase):
 
         receipt = receipt_services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "Cola 12oz", "quantity": 1}],
+            items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],
         )
         self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
 
@@ -96,7 +96,7 @@ class HappyPathTests(APITestCase):
         user, reservation = _claim(campaign)
         receipt_services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "Cola 12oz", "quantity": 1}],
+            items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],
         )
         self.client.force_authenticate(user)
         listing = self.client.get(reverse("v1:rebates:redemption-list"))
@@ -120,7 +120,7 @@ class ManualApprovalTests(APITestCase):
         # Unmatched description -> manual review, no reward yet.
         receipt = receipt_services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "CLA 12 OZ", "quantity": 1}],
+            items=[{"description": "CLA 12 OZ", "quantity": 1, "unit_price": "10.00"}],
         )
         self.assertEqual(receipt.status, Receipt.Status.PENDING)
         self.assertFalse(Redemption.objects.exists())
@@ -140,7 +140,7 @@ class RejectionAndDuplicateTests(APITestCase):
         user, reservation = _claim(campaign)
         receipt = receipt_services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "Unknown Item", "quantity": 1}],
+            items=[{"description": "Unknown Item", "quantity": 1, "unit_price": "10.00"}],
         )
         item = ManualReviewItem.objects.get(receipt=receipt)
 
@@ -169,7 +169,7 @@ class RejectionAndDuplicateTests(APITestCase):
         u1, r1 = _claim(campaign, "a@example.com")
         u2, r2 = _claim(campaign, "b@example.com")
         meta = dict(merchant="Acme", total=Decimal("9.99"),
-                    items=[{"description": "Cola 12oz", "quantity": 1}])
+                    items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}])
 
         receipt_services.upload_receipt(user=u1, reservation_id=r1.id, **RECEIPT_META, **meta)
         with self.assertRaises(receipt_services.DuplicateReceipt):
@@ -194,7 +194,7 @@ class NoDoubleIssueTests(APITestCase):
         user, reservation = _claim(campaign)
         receipt = receipt_services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "Cola 12oz", "quantity": 1}],
+            items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],
         )
         # Already issued once via auto-verify. Calling again must not double-issue.
         from Apps.rebates.services import issue_reward
@@ -234,7 +234,7 @@ class NoFeePlanTests(APITestCase):
         user, reservation = _claim(campaign)
         receipt_services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "Cola 12oz", "quantity": 1}],
+            items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],
         )
         redemption = Redemption.objects.get()
         self.assertEqual(redemption.fee_amount, Decimal("0.00"))
@@ -249,7 +249,7 @@ class ReceiptImageUrlTests(APITestCase):
         user, reservation = _claim(campaign)
         receipt = receipt_services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "Cola 12oz", "quantity": 1}],
+            items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],
         )
         # Attach an image file so the derived URL is populated.
         receipt.image = SimpleUploadedFile(
@@ -275,7 +275,7 @@ class BrandRedemptionDetailTests(APITestCase):
         user, reservation = _claim(campaign)
         receipt = receipt_services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "Cola 12oz", "quantity": 1}],
+            items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],
         )
         receipt.image = SimpleUploadedFile(
             "r.jpg", b"fake-jpeg-bytes", content_type="image/jpeg"
@@ -315,7 +315,7 @@ class BrandRedemptionDetailTests(APITestCase):
         user, reservation = _claim(campaign)
         receipt_services.upload_receipt(
             user=user, reservation_id=reservation.id, **RECEIPT_META,
-            items=[{"description": "Cola 12oz", "quantity": 1}],
+            items=[{"description": "Cola 12oz", "quantity": 1, "unit_price": "10.00"}],
         )
         redemption = Redemption.objects.get()
 

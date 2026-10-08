@@ -58,7 +58,7 @@ def payload(
         # description + quantity=100 + unit=G — reproduced faithfully here.
         items = [
             {"description": "Dark Chocolate Bar", "quantity": "100", "unit": "G",
-             "unit_price": "1.00", "total_price": "10.00"},
+             "unit_price": "2.00", "total_price": "10.00"},
             {"description": "Coca Cola", "quantity": "500", "unit": "ML",
              "unit_price": "1.00", "total_price": "5.00"},
             {"description": "Biscuits", "quantity": None, "unit": None,
@@ -420,7 +420,7 @@ class SkuMatchingTests(APITestCase):
 
         body = payload(items=[
             {"description": "Dark Chocolate Bar", "sku": "NOT-A-REAL-SKU",
-             "quantity": "100", "unit": "G", "unit_price": "1.00", "total_price": "10.00"},
+             "quantity": "100", "unit": "G", "unit_price": "2.00", "total_price": "10.00"},
         ])
         with ocr_returning(body):
             receipt = services.upload_receipt(
@@ -800,7 +800,7 @@ class PayloadMappingTests(APITestCase):
     def test_sku_is_read_from_each_item(self):
         body = payload(items=[
             {"description": "Dark Chocolate Bar", "sku": "SKU-1", "quantity": "1",
-             "unit": None, "unit_price": "1.00", "total_price": "1.00"},
+             "unit": None, "unit_price": "2.00", "total_price": "1.00"},
             {"description": "Coca Cola", "sku": None, "quantity": "1",
              "unit": None, "unit_price": "1.00", "total_price": "1.00"},
         ])
@@ -937,7 +937,8 @@ class MultipleProductsOnOneReceiptTests(APITestCase):
         )
         self.assertEqual(Redemption.objects.count(), 2)
         self.assertEqual(balance(u1), Decimal("2.00"))
-        self.assertEqual(balance(u2), Decimal("1.50"))
+        # Free deal: the verified price ($1.00 cola), under the $1.50 cap.
+        self.assertEqual(balance(u2), Decimal("1.00"))
 
     def test_the_same_product_claimed_twice_off_the_same_receipt_is_blocked(self):
         brand, choc_campaign, _cola_campaign = self._two_campaigns()

@@ -174,6 +174,17 @@ def _rebate_window(brand: Brand, start, end) -> dict:
     }
 
 
+def _daily_allowance(campaign) -> "Decimal":  # noqa: F821
+    """Old builder: the $ daily budget. Deal model: desired redemptions per
+    cycle × the most one redemption can pay."""
+    if campaign.daily_budget is not None:
+        return campaign.daily_budget
+    from Apps.campaigns import deals
+
+    cap = deals.max_reward(campaign)
+    return cap * (campaign.desired_redemptions or 0) if cap else ZERO
+
+
 def _budget_savings(brand: Brand, start, end, spend) -> "Decimal":  # noqa: F821
     """Budgeted allowance for the window minus actual reward+fee spend.
 
@@ -190,7 +201,7 @@ def _budget_savings(brand: Brand, start, end, spend) -> "Decimal":  # noqa: F821
         overlap_start = max(c_start, start)
         overlap_end = min(c_end, end)
         active_days = max(0, min((overlap_end - overlap_start).days, period_days))
-        budgeted += campaign.daily_budget * active_days
+        budgeted += _daily_allowance(campaign) * active_days
     return budgeted - spend
 
 

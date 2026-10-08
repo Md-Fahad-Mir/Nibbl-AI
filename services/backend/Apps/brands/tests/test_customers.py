@@ -33,7 +33,7 @@ def _brand_with_customer(plan_slug):
     reservation = reservation_services.create_reservation(user=customer, campaign_id=campaign.id)
     receipt_services.upload_receipt(
         user=customer, reservation_id=reservation.id, **RECEIPT_META,
-        items=[{"description": "Cola", "quantity": 1}],
+        items=[{"description": "Cola", "quantity": 1, "unit_price": "10.00"}],
     )
     return owner, brand, customer
 

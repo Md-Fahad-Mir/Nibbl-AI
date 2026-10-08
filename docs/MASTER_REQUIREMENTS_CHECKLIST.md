@@ -16,12 +16,12 @@
 - [x] ✅ **3. Delete-product safeguard & ratings link** — "type DELETE" confirmation + history preserved (backend archive); clickable product rating (new `avg_rating`/`review_count` on product API) opens Review Management filtered to that product
 
 ## Rebate Campaigns
-- [ ] ⬜ **4. 25-Hour Claim Capacity** — currently $ daily_budget; needs redesign
-- [ ] ⬜ **5. Offer types w/ locked reward math** — Free / BOGO Free / B1G1-50% / Buy X Get $Y
-- [ ] 🟡 **6. Tier allocation must total 100%** — built in current model; changes with offer types
+- [ ] 🟡 **4. 25-Hour Claim Capacity** — backend done (desired ÷ rate, rounded up; cycles anchored at activation; expired claims don't refund a slot; "Going fast"); brand builder UI pending (Phase 3)
+- [ ] 🟡 **5. Offer types w/ locked reward math** — backend done (all 4 types, suggested wording, unclear price → review); brand builder UI pending (Phase 3)
+- [ ] 🟡 **6. Tier allocation must total 100%** — superseded by offer types; old tier builder still accepted and mapped (top tier → max rebate)
 - [ ] ⬜ **7. Nibbl campaign approval workflow** — Draft→Submit→Review→Approve/Changes
-- [ ] 🟡 **8. Reservation rule snapshot** — partial
-- [ ] 🟡 **9. Reserved reward funding** — Holds exist; reserve-max/return-difference partial
+- [x] ✅ **8. Reservation rule snapshot** — each claim stores its deal terms, products, merchants and cooldown; later edits apply to new claims only
+- [x] ✅ **9. Reserved reward funding** — claim reserves the max reward; approval pays the actual reward and returns the difference; cooldown starts at the approved redemption
 - [ ] ⬜ **10. Retailer availability, featured retailers, receipt eligibility**
 - [ ] ⬜ **11. Meta Pixel tracking per campaign**
 - [x] ✅ **12. Minimum purchase in units + BOGO flag**
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (15):** #2, #3, #12, #17, #18, #20, #31, #33, #34, #37, #39, #41, #43, #45, #46.
+**Done to spec (17):** #2, #3, #8, #9, #12, #17, #18, #20, #31, #33, #34, #37, #39, #41, #43, #45, #46.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

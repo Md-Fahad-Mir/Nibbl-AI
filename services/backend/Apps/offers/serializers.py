@@ -27,6 +27,13 @@ class OfferSerializer(serializers.Serializer):
     review_count = serializers.IntegerField()
     is_claimed = serializers.BooleanField()
     reservation_id = serializers.UUIDField(allow_null=True)
+    # Deal model: offer type + Nibbl-suggested/brand-edited wording.
+    deal_type = serializers.CharField()
+    offer_headline = serializers.CharField(allow_blank=True)
+    offer_description = serializers.CharField(allow_blank=True)
+    required_quantity = serializers.IntegerField()
+    going_fast = serializers.BooleanField()
+    temporarily_unavailable = serializers.BooleanField()
 
     def to_representation(self, campaign):
         from Apps.offers.services import resolve_offer

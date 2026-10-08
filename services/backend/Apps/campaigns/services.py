@@ -5,7 +5,9 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.db import transaction
+from django.utils import timezone
 
+from Apps.campaigns import deals
 from Apps.campaigns.models import (
     Campaign,
     CampaignURL,
@@ -74,16 +76,47 @@ def _resolve_products(brand, product_ids) -> list[Product]:
     return products
 
 
-@transaction.atomic
-def create_campaign(*, brand, product_ids, name, daily_budget, description="",
-                    min_purchase_units=1, is_bogo=False, cooldown_days=30,
-                    start_at=None, end_at=None) -> Campaign:
-    products = _resolve_products(brand, product_ids)
-    daily_budget = to_money(daily_budget)
-    if daily_budget <= ZERO:
-        raise CampaignError("Daily budget must be positive.")
+# Deal-model fields a brand may set (Master builder ③④⑦⑧).
+DEAL_FIELDS = (
+    "deal_type", "max_rebate", "fixed_reward", "required_quantity",
+    "offer_headline", "offer_description", "desired_redemptions",
+    "estimated_redemption_rate", "cooldown_days", "one_time_only",
+)
 
-    campaign = Campaign.objects.create(
+
+def _apply_deal(campaign: Campaign, *, regenerate_wording: bool) -> None:
+    """Validate the deal, derive capacity etc., and fill suggested wording
+    for anything the brand left blank (or when the offer type changed)."""
+    deals.normalize(campaign)
+    try:
+        deals.validate(campaign)
+        deals.validate_cooldown(campaign.cooldown_days, campaign.one_time_only)
+    except deals.DealError as exc:
+        raise CampaignError(str(exc))
+    headline, description = deals.suggested_wording_for(campaign)
+    if regenerate_wording or not campaign.offer_headline:
+        campaign.offer_headline = headline
+    if regenerate_wording or not campaign.offer_description:
+        campaign.offer_description = description
+
+
+@transaction.atomic
+def create_campaign(*, brand, product_ids, name, daily_budget=None, description="",
+                    min_purchase_units=1, is_bogo=False, cooldown_days=30,
+                    start_at=None, end_at=None, **deal) -> Campaign:
+    products = _resolve_products(brand, product_ids)
+    deal = {k: v for k, v in deal.items() if k in DEAL_FIELDS and v is not None}
+    is_deal_model = "deal_type" in deal
+
+    if not is_deal_model:
+        # Old builder: $ daily budget now; reward tiers arrive via set_tiers.
+        if daily_budget is None:
+            raise CampaignError("Choose an offer type.")
+        daily_budget = to_money(daily_budget)
+        if daily_budget <= ZERO:
+            raise CampaignError("Daily budget must be positive.")
+
+    campaign = Campaign(
         brand=brand,
         name=name,
         description=description,
@@ -94,7 +127,18 @@ def create_campaign(*, brand, product_ids, name, daily_budget, description="",
         start_at=start_at,
         end_at=end_at,
     )
+    if is_deal_model:
+        for key, value in deal.items():
+            setattr(campaign, key, value)
+    else:
+        campaign.deal_type = (
+            Campaign.DealType.BOGO_FREE if is_bogo else Campaign.DealType.FREE
+        )
+    campaign.save()
     campaign.products.set(products)
+    if is_deal_model:
+        _apply_deal(campaign, regenerate_wording=False)
+        campaign.save()
     regenerate_restriction(campaign)
     ensure_access(campaign)
     return campaign
@@ -113,15 +157,27 @@ def update_campaign(campaign: Campaign, **fields) -> Campaign:
         if fields["daily_budget"] <= ZERO:
             raise CampaignError("Daily budget must be positive.")
 
-    restriction_changed = False
+    deal_changed = any(key in DEAL_FIELDS for key in fields)
+    # Changing the offer type regenerates the suggested wording unless the
+    # brand sends its own in the same edit (the builder warns first).
+    type_changed = (
+        "deal_type" in fields and fields["deal_type"] != campaign.deal_type
+        and "offer_headline" not in fields and "offer_description" not in fields
+    )
+
+    restriction_changed = deal_changed
     for key, value in fields.items():
         if key in ("min_purchase_units", "is_bogo"):
             restriction_changed = True
         setattr(campaign, key, value)
-    campaign.save()
 
     if product_ids is not None:
         campaign.products.set(products)
+    if deal_changed:
+        _apply_deal(campaign, regenerate_wording=type_changed)
+    elif "daily_budget" in fields:
+        deals.apply_legacy_inputs(campaign)
+    campaign.save()
 
     if restriction_changed:
         regenerate_restriction(campaign)
@@ -169,6 +225,10 @@ def set_tiers(campaign: Campaign, tiers: list[dict]) -> list[RewardTier]:
             for reward, allocation in cleaned
         ]
     )
+    # Old builder: the top tier becomes the deal's maximum rebate.
+    deals.apply_legacy_inputs(campaign)
+    campaign.save()
+    regenerate_restriction(campaign)
     # Return in waterfall order (highest reward first) per Meta.ordering.
     return list(campaign.tiers.all())
 
@@ -194,15 +254,26 @@ def set_fallback(campaign: Campaign, *, reward_amount, is_enabled, description="
 # ---------------------------------------------------------------------------
 # Lifecycle (activate / pause) with wallet funding gate
 # ---------------------------------------------------------------------------
+def _funding_threshold(campaign: Campaign):
+    """Real funds needed to run: a legacy campaign keeps its one-day budget;
+    a deal-model campaign must cover at least one claim's maximum reward."""
+    return campaign.daily_budget or deals.max_reward(campaign) or ZERO
+
+
 def _validate_ready_to_activate(campaign: Campaign) -> None:
     tiers = list(campaign.tiers.all())
-    if not tiers:
+    if tiers:
+        total = sum((t.allocation_percent for t in tiers), Decimal("0.00"))
+        if total != HUNDRED:
+            raise CampaignError("Tier allocations must sum to 100% before activating.")
+    elif campaign.daily_budget and not campaign.max_rebate and not campaign.fixed_reward:
         raise CampaignError("Add reward tiers before activating.")
-    total = sum((t.allocation_percent for t in tiers), Decimal("0.00"))
-    if total != HUNDRED:
-        raise CampaignError("Tier allocations must sum to 100% before activating.")
     if not campaign.products.filter(is_active=True).exists():
         raise CampaignError("All products in this campaign are archived.")
+    if not deals.max_reward(campaign):
+        raise CampaignError("Set the offer's reward before activating.")
+    if not campaign.claim_capacity:
+        raise CampaignError("Set the 25-hour claim capacity before activating.")
 
 
 def activate_campaign(campaign: Campaign) -> Campaign:
@@ -225,7 +296,7 @@ def activate_campaign(campaign: Campaign) -> Campaign:
     wallet = get_or_create_brand_wallet(campaign.brand)
     # Campaigns pay shopper rewards, so they must be backed by real funds —
     # promotional credit can't be used to run a campaign.
-    if wallet.reward_available() < campaign.daily_budget:
+    if wallet.reward_available() < _funding_threshold(campaign):
         raise CampaignError(
             "Insufficient wallet funds to run this campaign. "
             "Fund the wallet to cover at least one day's budget."
@@ -233,7 +304,12 @@ def activate_campaign(campaign: Campaign) -> Campaign:
 
     campaign.status = Campaign.Status.ACTIVE
     campaign.auto_paused = False
-    campaign.save(update_fields=["status", "auto_paused", "updated_at"])
+    fields = ["status", "auto_paused", "updated_at"]
+    if campaign.activated_at is None:
+        # 25-hour claim cycles are anchored to the first activation.
+        campaign.activated_at = timezone.now()
+        fields.append("activated_at")
+    campaign.save(update_fields=fields)
     return campaign
 
 
@@ -254,7 +330,7 @@ def sync_funding_state(brand) -> dict:
     summary = {"paused": 0, "resumed": 0}
 
     for campaign in brand.campaigns.filter(status=Campaign.Status.ACTIVE):
-        if available < campaign.daily_budget:
+        if available < _funding_threshold(campaign):
             campaign.status = Campaign.Status.PAUSED
             campaign.auto_paused = True
             campaign.save(update_fields=["status", "auto_paused", "updated_at"])
@@ -263,7 +339,7 @@ def sync_funding_state(brand) -> dict:
     for campaign in brand.campaigns.filter(
         status=Campaign.Status.PAUSED, auto_paused=True
     ):
-        if available >= campaign.daily_budget:
+        if available >= _funding_threshold(campaign):
             campaign.status = Campaign.Status.ACTIVE
             campaign.auto_paused = False
             campaign.save(update_fields=["status", "auto_paused", "updated_at"])

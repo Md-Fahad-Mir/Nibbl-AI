@@ -27,14 +27,21 @@ def is_in_cooldown(user, campaign: Campaign) -> bool:
     ).exists()
 
 
-def enter_cooldown(user, campaign: Campaign) -> CooldownRecord:
-    """Start a premium-reward cooldown. Called by the redemption flow (M7/M9)."""
+# "One time per customer" never lets the shopper redeem that campaign again.
+ONE_TIME_COOLDOWN = dt.timedelta(days=365 * 100)
+
+
+def enter_cooldown(user, campaign: Campaign, *, days=None, one_time=False) -> CooldownRecord | None:
+    """Start the campaign cooldown after an approved redemption. ``days`` /
+    ``one_time`` come from the claim's snapshotted terms (default: the
+    campaign's current setting). No cooldown (0 days) records nothing."""
+    days = campaign.cooldown_days if days is None else days
+    if not one_time and not days:
+        return None
     now = timezone.now()
+    length = ONE_TIME_COOLDOWN if one_time else dt.timedelta(days=days)
     return CooldownRecord.objects.create(
-        user=user,
-        campaign=campaign,
-        started_at=now,
-        expires_at=now + dt.timedelta(days=campaign.cooldown_days),
+        user=user, campaign=campaign, started_at=now, expires_at=now + length
     )
 
 
@@ -44,32 +51,29 @@ def enter_cooldown(user, campaign: Campaign) -> CooldownRecord:
 def resolve_offer(campaign: Campaign, user=None) -> dict:
     """Compute the offer to show a given user for a campaign.
 
-    Premium (highest tier) is shown when the campaign is live, the user isn't
-    in cooldown, and tiers exist. Otherwise the fallback offer is shown if the
-    brand enabled it; else nothing is claimable.
+    Claimable when the campaign is live, the shopper isn't in cooldown, and
+    the current 25-hour cycle still has claim capacity. ``reward_amount`` is
+    the most one redemption can pay (the actual reward comes from the
+    verified receipt). Shoppers never see claim counts — only "going fast"
+    and "temporarily unavailable" flags.
     """
     # Local imports avoid import cycles (reviews/reservations don't import offers).
+    from Apps.campaigns import deals
     from Apps.reservations.selectors import active_reservation_for
     from Apps.reviews.selectors import product_rating_summary
 
     in_cd = is_in_cooldown(user, campaign)
+    amount = deals.max_reward(campaign)
+    remaining = deals.capacity_remaining(campaign)
+    capacity_reached = remaining is not None and remaining <= 0
+    going_fast = (
+        remaining is not None and 0 < remaining
+        and remaining <= max(1, -(-campaign.claim_capacity // 5))  # last 20%
+    )
 
-    tiers = list(campaign.tiers.all())  # ordered -reward_amount (waterfall)
-    premium = tiers[0] if tiers else None
-    fallback = getattr(campaign, "fallback_offer", None)
-    fallback_active = bool(fallback and fallback.is_enabled)
-
-    premium_available = campaign.is_live and premium is not None and not in_cd
-
-    if premium_available:
-        offer_type = "premium"
-        amount = premium.reward_amount
-    elif fallback_active:
-        offer_type = "fallback"
-        amount = fallback.reward_amount
-    else:
-        offer_type = None
-        amount = None
+    available = campaign.is_live and bool(amount) and not in_cd and not capacity_reached
+    offer_type = "premium" if available else None
+    amount = amount if available else None
 
     restriction = getattr(campaign, "restriction", None)
 
@@ -111,6 +115,13 @@ def resolve_offer(campaign: Campaign, user=None) -> dict:
         "review_count": summary["review_count"],
         "is_claimed": reservation is not None,
         "reservation_id": str(reservation.id) if reservation else None,
+        # Deal model (Master: Offer Type Inputs and Shopper Output).
+        "deal_type": campaign.deal_type,
+        "offer_headline": campaign.offer_headline,
+        "offer_description": campaign.offer_description,
+        "required_quantity": campaign.min_purchase_units,
+        "going_fast": going_fast,
+        "temporarily_unavailable": capacity_reached,
     }
 
 

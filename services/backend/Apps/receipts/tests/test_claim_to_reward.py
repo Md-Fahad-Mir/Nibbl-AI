@@ -36,6 +36,7 @@ from Apps.reservations import services as reservation_services
 from Apps.reservations.models import Reservation
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+from Apps.common.testing import go_live
 
 SHOP = "Fahad Chocolate Shop"
 PRODUCT = "Dark Chocolate Bar 100g"
@@ -136,7 +137,7 @@ def build_world(*, min_units=1, start_at=None, end_at=None, product_name=PRODUCT
     wallet_services.credit(
         wallet=wallet, amount=Decimal(fund), category=LedgerEntry.Category.FUNDING
     )
-    campaign_services.activate_campaign(campaign)
+    go_live(campaign)
     return owner, brand, product, campaign
 
 
@@ -908,7 +909,7 @@ class MultipleProductsOnOneReceiptTests(APITestCase):
         campaign_services.set_tiers(
             cola_campaign, [{"reward_amount": "1.50", "allocation_percent": "100.00"}]
         )
-        campaign_services.activate_campaign(cola_campaign)
+        go_live(cola_campaign)
         return brand, choc_campaign, cola_campaign
 
     def test_two_distinct_products_on_the_same_receipt_each_fund_a_reward(self):

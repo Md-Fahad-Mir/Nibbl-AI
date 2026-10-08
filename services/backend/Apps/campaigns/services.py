@@ -144,10 +144,31 @@ def create_campaign(*, brand, product_ids, name, daily_budget=None, description=
     return campaign
 
 
-def update_campaign(campaign: Campaign, **fields) -> Campaign:
+def update_campaign(campaign: Campaign, *, submitted_by=None, **fields) -> Campaign:
+    """Edit a campaign. Once Nibbl has approved it, edits are held as a
+    revision for re-review and the approved version stays live
+    (Apps.campaigns.approvals)."""
     if campaign.status in (Campaign.Status.COMPLETED, Campaign.Status.ARCHIVED):
         raise CampaignError("This campaign can no longer be edited.")
+    if campaign.review_status == Campaign.ReviewStatus.APPROVED:
+        from Apps.campaigns import approvals
 
+        if fields:
+            approvals.propose_revision(campaign, fields, user=submitted_by)
+        return campaign
+    if campaign.review_status in (
+        Campaign.ReviewStatus.PENDING_REVIEW, Campaign.ReviewStatus.REJECTED
+    ):
+        raise CampaignError(
+            "This campaign is with Nibbl for review and can't be edited right now."
+            if campaign.review_status == Campaign.ReviewStatus.PENDING_REVIEW
+            else "This campaign was rejected and can no longer be edited."
+        )
+    return apply_update(campaign, **fields)
+
+
+def apply_update(campaign: Campaign, **fields) -> Campaign:
+    """Write edits straight to the campaign (drafts, or an approved revision)."""
     product_ids = fields.pop("product", None)
     if product_ids is not None:
         products = _resolve_products(campaign.brand, product_ids)
@@ -195,7 +216,11 @@ def archive_campaign(campaign: Campaign) -> Campaign:
 # Tiers (allocation must total 100%)
 # ---------------------------------------------------------------------------
 @transaction.atomic
-def set_tiers(campaign: Campaign, tiers: list[dict]) -> list[RewardTier]:
+def set_tiers(campaign: Campaign, tiers: list[dict], *, submitted_by=None) -> list[RewardTier]:
+    if campaign.review_status in (
+        Campaign.ReviewStatus.PENDING_REVIEW, Campaign.ReviewStatus.REJECTED
+    ):
+        raise CampaignError("This campaign can't be edited right now.")
     if not tiers:
         raise CampaignError("At least one reward tier is required.")
 
@@ -215,6 +240,16 @@ def set_tiers(campaign: Campaign, tiers: list[dict]) -> list[RewardTier]:
         raise CampaignError(
             f"Tier allocations must sum to 100% (got {total}%)."
         )
+
+    if campaign.review_status == Campaign.ReviewStatus.APPROVED:
+        # Old builder on an approved campaign: the top tier is the new
+        # maximum rebate, reviewed as a revision.
+        from Apps.campaigns import approvals
+
+        approvals.propose_revision(
+            campaign, {"max_rebate": max(r for r, _ in cleaned)}, user=submitted_by
+        )
+        return list(campaign.tiers.all())
 
     campaign.tiers.all().delete()
     RewardTier.objects.bulk_create(
@@ -260,7 +295,8 @@ def _funding_threshold(campaign: Campaign):
     return campaign.daily_budget or deals.max_reward(campaign) or ZERO
 
 
-def _validate_ready_to_activate(campaign: Campaign) -> None:
+def validate_ready(campaign: Campaign) -> None:
+    """Every required field is complete (submission and activation)."""
     tiers = list(campaign.tiers.all())
     if tiers:
         total = sum((t.allocation_percent for t in tiers), Decimal("0.00"))
@@ -279,7 +315,11 @@ def _validate_ready_to_activate(campaign: Campaign) -> None:
 def activate_campaign(campaign: Campaign) -> Campaign:
     if campaign.status in (Campaign.Status.COMPLETED, Campaign.Status.ARCHIVED):
         raise CampaignError("This campaign can no longer be activated.")
-    _validate_ready_to_activate(campaign)
+    if campaign.review_status != Campaign.ReviewStatus.APPROVED:
+        raise CampaignError(
+            "Nibbl must approve this campaign before it can go live. Submit it for review."
+        )
+    validate_ready(campaign)
 
     # Per-plan active-campaign limit (Starter 1 / Pro 3 / Scale 10).
     plan = campaign.brand.plan

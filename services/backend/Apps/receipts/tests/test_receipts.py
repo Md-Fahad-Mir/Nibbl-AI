@@ -19,6 +19,7 @@ from Apps.reservations.models import Reservation
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
 from Apps.common.testing import RECEIPT_META, receipt_meta
+from Apps.common.testing import go_live
 
 
 def _world(*, min_units=1, product_name="Cola 12oz"):
@@ -42,7 +43,7 @@ def _world(*, min_units=1, product_name="Cola 12oz"):
         wallet=wallet, amount=Decimal("1000.00"),
         category=LedgerEntry.Category.FUNDING,
     )
-    campaign_services.activate_campaign(campaign)
+    go_live(campaign)
     return owner, brand, product, campaign
 
 

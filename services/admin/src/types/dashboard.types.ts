@@ -26,6 +26,7 @@ export type SidebarNavItem =
   | "users"
   | "brand"
   | "promo-codes"
+  | "campaign-approvals"
   | "withdraw-request"
   | "payout-reviews"
   | "settings"

@@ -19,7 +19,11 @@ interface Campaign {
   dailyBudget: number;
   purchases: number;
   spendToday: number;
-  status: "ACTIVE" | "PAUSED" | "COMPLETED";
+  status: "ACTIVE" | "PAUSED" | "COMPLETED" | "IN_REVIEW";
+  // Nibbl approval label, e.g. "Pending review" (rebate campaigns).
+  reviewLabel?: string;
+  // Nibbl comment when changes were requested or the campaign was rejected.
+  reviewComment?: string;
 }
 
 interface RebatesLandingProps {
@@ -29,7 +33,7 @@ interface RebatesLandingProps {
 }
 
 export default function RebatesLanding({ campaigns, onCreateNew, onEditCampaign }: RebatesLandingProps) {
-  const [filter, setFilter] = useState<"ACTIVE" | "PAUSED" | "COMPLETED">("ACTIVE");
+  const [filter, setFilter] = useState<Campaign["status"]>("ACTIVE");
   const rebatesSummary = useBrandApiStore((state) => state.analyticsRebatesSummary);
 
   const filteredCampaigns = campaigns.filter((camp) => camp.status === filter);
@@ -89,6 +93,7 @@ export default function RebatesLanding({ campaigns, onCreateNew, onEditCampaign 
       <div className="flex items-center gap-2 bg-[#FAF8FF] font-manrope self-start">
         {[
           { name: "Running", status: "ACTIVE" as const },
+          { name: "In Review", status: "IN_REVIEW" as const },
           { name: "Paused", status: "PAUSED" as const },
           { name: "Completed", status: "COMPLETED" as const },
         ].map((tab) => (

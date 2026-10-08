@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from Apps.campaigns.models import (
     Campaign,
+    CampaignReview,
     FallbackOffer,
     Restriction,
     RewardTier,
@@ -31,8 +32,25 @@ class FallbackOfferSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class CampaignReviewSerializer(serializers.ModelSerializer):
+    """One entry of a campaign's review activity (Master ⑥)."""
+
+    class Meta:
+        model = CampaignReview
+        fields = [
+            "id", "kind", "status", "changes", "submitted_at",
+            "reviewed_at", "comment",
+        ]
+        read_only_fields = fields
+
+
 class CampaignSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField(read_only=True)
+    # Open revision of an approved campaign (the live version is unchanged
+    # until Nibbl approves it); null when there is none.
+    pending_revision = serializers.SerializerMethodField(read_only=True)
+    # Nibbl's latest comment to the brand (changes requested / rejected).
+    review_comment = serializers.SerializerMethodField(read_only=True)
     # 25-hour cycle state for the brand ("Current Cycle Claims: 12 of 34").
     current_cycle_claims = serializers.SerializerMethodField(read_only=True)
     current_cycle_started_at = serializers.SerializerMethodField(read_only=True)
@@ -75,12 +93,45 @@ class CampaignSerializer(serializers.ModelSerializer):
             "activated_at",
             "current_cycle_claims",
             "current_cycle_started_at",
+            # Nibbl approval (additive).
+            "review_status",
+            "pending_revision",
+            "review_comment",
         ]
         read_only_fields = fields
 
     def get_product_name(self, obj):
         first_product = obj.products.first()
         return first_product.name if first_product else ""
+
+    def get_pending_revision(self, obj):
+        review = obj.reviews.filter(
+            kind=CampaignReview.Kind.REVISION, status__in=CampaignReview.OPEN
+        ).first()
+        return CampaignReviewSerializer(review).data if review else None
+
+    def get_review_comment(self, obj) -> str:
+        review = (
+            obj.reviews.exclude(comment="")
+            .filter(status__in=(
+                CampaignReview.Status.CHANGES_REQUESTED, CampaignReview.Status.REJECTED,
+            ))
+            .order_by("-reviewed_at")
+            .first()
+        )
+        if review is None:
+            return ""
+        # Only while it still applies: the campaign (or its revision) is
+        # waiting on the brand, or was rejected.
+        if review.kind == CampaignReview.Kind.NEW and obj.review_status not in (
+            Campaign.ReviewStatus.CHANGES_REQUESTED, Campaign.ReviewStatus.REJECTED
+        ):
+            return ""
+        if review.kind == CampaignReview.Kind.REVISION and (
+            review.status != CampaignReview.Status.CHANGES_REQUESTED
+        ):
+            return ""
+        return review.comment
 
     def get_current_cycle_claims(self, obj) -> int:
         from Apps.campaigns import deals
@@ -183,3 +234,36 @@ class CampaignPreviewSerializer(serializers.Serializer):
     qr_data = serializers.CharField()
     consumes_budget = serializers.BooleanField()
     creates_reservation = serializers.BooleanField()
+
+
+class ReviewDecisionSerializer(serializers.Serializer):
+    comment = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class AdminCampaignReviewSerializer(serializers.ModelSerializer):
+    """Approval queue row: the essential terms Nibbl checks (offer, products,
+    retailers, cooldown, 25-hour redemption goal, funding) plus, for a
+    revision, the proposed changes."""
+
+    campaign = CampaignSerializer(read_only=True)
+    brand_id = serializers.UUIDField(source="campaign.brand_id", read_only=True)
+    brand_name = serializers.CharField(source="campaign.brand.name", read_only=True)
+    product_names = serializers.SerializerMethodField()
+    wallet_available = serializers.SerializerMethodField()
+    submitted_by_email = serializers.EmailField(source="submitted_by.email", read_only=True, default=None)
+
+    class Meta:
+        model = CampaignReview
+        fields = [
+            "id", "kind", "status", "changes", "submitted_at", "submitted_by_email",
+            "brand_id", "brand_name", "product_names", "wallet_available", "campaign",
+        ]
+        read_only_fields = fields
+
+    def get_product_names(self, obj) -> list[str]:
+        return [p.name for p in obj.campaign.products.all()]
+
+    def get_wallet_available(self, obj) -> str:
+        from Apps.wallets.services import get_or_create_brand_wallet
+
+        return str(get_or_create_brand_wallet(obj.campaign.brand).reward_available())

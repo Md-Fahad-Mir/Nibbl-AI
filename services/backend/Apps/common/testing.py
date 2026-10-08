@@ -31,3 +31,16 @@ RECEIPT_META = {
 def receipt_meta(number: str = "INV-TEST-0001", **overrides) -> dict:
     """RECEIPT_META with a distinct receipt number (a *different* receipt)."""
     return {**RECEIPT_META, "receipt_number": number, **overrides}
+
+
+def go_live(campaign):
+    """Mark a campaign Nibbl-approved and activate it — for tests whose
+    subject is downstream of the approval workflow."""
+    from Apps.campaigns import services as campaign_services
+    from Apps.campaigns.models import Campaign
+
+    Campaign.objects.filter(pk=campaign.pk).update(
+        review_status=Campaign.ReviewStatus.APPROVED
+    )
+    campaign.review_status = Campaign.ReviewStatus.APPROVED
+    return campaign_services.activate_campaign(campaign)

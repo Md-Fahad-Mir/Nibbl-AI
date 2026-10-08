@@ -16,6 +16,7 @@ from Apps.reservations import services
 from Apps.reservations.models import Reservation
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+from Apps.common.testing import go_live
 
 
 @skipUnless(connection.vendor == "postgresql", "Row locking requires PostgreSQL.")
@@ -42,7 +43,7 @@ class ConcurrentClaimTests(TransactionTestCase):
             wallet=wallet, amount=Decimal("1000.00"),
             category=LedgerEntry.Category.FUNDING,
         )
-        campaign_services.activate_campaign(campaign)
+        go_live(campaign)
 
         users = [
             User.objects.create_user(email=f"u{i}@example.com", password="x", full_name="U")

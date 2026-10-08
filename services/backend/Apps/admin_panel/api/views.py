@@ -14,6 +14,10 @@ from Apps.billing import serializers as billing_serializers
 from Apps.billing import services as billing_services
 from Apps.billing.models import PromoCode
 from Apps.brands.access import get_brand_or_404
+from Apps.campaigns import approvals
+from Apps.campaigns import serializers as campaign_serializers
+from Apps.campaigns.models import CampaignReview
+from Apps.campaigns.services import CampaignError
 from Apps.common.models import PlatformSettings
 from Apps.common.permissions import IsPlatformAdmin
 
@@ -246,6 +250,50 @@ class AdminCampaignListView(APIView):
     def get(self, request):
         campaigns = selectors.all_campaigns(status=request.query_params.get("status", ""))
         return Response(s.AdminCampaignSerializer(campaigns, many=True).data)
+
+
+@extend_schema(tags=["admin"])
+class CampaignApprovalQueueView(APIView):
+    """Campaigns and revisions waiting for Nibbl review (?kind=new|revision)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(
+        parameters=[OpenApiParameter("kind", str)],
+        responses={200: campaign_serializers.AdminCampaignReviewSerializer(many=True)},
+    )
+    def get(self, request):
+        reviews = approvals.pending_reviews(kind=request.query_params.get("kind", ""))
+        return Response(
+            campaign_serializers.AdminCampaignReviewSerializer(reviews, many=True).data
+        )
+
+
+@extend_schema(tags=["admin"])
+class CampaignApprovalDecisionView(APIView):
+    """POST .../approve/, .../reject/ or .../request-changes/ with {comment}."""
+
+    permission_classes = [IsPlatformAdmin]
+    ACTIONS = {
+        "approve": approvals.approve,
+        "reject": approvals.reject,
+        "request-changes": approvals.request_changes,
+    }
+
+    @extend_schema(request=campaign_serializers.ReviewDecisionSerializer, responses={200: None})
+    def post(self, request, review_id, action):
+        handler = self.ACTIONS.get(action)
+        review = CampaignReview.objects.filter(id=review_id).first()
+        if handler is None or review is None:
+            raise NotFound("Review not found.")
+        serializer = campaign_serializers.ReviewDecisionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            note = handler(review, admin=request.user, comment=serializer.validated_data["comment"])
+        except CampaignError as exc:
+            raise ValidationError({"detail": str(exc)})
+        review.refresh_from_db()
+        return Response({"id": str(review.id), "status": review.status, "detail": note or ""})
 
 
 # ---------------------------------------------------------------------------

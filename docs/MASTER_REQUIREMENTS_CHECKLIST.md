@@ -19,7 +19,7 @@
 - [ ] 🟡 **4. 25-Hour Claim Capacity** — backend done (desired ÷ rate, rounded up; cycles anchored at activation; expired claims don't refund a slot; "Going fast"); brand builder UI pending (Phase 3)
 - [ ] 🟡 **5. Offer types w/ locked reward math** — backend done (all 4 types, suggested wording, unclear price → review); brand builder UI pending (Phase 3)
 - [ ] 🟡 **6. Tier allocation must total 100%** — superseded by offer types; old tier builder still accepted and mapped (top tier → max rebate)
-- [ ] ⬜ **7. Nibbl campaign approval workflow** — Draft→Submit→Review→Approve/Changes
+- [ ] 🟡 **7. Nibbl campaign approval workflow** — backend done (submit → approve / reject / request changes; edits to approved campaigns become revisions while the approved version stays live; audited + brand notified; existing campaigns grandfathered). Brand UI: submit on publish, review statuses, Nibbl comment on card + edit screen; full campaign detail page with review activity pending (Phase 3)
 - [x] ✅ **8. Reservation rule snapshot** — each claim stores its deal terms, products, merchants and cooldown; later edits apply to new claims only
 - [x] ✅ **9. Reserved reward funding** — claim reserves the max reward; approval pays the actual reward and returns the difference; cooldown starts at the approved redemption
 - [ ] ⬜ **10. Retailer availability, featured retailers, receipt eligibility**
@@ -78,7 +78,7 @@
 ## Admin — Dashboard, Withdrawals, Brands, Approvals, Promo
 - [ ] 🟡 **42. Admin dashboard & revenue** — views exist; not to Master shape
 - [x] ✅ **43. Withdrawal batch processing** — batches + approve/reject/mark-paid
-- [ ] ⬜ **44. Campaign approval queue**
+- [x] ✅ **44. Campaign approval queue** — admin Campaign Approvals page: new campaigns and revisions kept separate, essential terms + proposed changes, approve / request changes / reject with comment
 - [x] ✅ **45. Promo codes** — reusable admin-created codes (amount, validity dates, usage limits, once-per-brand) redeemed by brands for *promotional* credit; promo money covers fees/subscription (promo-first) but never shopper rewards (wallet real/promo split enforced); admin create/list UI + brand redeem UI
 - [x] ✅ **46. Shopper management & suspensions** — global suspend ✓; **per-brand suspension** (brand Customers → Suspend/Reactivate, blocks claims on that brand only; anonymized plans act by `cust_` ref); **repeated-suspension fraud alert** (`REPEATED_SUSPENSION_ALERT`, default 3); shopper wallet adjustments now **require a reason** + ledger entry
 - [ ] ⬜ **47. Referral management / flag review**
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (17):** #2, #3, #8, #9, #12, #17, #18, #20, #31, #33, #34, #37, #39, #41, #43, #45, #46.
+**Done to spec (18):** #2, #3, #8, #9, #12, #17, #18, #20, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

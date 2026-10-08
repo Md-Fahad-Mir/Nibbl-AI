@@ -20,6 +20,7 @@ from Apps.reservations.models import Reservation
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import Hold, LedgerEntry
 from Apps.common.testing import RECEIPT_META, receipt_meta
+from Apps.common.testing import go_live
 
 
 def _world(*, reward="5.00", plan_slug="starter", fund="1000.00"):
@@ -43,7 +44,7 @@ def _world(*, reward="5.00", plan_slug="starter", fund="1000.00"):
         wallet=brand_wallet, amount=Decimal(fund),
         category=LedgerEntry.Category.FUNDING,
     )
-    campaign_services.activate_campaign(campaign)
+    go_live(campaign)
     return owner, brand, product, campaign, brand_wallet
 
 
@@ -229,7 +230,7 @@ class NoFeePlanTests(APITestCase):
         wallet_services.credit(
             wallet=bw, amount=Decimal("100.00"), category=LedgerEntry.Category.FUNDING
         )
-        campaign_services.activate_campaign(campaign)
+        go_live(campaign)
 
         user, reservation = _claim(campaign)
         receipt_services.upload_receipt(

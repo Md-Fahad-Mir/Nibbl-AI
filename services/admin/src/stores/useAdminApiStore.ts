@@ -232,6 +232,9 @@ interface AdminApiState {
   reactivateBrand: (brandId: string) => Promise<void>;
   approveBrand: (brand: BrandDetail) => Promise<void>;
   rejectBrandApplication: (applicationId: string) => Promise<void>;
+  campaignApprovals: ApiRecord[];
+  campaignApprovalsLoaded: boolean;
+  loadCampaignApprovals: () => Promise<void>;
   promoCodes: ApiRecord[];
   loadPromoCodes: () => Promise<void>;
   createPromoCode: (body: ApiRecord) => Promise<ApiRecord>;
@@ -257,6 +260,8 @@ export const useAdminApiStore = create<AdminApiState>()(
       transactions: [],
       monthlyEarnings: [],
       stats: [],
+      campaignApprovals: [],
+      campaignApprovalsLoaded: false,
       promoCodes: [],
       pendingPayoutMethods: [],
       platformSettings: null,
@@ -378,6 +383,13 @@ export const useAdminApiStore = create<AdminApiState>()(
       loadUsers: async () => {
         const response = await apiClient.request<unknown>(backendApi.admin.users);
         set({ users: listResults(response).map(mapUser) });
+      },
+      loadCampaignApprovals: async () => {
+        const response = await nibblApi.adminCampaignApprovals();
+        set({
+          campaignApprovals: Array.isArray(response) ? response : listResults(response),
+          campaignApprovalsLoaded: true,
+        });
       },
       loadPromoCodes: async () => {
         const response = await nibblApi.adminPromoCodes();

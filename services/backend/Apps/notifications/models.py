@@ -15,6 +15,7 @@ class NotificationType(models.TextChoices):
     PROMOTIONAL = "promotional", "Promotional"
     # Brand-facing billing alerts (not preference-gated — critical).
     AUTO_REFILL_FAILED = "auto_refill_failed", "Automatic refill failed"
+    CAMPAIGN_REVIEW = "campaign_review", "Campaign review update"
 
 
 # Maps a notification type to the preference flag that gates it.

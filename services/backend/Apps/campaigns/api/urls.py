@@ -29,6 +29,16 @@ urlpatterns = [
         name="campaign-activate",
     ),
     path(
+        f"{_base}/<uuid:campaign_id>/submit/",
+        views.CampaignSubmitView.as_view(),
+        name="campaign-submit",
+    ),
+    path(
+        f"{_base}/<uuid:campaign_id>/reviews/",
+        views.CampaignReviewListView.as_view(),
+        name="campaign-reviews",
+    ),
+    path(
         f"{_base}/<uuid:campaign_id>/pause/",
         views.CampaignPauseView.as_view(),
         name="campaign-pause",

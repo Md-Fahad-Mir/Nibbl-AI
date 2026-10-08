@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 
 from Apps.brands.access import get_brand_or_404, require_membership
 from Apps.campaigns import serializers as s
-from Apps.campaigns import services
+from Apps.campaigns import approvals, services
 from Apps.campaigns.selectors import campaigns_for_brand, get_brand_campaign
 from Apps.campaigns.services import CampaignError
 
@@ -75,7 +75,10 @@ class CampaignDetailView(APIView):
         campaign = _get_campaign(brand, campaign_id)
         serializer = s.CampaignUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        campaign = _run(services.update_campaign, campaign, **serializer.validated_data)
+        campaign = _run(
+            services.update_campaign, campaign,
+            submitted_by=request.user, **serializer.validated_data,
+        )
         return Response(s.CampaignSerializer(campaign).data)
 
     @extend_schema(responses={204: None})
@@ -104,7 +107,10 @@ class CampaignTiersView(APIView):
         campaign = _get_campaign(brand, campaign_id)
         serializer = s.SetTiersSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        tiers = _run(services.set_tiers, campaign, serializer.validated_data["tiers"])
+        tiers = _run(
+            services.set_tiers, campaign, serializer.validated_data["tiers"],
+            submitted_by=request.user,
+        )
         return Response(s.RewardTierSerializer(tiers, many=True).data)
 
 
@@ -133,6 +139,36 @@ class CampaignActivateView(APIView):
         require_membership(request.user, brand, manager=True, active=True)
         campaign = _run(services.activate_campaign, _get_campaign(brand, campaign_id))
         return Response(s.CampaignSerializer(campaign).data)
+
+
+@extend_schema(tags=["campaigns"])
+class CampaignSubmitView(APIView):
+    """Submit for Nibbl review (also resubmits after changes were requested)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses={200: s.CampaignSerializer})
+    def post(self, request, brand_id, campaign_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True, active=True)
+        campaign = _get_campaign(brand, campaign_id)
+        _run(approvals.submit_for_review, campaign, user=request.user)
+        campaign.refresh_from_db()
+        return Response(s.CampaignSerializer(campaign).data)
+
+
+@extend_schema(tags=["campaigns"])
+class CampaignReviewListView(APIView):
+    """Review activity: submissions, revisions, Nibbl decisions + comments."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: s.CampaignReviewSerializer(many=True)})
+    def get(self, request, brand_id, campaign_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand)
+        campaign = _get_campaign(brand, campaign_id)
+        return Response(s.CampaignReviewSerializer(campaign.reviews.all(), many=True).data)
 
 
 @extend_schema(tags=["campaigns"])

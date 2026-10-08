@@ -97,6 +97,21 @@ class Campaign(BaseModel):
     # funding sync can safely resume it (vs a manual pause).
     auto_paused = models.BooleanField(default=False)
 
+    # --- Nibbl approval (Master: Submission and revision rules) ---------------
+    # Separate from `status` (draft/active/...): a campaign can only be
+    # activated once approved; later edits are reviewed as a CampaignReview
+    # revision while this approved version stays live.
+    class ReviewStatus(models.TextChoices):
+        NOT_SUBMITTED = "not_submitted", "Not submitted"
+        PENDING_REVIEW = "pending_review", "Pending review"
+        CHANGES_REQUESTED = "changes_requested", "Changes requested"
+        REJECTED = "rejected", "Rejected"
+        APPROVED = "approved", "Approved"
+
+    review_status = models.CharField(
+        max_length=20, choices=ReviewStatus.choices, default=ReviewStatus.NOT_SUBMITTED
+    )
+
     class Meta:
         ordering = ["-created_at"]
         indexes = [
@@ -109,6 +124,55 @@ class Campaign(BaseModel):
     @property
     def is_live(self) -> bool:
         return self.status == self.Status.ACTIVE
+
+
+class CampaignReview(BaseModel):
+    """One Nibbl review of a campaign: its first submission (NEW) or an edit
+    to an approved campaign (REVISION). A revision holds the proposed changes
+    and applies them only when approved. Doubles as the campaign's review
+    activity history."""
+
+    class Kind(models.TextChoices):
+        NEW = "new", "New campaign"
+        REVISION = "revision", "Revision"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        CHANGES_REQUESTED = "changes_requested", "Changes requested"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    OPEN = (Status.PENDING, Status.CHANGES_REQUESTED)
+
+    campaign = models.ForeignKey(
+        Campaign, on_delete=models.CASCADE, related_name="reviews"
+    )
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    # REVISION only: the proposed field values (JSON-safe), e.g.
+    # {"max_rebate": "6.00", "product": ["<uuid>"]}.
+    changes = models.JSONField(default=dict, blank=True)
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+    submitted_at = models.DateTimeField()
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    # Nibbl's comment to the brand (required for reject / request changes).
+    comment = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        indexes = [models.Index(fields=["status", "kind"])]
+
+    def __str__(self):
+        return f"{self.kind} review of {self.campaign_id} ({self.status})"
 
 
 class RewardTier(BaseModel):

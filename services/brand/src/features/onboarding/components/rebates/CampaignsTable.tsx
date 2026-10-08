@@ -39,7 +39,19 @@ const campaignStatusValue = (campaign: ApiRecord) => {
   return "draft";
 };
 
-const statusText = (campaign: ApiRecord) => titleCase(campaignStatusValue(campaign));
+// Nibbl approval state (rebate campaigns) takes precedence until approved.
+const REVIEW_STATUS_TEXT: Record<string, string> = {
+  pending_review: "Pending Review",
+  changes_requested: "Changes Requested",
+  rejected: "Rejected",
+};
+
+const statusText = (campaign: ApiRecord) => {
+  const review = REVIEW_STATUS_TEXT[String(campaign.review_status ?? "")];
+  if (review) return review;
+  const status = titleCase(campaignStatusValue(campaign));
+  return campaign.pending_revision ? `${status} · Changes Pending Review` : status;
+};
 
 const isActiveCampaign = (campaign: ApiRecord) =>
   campaignStatusValue(campaign).trim().toLowerCase() === "active" ||
@@ -315,7 +327,7 @@ export default function CampaignsTable() {
                 </td>
                 <td className="px-8">
                   <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 ${row.status === "Active" ? "bg-[#10B981]" : "bg-[#FBBF24]"} rounded-full`}></span>
+                    <span className={`w-2 h-2 ${row.status.startsWith("Active") ? "bg-[#10B981]" : row.status === "Rejected" ? "bg-[#EF4444]" : "bg-[#FBBF24]"} rounded-full`}></span>
                     <span className="text-xs font-semibold text-[#454656]">
                       {row.status}
                     </span>

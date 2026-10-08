@@ -543,6 +543,16 @@ export const backendApi = {
     createPromoCode: { method: "POST", path: "/admin/promo-codes/", auth: true },
     fraudFlags: { method: "GET", path: "/admin/fraud-flags/", auth: true },
     campaigns: { method: "GET", path: "/admin/campaigns/", auth: true },
+    campaignApprovals: (kind: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/admin/campaign-approvals/${kind ? `?kind=${kind}` : ""}`,
+      auth: true,
+    }),
+    campaignApprovalDecision: (reviewId: string, action: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/campaign-approvals/${reviewId}/${action}/`,
+      auth: true,
+    }),
     transactions: {
       method: "GET",
       path: "/admin/transactions/",
@@ -837,6 +847,12 @@ export const nibblApi = {
     requestEndpoint<ApiRecord>(backendApi.admin.privacyPolicy),
   updateAdminPrivacyPolicy: (content: string) =>
     requestEndpoint<ApiRecord>(backendApi.admin.updatePrivacyPolicy, { content }),
+  adminCampaignApprovals: (kind = "") =>
+    requestEndpoint<ApiRecord[]>(backendApi.admin.campaignApprovals(kind)),
+  decideCampaignApproval: (reviewId: string, action: string, comment: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.campaignApprovalDecision(reviewId, action), {
+      comment,
+    }),
   adminPromoCodes: () =>
     requestEndpoint<ApiRecord[]>(backendApi.admin.promoCodes),
   createAdminPromoCode: (body: ApiRecord) =>

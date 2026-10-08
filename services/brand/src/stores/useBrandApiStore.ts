@@ -684,7 +684,8 @@ export const useBrandApiStore = create<BrandApiState>()(
           });
         }
         if (isActive) {
-          await apiClient.request(backendApi.brand.activateCampaign(brandId, campaignId));
+          // New campaigns go to Nibbl for review; approval puts them live.
+          await apiClient.request(backendApi.brand.submitCampaign(brandId, campaignId));
         }
         const [campaigns, analyticsCampaigns] = await Promise.all([
           apiClient.request<unknown>(backendApi.brand.campaigns(brandId)),
@@ -756,8 +757,13 @@ export const useBrandApiStore = create<BrandApiState>()(
             },
           });
         }
+        const reviewStatus = String(currentCampaign?.review_status ?? "approved");
         if (isActive && currentStatus !== "active") {
-          await apiClient.request(backendApi.brand.activateCampaign(brandId, campaignId));
+          if (reviewStatus === "approved") {
+            await apiClient.request(backendApi.brand.activateCampaign(brandId, campaignId));
+          } else if (reviewStatus === "not_submitted" || reviewStatus === "changes_requested") {
+            await apiClient.request(backendApi.brand.submitCampaign(brandId, campaignId));
+          }
         } else if (!isActive && currentStatus === "active") {
           await apiClient.request(backendApi.brand.pauseCampaign(brandId, campaignId));
         }

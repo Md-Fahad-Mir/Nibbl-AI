@@ -17,6 +17,7 @@ from Apps.reviews import services as review_services
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
 from Apps.common.testing import RECEIPT_META, receipt_meta
+from Apps.common.testing import go_live
 
 
 def _brand(slug="acme", plan="starter"):
@@ -52,7 +53,7 @@ def _full_flow(brand, *, email="c@example.com"):
         brand=brand, product_ids=[product.id], name="Deal", daily_budget=Decimal("100.00")
     )
     campaign_services.set_tiers(rebate, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
-    campaign_services.activate_campaign(rebate)
+    go_live(rebate)
 
     user = User.objects.create_user(email=email, password="x", full_name="U")
     reservation = reservation_services.create_reservation(user=user, campaign_id=rebate.id)

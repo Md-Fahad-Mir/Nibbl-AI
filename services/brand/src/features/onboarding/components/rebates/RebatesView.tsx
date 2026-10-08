@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import RebatesLanding from "./RebatesLanding";
+import NibblReviewComment from "./NibblReviewComment";
 import CreateCampaignPublishPage from "./CreateCampaignPublishPage";
 import AddCustomTierModal from "./AddCustomTierModal";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
@@ -14,7 +15,11 @@ interface Campaign {
   dailyBudget: number;
   purchases: number;
   spendToday: number;
-  status: "ACTIVE" | "PAUSED" | "COMPLETED";
+  status: "ACTIVE" | "PAUSED" | "COMPLETED" | "IN_REVIEW";
+  // Nibbl approval label, e.g. "Pending review" (rebate campaigns).
+  reviewLabel?: string;
+  // Nibbl comment when changes were requested or the campaign was rejected.
+  reviewComment?: string;
 }
 
 interface RewardTier {
@@ -59,6 +64,16 @@ const statusMap = (status: unknown): Campaign["status"] => {
   return "PAUSED";
 };
 
+const REVIEW_LABELS: Record<string, string> = {
+  pending_review: "Pending review",
+  changes_requested: "Changes requested",
+  rejected: "Rejected",
+};
+
+const reviewLabel = (campaign: ApiRecord) =>
+  REVIEW_LABELS[String(campaign.review_status ?? "")] ??
+  (campaign.pending_revision ? "Changes pending review" : undefined);
+
 const campaignId = (campaign: ApiRecord) =>
   String(campaign.id ?? campaign.campaign_id ?? "");
 
@@ -70,7 +85,11 @@ const mapCampaign = (campaign: ApiRecord, metrics?: ApiRecord): Campaign => ({
   dailyBudget: toNumber(campaign.daily_budget),
   purchases: toNumber(metrics?.approvals ?? campaign.approvals ?? campaign.reservations),
   spendToday: toNumber(metrics?.total_spend ?? campaign.total_spend),
-  status: statusMap(campaign.status),
+  status: REVIEW_LABELS[String(campaign.review_status ?? "")]
+    ? "IN_REVIEW"
+    : statusMap(campaign.status),
+  reviewLabel: reviewLabel(campaign),
+  reviewComment: String(campaign.review_comment ?? "") || undefined,
 });
 
 const parseRewardAmount = (reward: string) => {
@@ -150,6 +169,9 @@ export default function RebatesView() {
     category: product.category,
     imageSrc: product.imageSrc,
   }));
+  const editingRaw = editingCampaignId
+    ? apiCampaigns.find((item) => String(item.id) === editingCampaignId)
+    : undefined;
   const campaigns = useMemo(() => {
     const metricsByCampaign = new Map(
       analyticsCampaigns.map((metrics) => [campaignId(metrics), metrics])
@@ -277,6 +299,16 @@ export default function RebatesView() {
         <div className="mb-4 bg-red-50 border border-red-100 text-red-700 text-sm font-semibold rounded-xl px-4 py-3">
           {submitError}
         </div>
+      )}
+      {step === 1 && editingRaw && (
+        <NibblReviewComment
+          comment={String(editingRaw.review_comment ?? "")}
+          label={
+            editingRaw.review_status === "rejected"
+              ? "Nibbl rejected this campaign"
+              : "Nibbl's comment — make these changes, then publish to resubmit"
+          }
+        />
       )}
       {step === 1 && (
         <CreateCampaignPublishPage

@@ -25,6 +25,7 @@ from Apps.reservations import services as reservation_services
 from Apps.reservations.models import Reservation
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+from Apps.common.testing import go_live
 
 
 def _deal_campaign(**deal):
@@ -41,7 +42,7 @@ def _deal_campaign(**deal):
     campaign = campaign_services.create_campaign(
         brand=brand, product_ids=[product.id], name="Deal", **deal
     )
-    campaign_services.activate_campaign(campaign)
+    go_live(campaign)
     return campaign, wallet
 
 
@@ -124,7 +125,8 @@ class RedemptionTests(TestCase):
         campaign, _ = _deal_campaign(max_rebate=Decimal("5.00"))
         user = _user("a@x.com")
         reservation = reservation_services.create_reservation(user=user, campaign_id=campaign.id)
-        campaign_services.update_campaign(campaign, max_rebate=Decimal("1.00"))
+        # An approved revision lowers the cap after the claim was made.
+        campaign_services.apply_update(campaign, max_rebate=Decimal("1.00"))
 
         _upload(user, reservation, ["4.00"])
         # Snapshot cap $5 applies, not the edited $1.

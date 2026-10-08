@@ -13,6 +13,7 @@ from Apps.offers.models import Bookmark, CooldownRecord, OfferView
 from Apps.products.services import create_product
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+from Apps.common.testing import go_live
 
 
 def _active_campaign(brand_name="Acme", slug="acme", category="Beverages",
@@ -35,7 +36,7 @@ def _active_campaign(brand_name="Acme", slug="acme", category="Beverages",
         wallet=wallet, amount=Decimal("100.00"),
         category=LedgerEntry.Category.FUNDING,
     )
-    campaign_services.activate_campaign(campaign)
+    go_live(campaign)
     return brand, product, campaign
 
 

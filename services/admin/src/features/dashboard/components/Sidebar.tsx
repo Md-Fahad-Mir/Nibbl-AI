@@ -158,6 +158,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ),
     },
     {
+      id: "campaign-approvals",
+      label: "Campaign Approvals",
+      icon: (isActive) => (
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={isActive ? "#FEFEFE" : "#3E3EDF"}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M9 11l3 3 8-8" />
+          <path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />
+        </svg>
+      ),
+    },
+    {
       id: "payout-reviews",
       label: "Payout Reviews",
       icon: (isActive) => (

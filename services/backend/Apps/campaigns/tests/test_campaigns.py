@@ -12,6 +12,12 @@ from Apps.campaigns.models import Campaign, Restriction, RewardTier
 from Apps.products.services import create_product
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+from Apps.common.testing import go_live
+
+
+def _approve(campaign):
+    campaign.review_status = Campaign.ReviewStatus.APPROVED
+    campaign.save(update_fields=["review_status"])
 
 
 def _setup_brand(owner_email="owner@example.com"):
@@ -195,6 +201,7 @@ class ActivationFundingTests(APITestCase):
             self.campaign,
             [{"reward_amount": "5.00", "allocation_percent": "100.00"}],
         )
+        _approve(self.campaign)
         self.client.force_authenticate(self.owner)
         self.activate_url = reverse(
             "v1:campaigns:campaign-activate", args=[self.brand.id, self.campaign.id]
@@ -218,6 +225,7 @@ class ActivationFundingTests(APITestCase):
             brand=self.brand, product_ids=[self.product.id],
             name="Bare", daily_budget=Decimal("10.00"),
         )
+        _approve(bare)
         _fund(self.brand, "1000.00")
         resp = self.client.post(
             reverse("v1:campaigns:campaign-activate", args=[self.brand.id, bare.id])
@@ -236,7 +244,7 @@ class FundingSyncTests(APITestCase):
             campaign, [{"reward_amount": "5.00", "allocation_percent": "100.00"}]
         )
         wallet = _fund(brand, "100.00")
-        services.activate_campaign(campaign)
+        go_live(campaign)
 
         # Drain the wallet -> campaign should auto-pause.
         wallet_services.debit(
@@ -330,6 +338,7 @@ class ActiveCampaignLimitTests(APITestCase):
         services.set_tiers(
             c, [{"reward_amount": "5.00", "allocation_percent": "100.00"}]
         )
+        _approve(c)
         return c
 
     def _activate(self, c):

@@ -19,6 +19,7 @@ from Apps.products.services import create_product
 from Apps.reservations.models import Reservation
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+from Apps.common.testing import go_live
 
 
 def _user(email="c@example.com"):
@@ -86,7 +87,7 @@ class ReceiptReminderTests(APITestCase):
         campaign_services.set_tiers(campaign, [{"reward_amount": "5.00", "allocation_percent": "100.00"}])
         wallet = wallet_services.get_or_create_brand_wallet(brand)
         wallet_services.credit(wallet=wallet, amount=Decimal("100.00"), category=LedgerEntry.Category.FUNDING)
-        campaign_services.activate_campaign(campaign)
+        go_live(campaign)
 
         user = _user("buyer@example.com")
         from Apps.reservations import services as reservation_services

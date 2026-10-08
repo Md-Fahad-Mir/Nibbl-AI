@@ -42,7 +42,7 @@ can't be confirmed, the receipt goes to **manual review** — never auto-rejecte
 ## Phases
 1. ✅ **Backend engine** (done 2026-10-08; migration 0005 converts existing campaigns) — deal types + reward math, suggested wording, 25-hour capacity,
    term snapshot, reserve-max / pay-actual, cooldown semantics. API changes additive only.
-2. **Approval workflow** — submit/review statuses, revisions (approved version stays
+2. ✅ **Approval workflow** (done 2026-10-08; migration 0007 grandfathers running campaigns) — submit/review statuses, revisions (approved version stays
    live), admin approval queue (#44).
 3. **Brand builder UI** — new campaign builder + campaign detail page
    (status banner, "Current cycle claims X of Y", review activity).

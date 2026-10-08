@@ -412,6 +412,11 @@ export const backendApi = {
       path: `/brands/${brandId}/campaigns/${campaignId}/preview/`,
       auth: true,
     }),
+    submitCampaign: (brandId: string, campaignId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/campaigns/${campaignId}/submit/`,
+      auth: true,
+    }),
     activateCampaign: (brandId: string, campaignId: string): ApiEndpoint => ({
       method: "POST",
       path: `/brands/${brandId}/campaigns/${campaignId}/activate/`,

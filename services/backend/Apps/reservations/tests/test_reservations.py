@@ -17,6 +17,7 @@ from Apps.reservations import services
 from Apps.reservations.models import Reservation
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import Hold, LedgerEntry
+from Apps.common.testing import go_live
 
 
 def _campaign(*, daily="100.00", premium="5.00", fallback=None, fallback_on=False,
@@ -43,7 +44,7 @@ def _campaign(*, daily="100.00", premium="5.00", fallback=None, fallback_on=Fals
     wallet_services.credit(
         wallet=wallet, amount=Decimal(fund), category=LedgerEntry.Category.FUNDING
     )
-    campaign_services.activate_campaign(campaign)
+    go_live(campaign)
     return brand, campaign, wallet
 
 

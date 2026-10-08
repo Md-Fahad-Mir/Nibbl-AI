@@ -34,6 +34,7 @@ from Apps.receipts.tests.test_claim_to_reward import (
 from Apps.reservations import services as reservation_services
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
+from Apps.common.testing import go_live
 
 
 def second_world(*, brand_name="Other Brand", slug="other-brand",
@@ -63,7 +64,7 @@ def second_world(*, brand_name="Other Brand", slug="other-brand",
         wallet=wallet, amount=Decimal("1000.00"),
         category=LedgerEntry.Category.FUNDING,
     )
-    campaign_services.activate_campaign(campaign)
+    go_live(campaign)
     return owner, brand, product, campaign
 
 

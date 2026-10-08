@@ -301,7 +301,7 @@ class PhoneVerificationTests(APITestCase):
     def test_add_and_verify_phone(self):
         resp = self.client.post(
             reverse("v1:accounts:users:add-phone"),
-            {"phone": "+15551234567"},
+            {"phone": "+12125551234"},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)

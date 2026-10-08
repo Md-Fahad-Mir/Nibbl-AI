@@ -153,6 +153,9 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class AddPhoneSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=20)
+    # Optional ISO country (e.g. "BD") for a local-format number; not needed
+    # when ``phone`` is already international (+880…).
+    country = serializers.CharField(max_length=2, required=False, allow_blank=True)
 
 
 class VerifyPhoneSerializer(serializers.Serializer):

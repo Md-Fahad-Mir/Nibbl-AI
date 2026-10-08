@@ -1,4 +1,4 @@
-"""Phone add/verify: US normalization and the log-only fallback (no Twilio)."""
+"""Phone add/verify: international validation and the log-only fallback (no Twilio)."""
 
 from django.urls import reverse
 from rest_framework import status
@@ -13,15 +13,31 @@ class PhoneVerificationTests(APITestCase):
         self.user = User.objects.create_user(email="p@example.com", password="x", full_name="P")
         self.client.force_authenticate(self.user)
 
-    def test_normalizes_us_numbers(self):
-        self.assertEqual(services.normalize_us_phone("(555) 201-0003"), "+15552010003")
-        self.assertEqual(services.normalize_us_phone("+1 555 201 0003"), "+15552010003")
-        for bad in ("12345", "+44 20 7946 0958", "055-201-0003"):
-            with self.assertRaises(services.AccountError):
-                services.normalize_us_phone(bad)
+    def test_accepts_mobile_numbers_from_any_country(self):
+        self.assertEqual(services.normalize_phone("+1 (212) 555-0123"), "+12125550123")   # US
+        self.assertEqual(services.normalize_phone("+880 1712-345678"), "+8801712345678")  # Bangladesh
+        self.assertEqual(services.normalize_phone("+44 7911 123456"), "+447911123456")    # UK mobile
+        self.assertEqual(services.normalize_phone("0044 7911 123456"), "+447911123456")   # 00 prefix
+
+    def test_local_number_with_country_applies_that_countrys_rules(self):
+        # Leading 0 is the national prefix in BD and the UK — dropped correctly.
+        self.assertEqual(services.normalize_phone("01712-345678", "BD"), "+8801712345678")
+        self.assertEqual(services.normalize_phone("07911 123456", "gb"), "+447911123456")
+        self.assertEqual(services.normalize_phone("(212) 555-0123", "US"), "+12125550123")
+
+    def test_rejects_missing_country_code_invalid_and_non_sms_numbers(self):
+        for bad in (
+            "(212) 555-0123",     # no country code and no country given
+            "+1 12345",           # too short / invalid
+            "+44 20 7946 0958",   # UK landline
+            "+1 800 555 0199",    # toll-free
+            "+44 909 879 0000",   # premium-rate (SMS-fraud vector)
+        ):
+            with self.assertRaises(services.AccountError, msg=bad):
+                services.normalize_phone(bad)
 
     def test_add_and_verify_without_twilio_uses_logged_code(self):
-        resp = self.client.post(reverse("v1:accounts:users:add-phone"), {"phone": "555-201-0004"}, format="json")
+        resp = self.client.post(reverse("v1:accounts:users:add-phone"), {"phone": "+880 1712-345604"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
         code = VerificationCode.objects.filter(
             user=self.user, purpose=VerificationCode.Purpose.PHONE_VERIFY
@@ -30,7 +46,7 @@ class PhoneVerificationTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.user.refresh_from_db()
         self.assertTrue(self.user.is_phone_verified)
-        self.assertEqual(self.user.last_verified_phone, "+15552010004")
+        self.assertEqual(self.user.last_verified_phone, "+8801712345604")
         self.assertIsNone(self.user.withdrawals_paused_until)  # first number: no pause
 
     def test_invalid_number_rejected(self):

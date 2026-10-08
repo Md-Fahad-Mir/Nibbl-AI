@@ -194,13 +194,13 @@ class SmsRolloutTests(APITestCase):
         user = _user("i@example.com", None, verified=False)
         method = _method(user, "i@paypal.com")
         # First number: verified, no pause.
-        account_services.start_phone_verification(user, phone="(555) 201-0001")
+        account_services.start_phone_verification(user, phone="+1 212 555 0101")
         account_services.verify_phone(user, code="123456")
         user.refresh_from_db()
-        self.assertEqual(user.phone, "+15552010001")
+        self.assertEqual(user.phone, "+12125550101")
         self.assertIsNone(user.withdrawals_paused_until)
         # Change to a different number → withdrawals pause.
-        account_services.start_phone_verification(user, phone="555-201-0002")
+        account_services.start_phone_verification(user, phone="+44 7911 123456")
         account_services.verify_phone(user, code="123456")
         user.refresh_from_db()
         self.assertIsNotNone(user.withdrawals_paused_until)

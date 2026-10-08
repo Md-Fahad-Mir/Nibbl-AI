@@ -49,6 +49,12 @@ class User(UUIDModel, AbstractBaseUser, PermissionsMixin):
 
     is_email_verified = models.BooleanField(default=False)
     is_phone_verified = models.BooleanField(default=False)
+    phone_verified_at = models.DateTimeField(null=True, blank=True)
+    # The last number this user successfully verified. Verifying a DIFFERENT
+    # number later is a phone change, which pauses withdrawals (account-takeover
+    # guard, see withdrawals_paused_until).
+    last_verified_phone = models.CharField(max_length=20, blank=True)
+    withdrawals_paused_until = models.DateTimeField(null=True, blank=True)
 
     accepted_terms_at = models.DateTimeField(null=True, blank=True)
 

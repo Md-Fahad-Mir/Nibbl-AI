@@ -27,6 +27,7 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
     draft[field] !== undefined
       ? Boolean(draft[field])
       : Boolean(platformSettings?.[field]);
+  const smsConfigured = Boolean(platformSettings?.sms_configured);
 
   const handleSave = async () => {
     setSaving(true);
@@ -37,6 +38,7 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
         withdrawal_review_rolling: text("withdrawal_review_rolling"),
         withdrawal_rolling_days: Number(text("withdrawal_rolling_days")),
         referrals_enabled: bool("referrals_enabled"),
+        withdrawal_sms_required: bool("withdrawal_sms_required"),
       });
       setDraft({});
       setMessage("Settings saved.");
@@ -105,6 +107,28 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
             onChange={(e) => setDraft({ ...draft, withdrawal_rolling_days: e.target.value })}
           />
         </label>
+
+        <div className="border-t border-[#F0F0F7] pt-4">
+          <h3 className="text-base font-bold text-[#1A1A2E]">SMS-verified withdrawals</h3>
+          <label
+            className={`flex items-center gap-2 text-sm font-medium mt-2 ${
+              smsConfigured ? "text-[#454656]" : "text-[#A0A0B5]"
+            }`}
+          >
+            <input
+              type="checkbox"
+              disabled={!smsConfigured}
+              checked={bool("withdrawal_sms_required")}
+              onChange={(e) => setDraft({ ...draft, withdrawal_sms_required: e.target.checked })}
+            />
+            Withdrawals require an SMS code
+          </label>
+          <p className="text-xs text-[#6B6B80] mt-1">
+            {smsConfigured
+              ? "Shoppers without a verified phone are asked to verify it when they withdraw."
+              : "SMS sending isn't configured yet, so this can't be turned on."}
+          </p>
+        </div>
 
         <div className="border-t border-[#F0F0F7] pt-4">
           <h3 className="text-base font-bold text-[#1A1A2E]">Referrals</h3>

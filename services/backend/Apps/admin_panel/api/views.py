@@ -150,6 +150,29 @@ class SuspendUserView(APIView):
 
 
 @extend_schema(tags=["admin"])
+class ResetUserPhoneView(APIView):
+    """Clear a shopper's phone (e.g. lost phone) so they can verify a new one.
+    Audited; the next number they verify counts as a change (48h pause)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(request=s.SuspendUserSerializer, responses={200: None})
+    def post(self, request, user_id):
+        from Apps.accounts import services as account_services
+
+        user = User.objects.filter(id=user_id, is_deleted=False).first()
+        if user is None:
+            raise NotFound("User not found.")
+        serializer = s.SuspendUserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        account_services.reset_phone(
+            user=user, admin=request.user,
+            reason=serializer.validated_data.get("reason", ""),
+        )
+        return Response({"detail": "Phone number reset."})
+
+
+@extend_schema(tags=["admin"])
 class ReactivateUserView(APIView):
     permission_classes = [IsPlatformAdmin]
 

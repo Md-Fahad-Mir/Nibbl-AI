@@ -125,9 +125,30 @@ def _validate_withdrawal(*, user, payout_method_id, amount):
     return method, wallet, amount
 
 
+class PhoneVerificationRequired(PayoutError):
+    """The shopper must verify a phone before an SMS-verified withdrawal."""
+
+    code = "phone_verification_required"
+
+
+def sms_required() -> bool:
+    """Withdrawals need an SMS code only when the admin switch is on AND SMS
+    sending is configured (the switch can't be enabled without it)."""
+    return (
+        get_platform_settings().withdrawal_sms_required
+        and twilio_verify.is_configured()
+    )
+
+
 def _require_verified_phone(user) -> str:
     if not (user.phone and user.is_phone_verified):
-        raise PayoutError("Verify your mobile number before withdrawing.")
+        raise PhoneVerificationRequired("Verify your mobile number before withdrawing.")
+    paused_until = user.withdrawals_paused_until
+    if paused_until and paused_until > timezone.now():
+        raise PayoutError(
+            "Withdrawals are paused until "
+            f"{paused_until:%b %d, %H:%M} UTC because your phone number changed."
+        )
     return user.phone
 
 
@@ -141,8 +162,8 @@ def start_withdrawal_verification(*, user, payout_method_id, amount) -> str:
     # Report "SMS verification unavailable" (→ 503, clients skip the SMS step)
     # before demanding a verified phone; otherwise shoppers without one could
     # never withdraw while verification is switched off.
-    if not settings.TWILIO_VERIFY_SERVICE_SID:
-        raise twilio_verify.TwilioNotConfigured("Twilio Verify is not configured.")
+    if not sms_required():
+        raise twilio_verify.TwilioNotConfigured("SMS verification is not required.")
     phone = _require_verified_phone(user)
     twilio_verify.start_verification(phone)
     return _mask_phone(phone)
@@ -169,9 +190,9 @@ def request_withdrawal(*, user, payout_method_id, amount, code="") -> Withdrawal
         user=user, payout_method_id=payout_method_id, amount=amount
     )
 
-    # SMS verification is enforced once Twilio Verify is configured; until then
-    # the flow is unchanged so existing clients keep working.
-    if settings.TWILIO_VERIFY_SERVICE_SID:
+    # SMS verification is enforced only when the admin switch is on (and SMS
+    # is configured); otherwise the flow is unchanged.
+    if sms_required():
         phone = _require_verified_phone(user)
         if not code or not twilio_verify.check_verification(phone, code):
             raise PayoutError("Invalid or missing verification code.")

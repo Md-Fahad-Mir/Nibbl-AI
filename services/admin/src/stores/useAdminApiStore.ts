@@ -238,6 +238,7 @@ interface AdminApiState {
   pendingPayoutMethods: ApiRecord[];
   loadPendingPayoutMethods: () => Promise<void>;
   reviewPayoutMethod: (methodId: string, approve: boolean, note?: string) => Promise<void>;
+  resetUserPhone: (userId: string, reason: string) => Promise<void>;
   platformSettings: ApiRecord | null;
   loadPlatformSettings: () => Promise<void>;
   savePlatformSettings: (body: ApiRecord) => Promise<void>;
@@ -386,6 +387,12 @@ export const useAdminApiStore = create<AdminApiState>()(
         const created = await nibblApi.createAdminPromoCode(body);
         await get().loadPromoCodes();
         return created;
+      },
+      resetUserPhone: async (userId, reason) => {
+        await apiClient.request(backendApi.admin.resetUserPhone(userId), {
+          body: { reason },
+        });
+        await get().loadUsers();
       },
       loadPlatformSettings: async () => {
         const response = await nibblApi.adminSettings();

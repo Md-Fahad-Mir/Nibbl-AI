@@ -29,7 +29,12 @@ def _run(func, *args, **kwargs):
     try:
         return func(*args, **kwargs)
     except DomainError as exc:
-        raise ValidationError({"detail": str(exc)})
+        body = {"detail": str(exc)}
+        # Machine-readable reason (e.g. "phone_verification_required") so
+        # clients can route the shopper to the phone-verification step.
+        if getattr(exc, "code", None):
+            body["code"] = exc.code
+        raise ValidationError(body)
 
 
 # ---------------------------------------------------------------------------

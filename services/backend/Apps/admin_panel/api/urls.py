@@ -12,6 +12,7 @@ urlpatterns = [
     path("admin/users/", views.AdminUserListView.as_view(), name="user-list"),
     path("admin/users/<uuid:user_id>/wallet/credit/", views.AdminUserWalletCreditView.as_view(), name="user-wallet-credit"),
     path("admin/users/<uuid:user_id>/suspend/", views.SuspendUserView.as_view(), name="user-suspend"),
+    path("admin/users/<uuid:user_id>/reset-phone/", views.ResetUserPhoneView.as_view(), name="user-reset-phone"),
     path("admin/users/<uuid:user_id>/reactivate/", views.ReactivateUserView.as_view(), name="user-reactivate"),
     path("admin/users/<uuid:user_id>/approve-brand/", views.AdminApproveBrandView.as_view(), name="user-approve-brand"),
     path("admin/fraud-flags/", views.FraudFlagListView.as_view(), name="fraud-flags"),

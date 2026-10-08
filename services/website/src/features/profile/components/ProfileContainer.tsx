@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import UserAvatar from "@/components/UserAvatar";
+import VerifyPhoneModal from "@/features/wallet/components/VerifyPhoneModal";
 import Header from "../../homepage/components/Header";
 import Footer from "../../homepage/components/Footer";
 import { LoadState, useConsumerApiStore } from "@/stores/useConsumerApiStore";
@@ -81,6 +82,7 @@ export default function ProfileContainer({
   const [showNewPass, setShowNewPass] = useState(false);
   const [activeFaqIndex, setActiveFaqIndex] = useState<number | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [privacyPolicy, setPrivacyPolicy] = useState<LegalContent | null>(null);
   const [termsContent, setTermsContent] = useState<LegalContent | null>(null);
   const [faqs, setFaqs] = useState<PublicFaq[]>([]);
@@ -177,6 +179,8 @@ export default function ProfileContainer({
 
   const displayName = text(user?.full_name ?? user?.name, text(user?.email, "NibblAI user"));
   const email = text(user?.email, "");
+  const phone = text(user?.phone, "");
+  const phoneVerified = Boolean(user?.is_phone_verified) && Boolean(phone);
   const backendAvatar = text(user?.avatar_url ?? user?.avatar ?? user?.profile_image, "");
   const avatar = avatarPreviewUrl || imageUrl(backendAvatar, "");
   const notificationsEnabled = Boolean(
@@ -290,6 +294,19 @@ export default function ProfileContainer({
 
             <ProfileGroup title="Account Information">
               <ProfileRow label="Edit Profile" onClick={() => setActiveView("edit")} />
+              <ProfileRow
+                label="Phone Number"
+                onClick={() => setShowPhoneModal(true)}
+                badge={
+                  phoneVerified ? (
+                    <span className="text-[12px] font-medium text-[#00A671]">{phone} ✓ Verified</span>
+                  ) : (
+                    <span className="text-[12px] font-medium text-[#E6A23C]">
+                      {phone ? "Not verified" : "Add"}
+                    </span>
+                  )
+                }
+              />
               <ProfileRow label="Saved" onClick={() => setActiveView("saved")} />
             </ProfileGroup>
 
@@ -321,6 +338,22 @@ export default function ProfileContainer({
             )}
             {saveMessage && (
               <p className="text-sm font-medium text-[#00A671]">{saveMessage}</p>
+            )}
+
+            {showPhoneModal && (
+              <VerifyPhoneModal
+                initialPhone={phoneVerified ? "" : phone}
+                reason={
+                  phoneVerified
+                    ? "Changing your number pauses withdrawals for 48 hours for your security."
+                    : "We'll text you a 6-digit code to confirm it's yours."
+                }
+                onClose={() => setShowPhoneModal(false)}
+                onVerified={() => {
+                  setShowPhoneModal(false);
+                  setSaveMessage("Phone number verified.");
+                }}
+              />
             )}
 
             <button
@@ -618,7 +651,15 @@ function ProfileGroup({ title, children }: { title: string; children: ReactNode 
   );
 }
 
-function ProfileRow({ label, onClick }: { label: string; onClick: () => void }) {
+function ProfileRow({
+  label,
+  onClick,
+  badge,
+}: {
+  label: string;
+  onClick: () => void;
+  badge?: ReactNode;
+}) {
   return (
     <button
       onClick={onClick}
@@ -627,7 +668,10 @@ function ProfileRow({ label, onClick }: { label: string; onClick: () => void }) 
       <span className="text-[18px] font-medium leading-[22px] text-[#575757]">
         {label}
       </span>
-      <span className="text-[#4D4D4D] w-6 h-6 flex items-center justify-center">&rarr;</span>
+      <span className="flex items-center gap-2">
+        {badge}
+        <span className="text-[#4D4D4D] w-6 h-6 flex items-center justify-center">&rarr;</span>
+      </span>
     </button>
   );
 }

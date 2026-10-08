@@ -55,6 +55,8 @@ export interface ConsumerApiState {
   logout: () => Promise<void>;
   validateSession: () => Promise<boolean>;
   loadProfile: () => Promise<void>;
+  addPhone: (phone: string) => Promise<void>;
+  verifyPhone: (code: string) => Promise<void>;
   loadHome: (search?: string, category?: string, page?: number) => Promise<void>;
   loadOfferDetails: (campaignId: string) => Promise<void>;
   loadSavedOffers: () => Promise<void>;
@@ -396,6 +398,14 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
           set({ status: "error", error: readError(error) });
           return true;
         }
+      },
+      addPhone: async (phone) => {
+        await nibblApi.addPhone(phone);
+      },
+      verifyPhone: async (code) => {
+        // Returns the updated user (phone + is_phone_verified).
+        const user = await nibblApi.verifyPhone(code);
+        set({ user });
       },
       loadProfile: async () => {
         set({ status: "loading", error: null });

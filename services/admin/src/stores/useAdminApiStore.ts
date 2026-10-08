@@ -238,6 +238,9 @@ interface AdminApiState {
   pendingPayoutMethods: ApiRecord[];
   loadPendingPayoutMethods: () => Promise<void>;
   reviewPayoutMethod: (methodId: string, approve: boolean, note?: string) => Promise<void>;
+  platformSettings: ApiRecord | null;
+  loadPlatformSettings: () => Promise<void>;
+  savePlatformSettings: (body: ApiRecord) => Promise<void>;
 }
 
 export const useAdminApiStore = create<AdminApiState>()(
@@ -255,6 +258,7 @@ export const useAdminApiStore = create<AdminApiState>()(
       stats: [],
       promoCodes: [],
       pendingPayoutMethods: [],
+      platformSettings: null,
       unreadCount: 0,
       status: "idle",
       error: null,
@@ -382,6 +386,14 @@ export const useAdminApiStore = create<AdminApiState>()(
         const created = await nibblApi.createAdminPromoCode(body);
         await get().loadPromoCodes();
         return created;
+      },
+      loadPlatformSettings: async () => {
+        const response = await nibblApi.adminSettings();
+        set({ platformSettings: response });
+      },
+      savePlatformSettings: async (body) => {
+        const response = await nibblApi.updateAdminSettings(body);
+        set({ platformSettings: response });
       },
       loadPendingPayoutMethods: async () => {
         const response = await nibblApi.pendingPayoutMethods();

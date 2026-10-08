@@ -84,7 +84,7 @@
 - [ ] ⬜ **47. Referral management / flag review**
 - [ ] ⬜ **48. Receipt brand discovery** — unpartnered-brand leads
 - [ ] 🟡 **49. Revenue analytics** — partial; subscription/rebate/review-fee breakdowns missing
-- [ ] ⬜ **50. Admin settings** — withdrawal thresholds ($25/$100), referral toggles, Discovery Ranking config
+- [ ] 🟡 **50. Admin settings** — ✅ admin-configurable withdrawal-review thresholds ($25 single / $100 rolling-30d, over-threshold withdrawals get `needs_review`) + referral on/off toggle, with a Platform Settings admin page (`/admin/settings/`); ⬜ Discovery-ranking config lands with the ranking engine (#14)
 
 ## Cross-cutting
 - [ ] 🟡 **51. Fraud & abuse controls** — duplicate / velocity / manual ✓; device / IP / browser checks missing

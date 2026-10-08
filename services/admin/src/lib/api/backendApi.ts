@@ -1,4 +1,4 @@
-export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export interface ApiEndpoint {
   method: HttpMethod;
@@ -532,6 +532,8 @@ export const backendApi = {
       path: `/admin/brands/${brandId}/plan/`,
       auth: true,
     }),
+    settings: { method: "GET", path: "/admin/settings/", auth: true },
+    updateSettings: { method: "PUT", path: "/admin/settings/", auth: true },
     promoCodes: { method: "GET", path: "/admin/promo-codes/", auth: true },
     createPromoCode: { method: "POST", path: "/admin/promo-codes/", auth: true },
     fraudFlags: { method: "GET", path: "/admin/fraud-flags/", auth: true },
@@ -834,6 +836,10 @@ export const nibblApi = {
     requestEndpoint<ApiRecord[]>(backendApi.admin.promoCodes),
   createAdminPromoCode: (body: ApiRecord) =>
     requestEndpoint<ApiRecord>(backendApi.admin.createPromoCode, body),
+  adminSettings: () =>
+    requestEndpoint<ApiRecord>(backendApi.admin.settings),
+  updateAdminSettings: (body: ApiRecord) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.updateSettings, body),
   pendingPayoutMethods: () =>
     requestEndpoint<ApiRecord[]>(backendApi.admin.pendingPayoutMethods),
   reviewPayoutMethod: (methodId: string, body: { approve: boolean; note?: string }) =>

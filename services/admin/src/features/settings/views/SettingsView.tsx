@@ -10,6 +10,7 @@ import { SettingsPasswordFlow } from "../components/SettingsPasswordFlow";
 import { FaqView } from "../components/FaqView";
 import { PrivacyPolicyView } from "../components/PrivacyPolicyView";
 import { TermsConditionView } from "../components/TermsConditionView";
+import { PlatformSettingsView } from "../components/PlatformSettingsView";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useRouter } from "next/navigation";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
@@ -158,6 +159,10 @@ export const SettingsView = () => {
             onForgotPassword={forgotPassword}
             onResetPassword={resetPassword}
           />
+        )}
+
+        {activeSubTab === "platform-settings" && (
+          <PlatformSettingsView onBack={() => setActiveSubTab("menu")} />
         )}
 
         {activeSubTab === "faq" && (

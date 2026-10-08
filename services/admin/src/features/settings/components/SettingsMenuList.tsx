@@ -13,6 +13,7 @@ export const SettingsMenuList: React.FC<SettingsMenuListProps> = ({
   const accountItems: { id: SettingsSubTab; label: string }[] = [
     { id: "personal-info", label: "Personal Information" },
     { id: "change-password", label: "Change Password" },
+    { id: "platform-settings", label: "Platform Settings" },
   ];
 
   const legalItems: { id: SettingsSubTab; label: string }[] = [

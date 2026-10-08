@@ -8,8 +8,30 @@ from Apps.payouts.models import PayoutBatch, PayoutMethod, WithdrawalRequest
 class PayoutMethodSerializer(serializers.ModelSerializer):
     class Meta:
         model = PayoutMethod
-        fields = ["id", "provider", "handle", "is_default", "created_at"]
-        read_only_fields = ["id", "created_at"]
+        fields = [
+            "id", "provider", "handle", "is_default",
+            "review_status", "review_note", "created_at",
+        ]
+        read_only_fields = fields
+
+
+class AdminPayoutMethodSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
+
+    class Meta:
+        model = PayoutMethod
+        fields = [
+            "id", "provider", "handle", "is_default",
+            "review_status", "review_note",
+            "user_email", "user_name", "created_at",
+        ]
+        read_only_fields = fields
+
+
+class ReviewPayoutMethodSerializer(serializers.Serializer):
+    approve = serializers.BooleanField()
+    note = serializers.CharField(required=False, allow_blank=True)
 
 
 class AddPayoutMethodSerializer(serializers.Serializer):

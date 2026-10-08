@@ -27,15 +27,41 @@ def add_payout_method(*, user, provider, handle, is_default=False) -> PayoutMeth
     handle = handle.strip()
     if not handle:
         raise PayoutError("A payout account handle is required.")
-    # Global uniqueness: an external account links to only one user.
+
+    # Same account already linked to this user.
+    if user.payout_methods.filter(provider=provider, handle__iexact=handle).exists():
+        raise PayoutError("This payout account is already linked to your account.")
+
+    # Linked to ANOTHER user → a fraud signal. Raise a review flag and reject
+    # the add rather than silently failing on the uniqueness constraint.
     if PayoutMethod.objects.filter(provider=provider, handle__iexact=handle).exists():
-        raise PayoutError("This payout account is already linked to an account.")
+        from Apps.receipts.models import FraudFlag
+
+        FraudFlag.objects.create(
+            user=user,
+            reason=FraudFlag.Reason.MANUAL,
+            detail=f"Duplicate payout account attempted: {provider}:{handle}",
+        )
+        raise PayoutError(
+            "This payout account is linked to another account and has been "
+            "flagged for review."
+        )
+
+    # A user's first payout method is usable immediately; any later change goes
+    # to a review hold until an admin approves it (spec 2.7).
+    is_first = not user.payout_methods.exists()
+    review_status = (
+        PayoutMethod.ReviewStatus.APPROVED
+        if is_first
+        else PayoutMethod.ReviewStatus.PENDING
+    )
     try:
         with transaction.atomic():
             if is_default:
                 user.payout_methods.update(is_default=False)
             return PayoutMethod.objects.create(
-                user=user, provider=provider, handle=handle, is_default=is_default,
+                user=user, provider=provider, handle=handle,
+                is_default=is_default, review_status=review_status,
             )
     except IntegrityError:
         raise PayoutError("This payout account is already linked to an account.")
@@ -47,6 +73,27 @@ def remove_payout_method(method: PayoutMethod) -> None:
     ).exists():
         raise PayoutError("This method has in-progress withdrawals and can't be removed.")
     method.delete()
+
+
+def list_pending_payout_methods():
+    """Payout methods awaiting admin review (the review queue)."""
+    return (
+        PayoutMethod.objects.filter(review_status=PayoutMethod.ReviewStatus.PENDING)
+        .select_related("user")
+        .order_by("created_at")
+    )
+
+
+def review_payout_method(*, method: PayoutMethod, approve: bool, note="") -> PayoutMethod:
+    """Approve or reject a payout method held for review."""
+    method.review_status = (
+        PayoutMethod.ReviewStatus.APPROVED
+        if approve
+        else PayoutMethod.ReviewStatus.REJECTED
+    )
+    method.review_note = note or ""
+    method.save(update_fields=["review_status", "review_note", "updated_at"])
+    return method
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +110,10 @@ def _validate_withdrawal(*, user, payout_method_id, amount):
     method = PayoutMethod.objects.filter(id=payout_method_id, user=user).first()
     if method is None:
         raise PayoutError("Payout method not found.")
+    if method.review_status != PayoutMethod.ReviewStatus.APPROVED:
+        raise PayoutError(
+            "This payout method is under review. You can withdraw once it's approved."
+        )
 
     wallet = wallet_services.get_or_create_customer_wallet(user)
     if wallet.available() < amount:

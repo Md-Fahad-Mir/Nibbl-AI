@@ -824,9 +824,13 @@ export const nibblApi = {
     requestEndpoint<ApiRecord>(backendApi.consumer.offerDetails(campaignId)),
   saveOffer: (campaignId: string) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.saveOffer(campaignId)),
-  createReservation: (campaignId: string) =>
+  createReservation: (
+    campaignId: string,
+    consents: { consent_nibbl?: boolean; consent_brand?: boolean } = {}
+  ) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.createReservation, {
       campaign: campaignId,
+      ...consents,
     }),
   reservations: (query?: RequestOptions["query"]) =>
     requestEndpoint<PaginatedResponse<ApiRecord>>(

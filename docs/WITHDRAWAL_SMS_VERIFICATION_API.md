@@ -6,6 +6,7 @@
 **Covers:**
 1. [Withdrawal SMS Verification](#part-1--withdrawal-sms-verification)
 2. [Receipt Reminders & Notifications](#part-2--receipt-reminders--notifications)
+3. [Claiming: consents, claim slots & payout-account review](#part-3--claiming-consents-claim-slots--payout-account-review)
 
 ---
 
@@ -184,3 +185,62 @@ until Firebase/FCM is configured on the server — that setup is pending.
 
 So: build the notifications list + deep-link now, and register device tokens now.
 Banners light up automatically once the server side is finished.
+
+---
+
+# Part 3 — Claiming: consents, claim slots & payout-account review
+
+All three are **additive** — existing requests keep working unchanged.
+
+## 1. Two consent checkboxes when claiming an offer
+
+Show two **separate, optional, unticked-by-default** checkboxes on the claim
+screen and send them with the claim:
+
+```
+POST /api/v1/reservations/
+{
+  "campaign": "<campaign_uuid>",
+  "consent_nibbl": true,     // "Send me NibblAI offers and updates by email and SMS."
+  "consent_brand": false     // "Send me offers and updates from <Brand> by email and SMS."
+}
+```
+
+- Both fields are optional and default to `false` (don't pre-tick them — marketing
+  consent must be the shopper's choice).
+- They're stored separately: one consent for Nibbl, one per brand.
+- Leaving a box unticked on a later claim does **not** withdraw an earlier "yes".
+
+## 2. Active claim slots ("3 of 5")
+
+A shopper can have a limited number of claims open at once (default **5**).
+
+```
+GET /api/v1/reservations/slots/
+→ { "used": 3, "limit": 5, "available": 2 }
+```
+
+Show it as "3 of 5 claims active". When `available` is `0`, a new claim returns
+**400** *"You've reached your active claim limit (5). Upload a receipt or let a
+claim expire to free up a slot."* — uploading a receipt or letting a claim expire
+frees a slot.
+
+## 3. Payout accounts can be "under review"
+
+`GET /api/v1/payout-methods/` now includes `review_status`
+(`approved` · `pending` · `rejected`) and `review_note`.
+
+- A shopper's **first** payout account is approved immediately.
+- Any **later** account starts as `pending` until an admin approves it.
+- Only offer **approved** accounts in the withdraw picker. A withdrawal to a
+  pending account returns **400** *"This payout method is under review…"*.
+- Adding an account that's already linked to another user returns **400**
+  *"…linked to another account and has been flagged for review."*
+
+## Quick reference
+
+| Endpoint | Method | What's new |
+|---|---|---|
+| `/reservations/` | POST | optional `consent_nibbl`, `consent_brand` |
+| `/reservations/slots/` | GET | **new** — `{ used, limit, available }` |
+| `/payout-methods/` | GET | `review_status`, `review_note` on each account |

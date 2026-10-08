@@ -33,7 +33,7 @@
 - [ ] ⬜ **16. Campaign-level suppression (not brand-wide)**
 
 ## Shopper Claim & Receipt Flow
-- [ ] ⬜ **17. Consent capture** — two checkboxes (Nibbl + Brand email/SMS)
+- [x] ✅ **17. Consent capture** — two separate optional checkboxes at claim (Nibbl email+SMS, Brand email+SMS); snapshot on the reservation + per-user Nibbl / per-brand `MarketingConsent` with grant date; website claim screen has the boxes; app dev guide updated
 - [x] ✅ **18. Active claim slots** — per-shopper hard cap (`ACTIVE_CLAIM_SLOTS`, default 5) enforced on claim; `GET /reservations/slots/` returns used/limit/available for the "3 of 5" display (app/website consume it)
 - [ ] 🟡 **19. Receipt validation / duplicate fingerprint / quantity allocation** — basic dup; richer fingerprint (store/register/txn#) + per-line qty missing
 - [x] ✅ **20. Reminder schedule (48h / 12h before expiry)** — fires at 48h and 12h before the reservation's exact deadline (each once, never extends it)
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (13):** #2, #3, #12, #18, #20, #31, #33, #34, #37, #41, #43, #45, #46.
+**Done to spec (14):** #2, #3, #12, #17, #18, #20, #31, #33, #34, #37, #41, #43, #45, #46.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

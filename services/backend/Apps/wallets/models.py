@@ -72,6 +72,20 @@ class Wallet(models.Model):
     def available(self):
         return self.balance - self.held_amount()
 
+    def promo_balance(self):
+        """Promotional money still on the wallet (promo credited − promo spent)."""
+        agg = self.ledger_entries.filter(is_promotional=True).aggregate(
+            credited=Sum("amount", filter=Q(entry_type=LedgerEntry.EntryType.CREDIT)),
+            spent=Sum("amount", filter=Q(entry_type=LedgerEntry.EntryType.DEBIT)),
+        )
+        return (agg["credited"] or ZERO) - (agg["spent"] or ZERO)
+
+    def reward_available(self):
+        """Real (non-promotional) money free to fund shopper rewards: the
+        settled balance minus promotional credit and active holds. Promo credit
+        can never back a reward."""
+        return self.balance - self.promo_balance() - self.held_amount()
+
 
 class LedgerEntry(models.Model):
     """An immutable, append-only money movement on a wallet."""
@@ -107,6 +121,10 @@ class LedgerEntry(models.Model):
     reference_id = models.CharField(max_length=64, blank=True)
 
     description = models.CharField(max_length=255, blank=True)
+    # Promotional money (admin promo credit / redeemed promo codes). Flagged so
+    # it can be spent on eligible platform charges (fees/subscription) but never
+    # reserved or paid out as a shopper reward. See Wallet.reward_available().
+    is_promotional = models.BooleanField(default=False)
     # Guards against double-posting the same logical event.
     idempotency_key = models.CharField(
         max_length=128, unique=True, null=True, blank=True

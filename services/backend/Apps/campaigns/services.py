@@ -223,7 +223,9 @@ def activate_campaign(campaign: Campaign) -> Campaign:
             )
 
     wallet = get_or_create_brand_wallet(campaign.brand)
-    if wallet.available() < campaign.daily_budget:
+    # Campaigns pay shopper rewards, so they must be backed by real funds —
+    # promotional credit can't be used to run a campaign.
+    if wallet.reward_available() < campaign.daily_budget:
         raise CampaignError(
             "Insufficient wallet funds to run this campaign. "
             "Fund the wallet to cover at least one day's budget."
@@ -248,7 +250,7 @@ def sync_funding_state(brand) -> dict:
     """Pause active campaigns the wallet can no longer fund, and resume
     auto-paused ones once funds return. Idempotent."""
     wallet = get_or_create_brand_wallet(brand)
-    available = wallet.available()
+    available = wallet.reward_available()
     summary = {"paused": 0, "resumed": 0}
 
     for campaign in brand.campaigns.filter(status=Campaign.Status.ACTIVE):

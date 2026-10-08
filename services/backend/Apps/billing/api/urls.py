@@ -5,6 +5,7 @@ from Apps.billing.api.views import (
     AddFundsView,
     AutoRefillView,
     PlanViewSet,
+    RedeemPromoCodeView,
     SavedCardsView,
     SetupCardView,
     StripeWebhookView,
@@ -35,6 +36,11 @@ urlpatterns = [
         "brands/<uuid:brand_id>/billing/auto-refill/",
         AutoRefillView.as_view(),
         name="auto-refill",
+    ),
+    path(
+        "brands/<uuid:brand_id>/billing/redeem-promo/",
+        RedeemPromoCodeView.as_view(),
+        name="redeem-promo",
     ),
     path(
         "billing/webhooks/stripe/",

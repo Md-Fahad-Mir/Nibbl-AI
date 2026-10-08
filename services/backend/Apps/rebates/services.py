@@ -72,7 +72,8 @@ def issue_reward(receipt) -> Redemption | None:
     # 3) Debit the brand the processing fee (platform revenue).
     fee_entry = None
     if fee > ZERO:
-        fee_entry = wallet_services.debit(
+        # Processing fee is an eligible charge: spend promotional credit first.
+        fee_entries = wallet_services.charge_eligible(
             wallet=brand_wallet,
             amount=fee,
             category=LedgerEntry.Category.REBATE_FEE,
@@ -81,6 +82,8 @@ def issue_reward(receipt) -> Redemption | None:
             description="Rebate processing fee",
             idempotency_key=f"redeem-fee:{reservation.id}",
         )
+        # Link the real-funds entry (or the promo one if fully promo-covered).
+        fee_entry = fee_entries[-1] if fee_entries else None
 
     reservation_services.mark_redeemed(reservation)
 

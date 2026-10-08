@@ -8,6 +8,8 @@ from Apps.wallets.models import LedgerEntry, Wallet
 class WalletSerializer(serializers.ModelSerializer):
     held = serializers.SerializerMethodField()
     available = serializers.SerializerMethodField()
+    promotional = serializers.SerializerMethodField()
+    reward_available = serializers.SerializerMethodField()
 
     class Meta:
         model = Wallet
@@ -18,6 +20,8 @@ class WalletSerializer(serializers.ModelSerializer):
             "balance",
             "held",
             "available",
+            "promotional",
+            "reward_available",
             "updated_at",
         ]
         read_only_fields = fields
@@ -27,6 +31,12 @@ class WalletSerializer(serializers.ModelSerializer):
 
     def get_available(self, obj) -> Decimal:
         return obj.available()
+
+    def get_promotional(self, obj) -> Decimal:
+        return obj.promo_balance()
+
+    def get_reward_available(self, obj) -> Decimal:
+        return obj.reward_available()
 
 
 class LedgerEntrySerializer(serializers.ModelSerializer):

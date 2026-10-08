@@ -124,6 +124,7 @@ def _issue_review_reward(review: Review) -> None:
             reference_type="review", reference_id=review.id,
             description="Review reward",
             idempotency_key=f"review-reward-debit:{review.id}",
+            real_only=True,  # promo credit may never fund a shopper reward
         )
     except wallet_services.InsufficientFunds as exc:
         raise RewardUnavailable(str(exc))

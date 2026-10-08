@@ -37,6 +37,9 @@ export const EarningsView = () => {
       case "brand":
         router.push("/brand");
         break;
+      case "promo-codes":
+        router.push("/promo-codes");
+        break;
       case "withdraw-request":
         router.push("/withdraw-request");
         break;

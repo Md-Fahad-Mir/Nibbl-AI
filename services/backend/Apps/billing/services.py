@@ -12,11 +12,17 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import F, Sum
 from django.utils import timezone
 
 from Apps.billing import stripe_gateway
-from Apps.billing.models import AutoRefill, Plan, Subscription
+from Apps.billing.models import (
+    AutoRefill,
+    Plan,
+    PromoCode,
+    PromoCodeRedemption,
+    Subscription,
+)
 from Apps.brands.models import Brand
 from Apps.common.dates import add_months
 from Apps.common.money import ZERO, to_money
@@ -100,7 +106,8 @@ def _charge_one(subscription: Subscription, now) -> str:
     wallet = wallet_services.get_or_create_brand_wallet(subscription.brand)
     period_key = subscription.current_period_start.date().isoformat()
     try:
-        wallet_services.debit(
+        # Subscription is an eligible charge: spend promotional credit first.
+        wallet_services.charge_eligible(
             wallet=wallet,
             amount=amount,
             category=LedgerEntry.Category.SUBSCRIPTION,
@@ -355,7 +362,8 @@ def run_auto_refill(now=None) -> dict:
         )
         wallet = wallet_services.get_or_create_brand_wallet(config.brand)
         # No recent spend (estimate 0) means there is nothing to refill for.
-        if trigger_at <= ZERO or wallet.available() >= trigger_at:
+        # Promo credit doesn't count toward the real funds that back rewards.
+        if trigger_at <= ZERO or wallet.reward_available() >= trigger_at:
             summary["skipped"] += 1
             continue
         try:
@@ -374,3 +382,69 @@ def run_auto_refill(now=None) -> dict:
         config.save(update_fields=["last_refilled_at", "updated_at"])
         summary["charged"] += 1
     return summary
+
+
+# ---------------------------------------------------------------------------
+# Promo codes (reusable promotional credit)
+# ---------------------------------------------------------------------------
+def create_promo_code(*, code, amount, note="", valid_from=None, valid_until=None,
+                      max_redemptions=None, once_per_brand=True,
+                      created_by=None) -> PromoCode:
+    code = (code or "").strip().upper()
+    if not code:
+        raise BillingError("A code is required.")
+    amount = to_money(amount)
+    if amount <= ZERO:
+        raise BillingError("Promo code amount must be positive.")
+    if PromoCode.objects.filter(code=code).exists():
+        raise BillingError("A promo code with this code already exists.")
+    if valid_from and valid_until and valid_until < valid_from:
+        raise BillingError("The end date must be after the start date.")
+    if max_redemptions is not None and max_redemptions <= 0:
+        raise BillingError("Max redemptions must be a positive number.")
+    return PromoCode.objects.create(
+        code=code, amount=amount, note=note,
+        valid_from=valid_from, valid_until=valid_until,
+        max_redemptions=max_redemptions, once_per_brand=once_per_brand,
+        created_by=created_by,
+    )
+
+
+@transaction.atomic
+def redeem_promo_code(*, brand, code) -> PromoCodeRedemption:
+    code = (code or "").strip().upper()
+    if not code:
+        raise BillingError("Enter a promo code.")
+    qs = PromoCode.objects.all()
+    try:
+        promo = qs.select_for_update().get(code=code)
+    except PromoCode.DoesNotExist:
+        raise BillingError("Invalid promo code.")
+
+    error = promo.availability_error()
+    if error:
+        raise BillingError(error)
+    if promo.once_per_brand and PromoCodeRedemption.objects.filter(
+        promo_code=promo, brand=brand
+    ).exists():
+        raise BillingError("Your brand has already redeemed this promo code.")
+
+    wallet = wallet_services.get_or_create_brand_wallet(brand)
+    entry = wallet_services.credit(
+        wallet=wallet,
+        amount=promo.amount,
+        category=LedgerEntry.Category.ADJUSTMENT,
+        reference_type="promo_code",
+        reference_id=promo.id,
+        description=f"Promo code {promo.code}",
+        idempotency_key=(
+            f"promo-code:{promo.id}:{brand.id}" if promo.once_per_brand else None
+        ),
+        is_promotional=True,
+    )
+    PromoCode.objects.filter(pk=promo.pk).update(
+        redemption_count=F("redemption_count") + 1
+    )
+    return PromoCodeRedemption.objects.create(
+        promo_code=promo, brand=brand, amount=promo.amount, ledger_entry=entry,
+    )

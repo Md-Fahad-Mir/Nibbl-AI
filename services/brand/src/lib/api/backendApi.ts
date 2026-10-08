@@ -719,6 +719,11 @@ export const backendApi = {
       path: `/brands/${brandId}/billing/auto-refill/`,
       auth: true,
     }),
+    redeemPromo: (brandId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/billing/redeem-promo/`,
+      auth: true,
+    }),
   },
 } as const;
 

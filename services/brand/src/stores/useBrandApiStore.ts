@@ -308,6 +308,7 @@ interface BrandApiState {
   loadSavedCards: () => Promise<SavedCard[]>;
   getAutoRefill: () => Promise<AutoRefillConfig>;
   saveAutoRefill: (config: AutoRefillInput) => Promise<AutoRefillConfig>;
+  redeemPromoCode: (code: string) => Promise<ApiRecord>;
   markAllNotificationsRead: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -944,6 +945,16 @@ export const useBrandApiStore = create<BrandApiState>()(
           backendApi.billing.setAutoRefill(brandId),
           { body: config },
         );
+      },
+      redeemPromoCode: async (code) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        const result = await apiClient.request<ApiRecord>(
+          backendApi.billing.redeemPromo(brandId),
+          { body: { code } },
+        );
+        await get().refreshWallet();
+        return result;
       },
       markAllNotificationsRead: async () => {
         await nibblApi.markAllNotificationsRead();

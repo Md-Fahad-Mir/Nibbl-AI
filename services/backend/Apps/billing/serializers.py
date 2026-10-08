@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from Apps.billing.models import Plan
+from Apps.billing.models import Plan, PromoCode
 
 
 class PlanSerializer(serializers.ModelSerializer):
@@ -76,3 +76,44 @@ class AutoRefillStatusSerializer(serializers.Serializer):
     trigger_at = serializers.DecimalField(max_digits=10, decimal_places=2)
     recommended_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
     last_refilled_at = serializers.DateTimeField(allow_null=True)
+
+
+class PromoCodeSerializer(serializers.ModelSerializer):
+    """Read view of a promo code (admin listing)."""
+
+    class Meta:
+        model = PromoCode
+        fields = [
+            "id",
+            "code",
+            "amount",
+            "note",
+            "valid_from",
+            "valid_until",
+            "max_redemptions",
+            "redemption_count",
+            "once_per_brand",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class CreatePromoCodeSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=40)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    note = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    valid_from = serializers.DateTimeField(required=False, allow_null=True)
+    valid_until = serializers.DateTimeField(required=False, allow_null=True)
+    max_redemptions = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    once_per_brand = serializers.BooleanField(required=False, default=True)
+
+
+class RedeemPromoCodeSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=40)
+
+
+class PromoRedemptionResultSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    promotional_balance = serializers.DecimalField(max_digits=12, decimal_places=2)

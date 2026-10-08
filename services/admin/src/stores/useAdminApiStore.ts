@@ -232,6 +232,9 @@ interface AdminApiState {
   reactivateBrand: (brandId: string) => Promise<void>;
   approveBrand: (brand: BrandDetail) => Promise<void>;
   rejectBrandApplication: (applicationId: string) => Promise<void>;
+  promoCodes: ApiRecord[];
+  loadPromoCodes: () => Promise<void>;
+  createPromoCode: (body: ApiRecord) => Promise<ApiRecord>;
 }
 
 export const useAdminApiStore = create<AdminApiState>()(
@@ -247,6 +250,7 @@ export const useAdminApiStore = create<AdminApiState>()(
       transactions: [],
       monthlyEarnings: [],
       stats: [],
+      promoCodes: [],
       unreadCount: 0,
       status: "idle",
       error: null,
@@ -365,6 +369,15 @@ export const useAdminApiStore = create<AdminApiState>()(
       loadUsers: async () => {
         const response = await apiClient.request<unknown>(backendApi.admin.users);
         set({ users: listResults(response).map(mapUser) });
+      },
+      loadPromoCodes: async () => {
+        const response = await nibblApi.adminPromoCodes();
+        set({ promoCodes: Array.isArray(response) ? response : listResults(response) });
+      },
+      createPromoCode: async (body) => {
+        const created = await nibblApi.createAdminPromoCode(body);
+        await get().loadPromoCodes();
+        return created;
       },
       loadBrands: async () => {
         const [brands, applications] = await Promise.all([

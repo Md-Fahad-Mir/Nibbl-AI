@@ -532,6 +532,8 @@ export const backendApi = {
       path: `/admin/brands/${brandId}/plan/`,
       auth: true,
     }),
+    promoCodes: { method: "GET", path: "/admin/promo-codes/", auth: true },
+    createPromoCode: { method: "POST", path: "/admin/promo-codes/", auth: true },
     fraudFlags: { method: "GET", path: "/admin/fraud-flags/", auth: true },
     campaigns: { method: "GET", path: "/admin/campaigns/", auth: true },
     transactions: {
@@ -818,6 +820,10 @@ export const nibblApi = {
     requestEndpoint<ApiRecord>(backendApi.admin.privacyPolicy),
   updateAdminPrivacyPolicy: (content: string) =>
     requestEndpoint<ApiRecord>(backendApi.admin.updatePrivacyPolicy, { content }),
+  adminPromoCodes: () =>
+    requestEndpoint<ApiRecord[]>(backendApi.admin.promoCodes),
+  createAdminPromoCode: (body: ApiRecord) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.createPromoCode, body),
   offers: (query?: RequestOptions["query"]) =>
     requestEndpoint<PaginatedResponse<ApiRecord>>(backendApi.consumer.offers, undefined, query),
   offerCategories: () =>

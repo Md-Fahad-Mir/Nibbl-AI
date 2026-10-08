@@ -5,6 +5,7 @@ import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatDate, formatMoney, titleCase, toNumber } from "../../utils/backendMappers";
 import FundWalletModal from "./FundWalletModal";
 import AutoRefillCard from "./AutoRefillCard";
+import RedeemPromoCard from "./RedeemPromoCard";
 
 interface WalletOverviewProps {
   onViewAll: () => void;
@@ -114,6 +115,8 @@ export default function WalletOverview({ onViewAll }: WalletOverviewProps) {
 
       {/* Automatic Refill */}
       <AutoRefillCard />
+
+      <RedeemPromoCard />
 
       {/* Transaction History Section */}
       <div className="w-full bg-white border border-[#C5C5D9]/10 shadow-[0px_1px_2px_rgba(0,0,0,0.05)] rounded-[32px] overflow-hidden flex flex-col">

@@ -4,7 +4,9 @@ M2 introduces the subscription *plan* definitions only. Subscriptions,
 wallets, fees-in-motion and charges arrive in M3.
 """
 
+from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from Apps.common.models import BaseModel
 from Apps.common.money import MONEY_FIELD, ZERO
@@ -139,3 +141,72 @@ class AutoRefill(BaseModel):
 
     def __str__(self):
         return f"{self.brand_id} auto-refill ({'on' if self.enabled else 'off'})"
+
+
+class PromoCode(BaseModel):
+    """An admin-created, reusable promotional code a brand can redeem for
+    promotional wallet credit. Promo credit covers eligible platform charges
+    (fees, subscription) but never shopper rewards (see Wallet.reward_available).
+    """
+
+    code = models.CharField(max_length=40, unique=True)
+    amount = models.DecimalField(**MONEY_FIELD)
+    note = models.CharField(max_length=255, blank=True)
+
+    # Validity window (both optional: open-ended if unset).
+    valid_from = models.DateTimeField(null=True, blank=True)
+    valid_until = models.DateTimeField(null=True, blank=True)
+
+    # Usage controls. ``max_redemptions`` null = unlimited total redemptions.
+    max_redemptions = models.PositiveIntegerField(null=True, blank=True)
+    redemption_count = models.PositiveIntegerField(default=0)
+    once_per_brand = models.BooleanField(default=True)
+
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="created_promo_codes",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.code} (${self.amount})"
+
+    def availability_error(self, now=None):
+        """Return a user-facing reason the code can't be redeemed, or None."""
+        now = now or timezone.now()
+        if not self.is_active:
+            return "This promo code is no longer active."
+        if self.valid_from and now < self.valid_from:
+            return "This promo code is not valid yet."
+        if self.valid_until and now > self.valid_until:
+            return "This promo code has expired."
+        if self.max_redemptions is not None and self.redemption_count >= self.max_redemptions:
+            return "This promo code has reached its redemption limit."
+        return None
+
+
+class PromoCodeRedemption(BaseModel):
+    """A single redemption of a promo code by a brand (audit + double-redeem
+    guard). ``once_per_brand`` codes allow at most one row per brand."""
+
+    promo_code = models.ForeignKey(
+        PromoCode, on_delete=models.CASCADE, related_name="redemptions"
+    )
+    brand = models.ForeignKey(
+        "brands.Brand", on_delete=models.CASCADE, related_name="promo_redemptions"
+    )
+    amount = models.DecimalField(**MONEY_FIELD)
+    ledger_entry = models.ForeignKey(
+        "wallets.LedgerEntry", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["promo_code", "brand"])]
+
+    def __str__(self):
+        return f"{self.brand_id} redeemed {self.promo_code_id}"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -16,6 +17,8 @@ from Apps.common.money import ZERO, to_money
 from Apps.payouts.models import PayoutBatch, PayoutMethod, WithdrawalRequest
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import Hold, LedgerEntry
+
+logger = logging.getLogger(__name__)
 
 S = WithdrawalRequest.Status
 
@@ -162,7 +165,14 @@ def start_withdrawal_verification(*, user, payout_method_id, amount) -> str:
     if not sms_required():
         raise twilio_verify.TwilioNotConfigured("SMS verification is not required.")
     phone = _require_verified_phone(user)
-    twilio_verify.start_verification(phone)
+    try:
+        twilio_verify.start_verification(phone)
+    except Exception:
+        # e.g. Twilio rejects the number or the country isn't enabled.
+        logger.exception("Withdrawal SMS send failed for user %s", user.pk)
+        raise PayoutError(
+            "We couldn't send a code to your phone. Please try again shortly."
+        )
     return _mask_phone(phone)
 
 

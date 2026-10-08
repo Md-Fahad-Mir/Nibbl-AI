@@ -289,6 +289,10 @@ def release_hold(*, hold) -> Hold:
 # ---------------------------------------------------------------------------
 def maybe_credit_referral_bonus(referred_user) -> LedgerEntry | None:
     """Pay the inviter once, the first time a referred user is activated."""
+    from Apps.common.models import get_platform_settings
+
+    if not get_platform_settings().referrals_enabled:
+        return None
     referrer = referred_user.referred_by
     if referrer is None:
         return None

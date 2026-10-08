@@ -108,6 +108,8 @@ class WithdrawalRequest(BaseModel):
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.PENDING
     )
+    # Over the admin-configured withdrawal-review threshold → needs closer review.
+    needs_review = models.BooleanField(default=False)
     admin_note = models.TextField(blank=True)
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,

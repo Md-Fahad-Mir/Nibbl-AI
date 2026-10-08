@@ -53,6 +53,7 @@ class WithdrawalSerializer(serializers.ModelSerializer):
             "handle",
             "amount",
             "status",
+            "needs_review",
             "admin_note",
             "batch",
             "reviewed_at",

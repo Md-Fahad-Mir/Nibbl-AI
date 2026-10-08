@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import datetime as dt
+
 from django.conf import settings
 from django.db import IntegrityError, transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from Apps.accounts import twilio_verify
 from Apps.common.exceptions import DomainError
+from Apps.common.models import get_platform_settings
 from Apps.common.money import ZERO, to_money
 from Apps.payouts.models import PayoutBatch, PayoutMethod, WithdrawalRequest
 from Apps.wallets import services as wallet_services
@@ -139,6 +143,22 @@ def start_withdrawal_verification(*, user, payout_method_id, amount) -> str:
     return _mask_phone(phone)
 
 
+def _withdrawal_needs_review(user, amount) -> bool:
+    """Flag a withdrawal for manual review when it exceeds the admin-configured
+    single-amount or rolling-window thresholds (spec 5.6)."""
+    cfg = get_platform_settings()
+    if amount > cfg.withdrawal_review_single:
+        return True
+    window_start = timezone.now() - dt.timedelta(days=cfg.withdrawal_rolling_days)
+    recent_total = (
+        WithdrawalRequest.objects.filter(user=user, created_at__gte=window_start)
+        .exclude(status=S.REJECTED)
+        .aggregate(total=Sum("amount"))["total"]
+        or ZERO
+    )
+    return (recent_total + amount) > cfg.withdrawal_review_rolling
+
+
 def request_withdrawal(*, user, payout_method_id, amount, code="") -> WithdrawalRequest:
     method, wallet, amount = _validate_withdrawal(
         user=user, payout_method_id=payout_method_id, amount=amount
@@ -154,6 +174,7 @@ def request_withdrawal(*, user, payout_method_id, amount, code="") -> Withdrawal
     withdrawal = WithdrawalRequest.objects.create(
         user=user, payout_method=method, provider=method.provider,
         handle=method.handle, amount=amount, status=S.PENDING,
+        needs_review=_withdrawal_needs_review(user, amount),
     )
     hold = wallet_services.place_hold(
         wallet=wallet, amount=amount,

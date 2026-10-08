@@ -215,3 +215,40 @@ class BroadcastTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(resp.data["recipients"], 3)  # u1, u2, admin
+
+
+class PlatformSettingsTests(APITestCase):
+    def test_admin_gets_and_updates_settings(self):
+        self.client.force_authenticate(_admin())
+        resp = self.client.get(reverse("v1:admin_panel:settings"))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(resp.data["withdrawal_review_single"]), Decimal("25.00"))
+        self.assertTrue(resp.data["referrals_enabled"])
+
+        put = self.client.put(
+            reverse("v1:admin_panel:settings"),
+            {"withdrawal_review_single": "50.00", "referrals_enabled": False},
+            format="json",
+        )
+        self.assertEqual(put.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(put.data["withdrawal_review_single"]), Decimal("50.00"))
+        self.assertFalse(put.data["referrals_enabled"])
+
+    def test_non_admin_blocked(self):
+        user = User.objects.create_user(email="u@example.com", password="x", full_name="U")
+        self.client.force_authenticate(user)
+        resp = self.client.get(reverse("v1:admin_panel:settings"))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_referral_toggle_disables_bonus(self):
+        from Apps.common.models import PlatformSettings
+        from Apps.wallets import services as ws
+
+        inviter = User.objects.create_user(email="inv@example.com", password="x", full_name="Inv")
+        invited = User.objects.create_user(
+            email="new@example.com", password="x", full_name="New", referred_by=inviter
+        )
+        settings_obj = PlatformSettings.load()
+        settings_obj.referrals_enabled = False
+        settings_obj.save()
+        self.assertIsNone(ws.maybe_credit_referral_bonus(invited))

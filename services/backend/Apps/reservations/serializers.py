@@ -56,3 +56,9 @@ class ReservationSerializer(serializers.ModelSerializer):
 
 class CreateReservationSerializer(serializers.Serializer):
     campaign = serializers.UUIDField()
+
+
+class ClaimSlotsSerializer(serializers.Serializer):
+    used = serializers.IntegerField()
+    limit = serializers.IntegerField()
+    available = serializers.IntegerField()

@@ -29,6 +29,15 @@ def _expiry_from(now):
     return now + dt.timedelta(days=settings.RESERVATION_EXPIRY_DAYS)
 
 
+def claim_slots(user) -> dict:
+    """A shopper's active-claim slot usage, for the '3 of 5' display."""
+    limit = settings.ACTIVE_CLAIM_SLOTS
+    used = Reservation.objects.filter(
+        user=user, status=Reservation.Status.ACTIVE
+    ).count()
+    return {"used": used, "limit": limit, "available": max(limit - used, 0)}
+
+
 def _lock_campaign(campaign_id):
     qs = Campaign.objects.select_related("brand", "fallback_offer")
     if connection.features.has_select_for_update:
@@ -92,6 +101,16 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE) -> Re
         user=user, campaign=campaign, status=Reservation.Status.ACTIVE
     ).exists():
         raise ReservationError("You already have an active claim for this offer.")
+
+    # Per-shopper active-claim slot limit (e.g. 3 of 5).
+    slot_limit = settings.ACTIVE_CLAIM_SLOTS
+    if Reservation.objects.filter(
+        user=user, status=Reservation.Status.ACTIVE
+    ).count() >= slot_limit:
+        raise ReservationError(
+            f"You've reached your active claim limit ({slot_limit}). Upload a "
+            "receipt or let a claim expire to free up a slot."
+        )
 
     # Backend-controlled global cap on concurrent active reservations.
     cap = settings.RESERVATION_GLOBAL_CAP

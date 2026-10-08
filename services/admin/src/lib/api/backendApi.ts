@@ -564,6 +564,16 @@ export const backendApi = {
       path: `/admin/withdrawals/${withdrawalId}/${action}/`,
       auth: true,
     }),
+    pendingPayoutMethods: {
+      method: "GET",
+      path: "/admin/payout-methods/pending/",
+      auth: true,
+    },
+    reviewPayoutMethod: (methodId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/payout-methods/${methodId}/review/`,
+      auth: true,
+    }),
     payoutBatches: {
       method: "GET",
       path: "/admin/payout-batches/",
@@ -824,6 +834,10 @@ export const nibblApi = {
     requestEndpoint<ApiRecord[]>(backendApi.admin.promoCodes),
   createAdminPromoCode: (body: ApiRecord) =>
     requestEndpoint<ApiRecord>(backendApi.admin.createPromoCode, body),
+  pendingPayoutMethods: () =>
+    requestEndpoint<ApiRecord[]>(backendApi.admin.pendingPayoutMethods),
+  reviewPayoutMethod: (methodId: string, body: { approve: boolean; note?: string }) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.reviewPayoutMethod(methodId), body),
   offers: (query?: RequestOptions["query"]) =>
     requestEndpoint<PaginatedResponse<ApiRecord>>(backendApi.consumer.offers, undefined, query),
   offerCategories: () =>

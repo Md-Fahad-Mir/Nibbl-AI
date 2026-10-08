@@ -70,30 +70,50 @@ Authorization: Bearer <access>
 
 ## Errors to handle
 
-| HTTP | Body `detail` | What it means / do |
+| HTTP | Body | What it means / do |
 |---|---|---|
-| `400` | `Verify your mobile number before withdrawing.` | Shopper has no verified phone → route them to phone verification first. |
+| `400` | `{"detail": "Verify your mobile number before withdrawing.", "code": "phone_verification_required"}` | No verified phone → open the **phone verification** screen (below), then retry `send-code`. Match on `code`, not the text. |
+| `400` | `Withdrawals are paused until <time> UTC because your phone number changed.` | The shopper verified a **new** number in the last 48 h. Show the message; they can withdraw after that time. |
 | `400` | `Invalid or missing verification code.` | Wrong or expired code → let them re-enter or resend (call send-code again). |
 | `400` | `Minimum withdrawal is …` / `Insufficient available balance.` | Standard withdrawal validation (same as before). |
 | `401` | — | Not authenticated. |
-| `503` | `SMS verification is not available right now.` | SMS verification isn't enabled yet (see timing note). |
+| `503` | `SMS verification is not available right now.` | SMS isn't required right now → call `POST /withdrawals/` **without** a code. |
 
 ---
 
-## Prerequisites
+## Phone verification (needed before SMS-verified withdrawals)
 
-- The SMS goes to the shopper's **verified mobile number** (`is_phone_verified`). The shopper must have added and verified a phone before they can withdraw. If not, `send-code` returns `400` (verify phone first).
-- Twilio is **US-only, SMS-only**.
+The SMS code is only ever sent to the shopper's **verified** phone. Build this
+screen and reach it two ways: from **Profile → Phone number**, and **inline**
+when a withdrawal returns `code: "phone_verification_required"` (then resume
+the withdrawal).
+
+```
+1. POST /api/v1/users/me/phone/          { "phone": "(555) 123-4567" }   → 202 (code texted)
+2. POST /api/v1/users/me/phone/verify/   { "code": "123456" }            → 200 (updated user)
+```
+
+- **US mobile numbers only.** Send it in any common format; it's stored as
+  `+15551234567`. Invalid/non-US → `400 "Enter a valid US mobile number."`
+- A number already used by another account → `400 "That phone number is already in use."`
+- Wrong/expired code → `400 "Invalid or expired code."` — offer "Resend" (repeat step 1).
+- `GET /users/me/` returns `phone` and `is_phone_verified` — show a "Verified" badge.
+- **Changing** a verified number pauses withdrawals for **48 hours** — warn the
+  shopper before they change it.
 
 ---
 
 ## Important: timing / rollout
 
-Verification is currently **dormant on production** — Twilio isn't configured yet. Until it's turned on:
-- `POST /withdrawals/send-code/` returns **503**.
-- `POST /withdrawals/` still works **without** a `code` (unchanged behavior).
+SMS-verified withdrawals are switched on by an **admin setting**, separate from
+SMS sending, so shoppers can verify phones before it's enforced:
 
-**Build the two-step flow now.** It starts being enforced the moment Twilio is enabled on the server — which will be coordinated so nothing breaks. Once enabled, `send-code` works and `code` becomes required.
+1. **Now:** not required → `send-code` returns **503**, `POST /withdrawals/` works without a `code`.
+2. **SMS sending goes live:** phone verification texts real codes; withdrawals still don't require one.
+3. **Admin turns on "Withdrawals require an SMS code":** `send-code` texts the verified phone and `code` becomes required.
+
+**Build the full flow now** (phone screen + two-step withdrawal + the 503
+fallback) — it keeps working through all three phases with no app update.
 
 ---
 
@@ -103,6 +123,8 @@ Verification is currently **dormant on production** — Twilio isn't configured 
 |---|---|---|---|
 | `/withdrawals/send-code/` | POST | `payout_method`, `amount` | `{ phone }` (masked) |
 | `/withdrawals/` | POST | `payout_method`, `amount`, `code` | the created withdrawal |
+| `/users/me/phone/` | POST | `phone` | 202 — code texted |
+| `/users/me/phone/verify/` | POST | `code` | the updated user |
 
 ---
 

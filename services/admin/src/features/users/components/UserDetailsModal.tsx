@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { UserDetail } from "@/types/users.types";
+import { useAdminApiStore } from "@/stores/useAdminApiStore";
 
 interface UserDetailsModalProps {
   isOpen: boolean;
@@ -14,7 +15,28 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
   onClose,
   user,
 }) => {
+  const resetUserPhone = useAdminApiStore((state) => state.resetUserPhone);
+  const [phoneMessage, setPhoneMessage] = useState("");
+  const [resetting, setResetting] = useState(false);
+
   if (!isOpen || !user) return null;
+
+  const handleResetPhone = async () => {
+    const reason = window.prompt(
+      "Reset this shopper's phone number? They'll need to verify a new one, and withdrawals pause for 48 hours after they do. Reason (required):"
+    );
+    if (!reason || !reason.trim()) return;
+    setResetting(true);
+    setPhoneMessage("");
+    try {
+      await resetUserPhone(user.id, reason.trim());
+      setPhoneMessage("Phone number reset.");
+    } catch (err) {
+      setPhoneMessage(err instanceof Error ? err.message : "Could not reset the phone number.");
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const data: UserDetail = user;
 
@@ -66,10 +88,23 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
           {/* Row 3: Phone Number */}
           <div className="flex items-center justify-between py-3.5 border-b border-[#3E3EDF]">
             <span className="font-medium text-[#1F1D1D]">Phone Number :</span>
-            <span className="font-medium text-[#1F1D1D]">
-              {data.phoneNumber}
+            <span className="flex items-center gap-3 font-medium text-[#1F1D1D]">
+              {data.phoneNumber || "—"}
+              {data.phoneNumber && (
+                <button
+                  type="button"
+                  onClick={() => void handleResetPhone()}
+                  disabled={resetting}
+                  className="text-xs font-semibold text-[#FF5C5C] hover:underline cursor-pointer disabled:opacity-50"
+                >
+                  {resetting ? "Resetting…" : "Reset"}
+                </button>
+              )}
             </span>
           </div>
+          {phoneMessage && (
+            <p className="text-xs font-medium text-[#3E3EDF] pt-2">{phoneMessage}</p>
+          )}
 
           {/* Row 4: Address */}
           <div className="flex items-center justify-between py-3.5 border-b border-[#3E3EDF]">

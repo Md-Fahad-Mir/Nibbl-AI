@@ -496,6 +496,11 @@ export const backendApi = {
       path: `/admin/users/${userId}/reactivate/`,
       auth: true,
     }),
+    resetUserPhone: (userId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/users/${userId}/reset-phone/`,
+      auth: true,
+    }),
     brandApplications: {
       method: "GET",
       path: "/admin/brand-applications/",

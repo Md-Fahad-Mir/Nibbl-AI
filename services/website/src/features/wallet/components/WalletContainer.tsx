@@ -8,6 +8,7 @@ import RecentRewardsCard from "./RecentRewardsCard";
 import WithdrawFundsModal from "./WithdrawFundsModal";
 import BankDetailsModal from "./BankDetailsModal";
 import VerifyWithdrawalModal from "./VerifyWithdrawalModal";
+import VerifyPhoneModal from "./VerifyPhoneModal";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
 import { ApiError } from "@/lib/api/backendApi";
 
@@ -22,6 +23,8 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
   const [verify, setVerify] = useState<{ phone: string; methodId: string } | null>(null);
   const [verifySubmitting, setVerifySubmitting] = useState(false);
   const [verifyError, setVerifyError] = useState("");
+  // Withdrawal waiting on the shopper to verify a phone number first.
+  const [phoneGateMethodId, setPhoneGateMethodId] = useState<string | null>(null);
   const { wallet, redemptions, payoutMethods, unreadCount, loadWallet, createPayoutMethod, sendWithdrawalCode, requestWithdrawal } =
     useConsumerApiStore();
 
@@ -57,6 +60,12 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
     } catch (err) {
       if (err instanceof ApiError && err.status === 503) {
         await finalizeWithdrawal(methodId);
+      } else if (
+        err instanceof ApiError &&
+        (err.data as { code?: string } | null)?.code === "phone_verification_required"
+      ) {
+        // No verified phone yet: verify inline, then resume this withdrawal.
+        setPhoneGateMethodId(methodId);
       } else {
         throw err;
       }
@@ -140,6 +149,20 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
               .catch((error: unknown) => {
                 setWalletMessage(error instanceof Error ? error.message : "Withdrawal request failed.");
               });
+          }}
+        />
+      )}
+
+      {phoneGateMethodId && (
+        <VerifyPhoneModal
+          reason="Withdrawals are protected by an SMS code. Verify your mobile number to continue."
+          onClose={() => setPhoneGateMethodId(null)}
+          onVerified={() => {
+            const methodId = phoneGateMethodId;
+            setPhoneGateMethodId(null);
+            void startWithdrawal(methodId).catch((error: unknown) => {
+              setWalletMessage(error instanceof Error ? error.message : "Withdrawal request failed.");
+            });
           }}
         />
       )}

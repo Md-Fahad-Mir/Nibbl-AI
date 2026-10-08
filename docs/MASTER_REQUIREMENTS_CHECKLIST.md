@@ -71,7 +71,7 @@
 - [ ] 🟡 **38. Guided onboarding** — application + approval ✓; guided plan→checkout→wallet-funding missing
 
 ## Shopper Wallet, Withdrawals & Referrals
-- [ ] 🟡 **39. Wallet & withdrawals** — wallet + withdrawals ✓; **SMS-verified withdrawal: backend + website done, pending Twilio activation** *(this engagement)*
+- [ ] 🟡 **39. Wallet & withdrawals** — wallet + withdrawals ✓; SMS-verified withdrawal backend + website ✓; **phone add/verify flow ✓** (Profile + inline at withdrawal, US-only, real SMS via Twilio when configured, 48h pause on phone change, admin phone reset); enforcement is an **admin switch** (Platform Settings) — pending Twilio activation
 - [ ] 🟡 **40. Referrals** — invite/code ✓; full qualification flow (join→claim→redeem→payout→withdraw) missing
 - [x] ✅ **41. Payout-account safeguards** — one PayPal/Venmo per user ✓; first method auto-approved, later changes held for admin review (withdrawals blocked until approved); duplicate across users raises a fraud flag; admin review queue UI (approve/reject)
 

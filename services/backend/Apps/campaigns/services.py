@@ -210,6 +210,18 @@ def activate_campaign(campaign: Campaign) -> Campaign:
         raise CampaignError("This campaign can no longer be activated.")
     _validate_ready_to_activate(campaign)
 
+    # Per-plan active-campaign limit (Starter 1 / Pro 3 / Scale 10).
+    plan = campaign.brand.plan
+    if plan and campaign.status != Campaign.Status.ACTIVE:
+        active_count = campaign.brand.campaigns.filter(
+            status=Campaign.Status.ACTIVE
+        ).count()
+        if active_count >= plan.max_active_campaigns:
+            raise CampaignError(
+                f"Your plan allows {plan.max_active_campaigns} active "
+                "campaign(s). Pause one or upgrade to activate another."
+            )
+
     wallet = get_or_create_brand_wallet(campaign.brand)
     if wallet.available() < campaign.daily_budget:
         raise CampaignError(

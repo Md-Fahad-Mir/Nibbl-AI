@@ -11,6 +11,11 @@ urlpatterns = [
         name="reservation-list",
     ),
     path(
+        "reservations/slots/",
+        views.ClaimSlotsView.as_view(),
+        name="claim-slots",
+    ),
+    path(
         "reservations/<uuid:reservation_id>/",
         views.ReservationDetailView.as_view(),
         name="reservation-detail",

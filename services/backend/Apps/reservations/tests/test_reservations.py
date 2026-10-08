@@ -101,6 +101,29 @@ class ClaimTests(APITestCase):
             services.create_reservation(user=user, campaign_id=campaign.id)
 
 
+@override_settings(ACTIVE_CLAIM_SLOTS=2)
+class ActiveClaimSlotTests(APITestCase):
+    def test_slot_cap_blocks_and_endpoint_reports_usage(self):
+        _, c1, _ = _campaign(slug="slota")
+        _, c2, _ = _campaign(slug="slotb")
+        _, c3, _ = _campaign(slug="slotc")
+        user = _user("slots@example.com")
+        self.client.force_authenticate(user)
+
+        services.create_reservation(user=user, campaign_id=c1.id)
+        services.create_reservation(user=user, campaign_id=c2.id)
+
+        # Third concurrent claim exceeds the 2-slot limit.
+        with self.assertRaises(services.ReservationError):
+            services.create_reservation(user=user, campaign_id=c3.id)
+
+        resp = self.client.get(reverse("v1:reservations:claim-slots"))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["used"], 2)
+        self.assertEqual(resp.data["limit"], 2)
+        self.assertEqual(resp.data["available"], 0)
+
+
 class DailyBudgetTests(APITestCase):
     def test_expired_reservation_does_not_restore_budget(self):
         # daily budget == one reward, so only one premium claim fits per day.

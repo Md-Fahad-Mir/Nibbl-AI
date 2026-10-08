@@ -50,6 +50,19 @@ class ReservationListCreateView(APIView):
 
 
 @extend_schema(tags=["reservations"])
+class ClaimSlotsView(APIView):
+    """The shopper's active-claim slot usage (e.g. 3 of 5)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: s.ClaimSlotsSerializer})
+    def get(self, request):
+        return Response(
+            s.ClaimSlotsSerializer(services.claim_slots(request.user)).data
+        )
+
+
+@extend_schema(tags=["reservations"])
 class ReservationDetailView(APIView):
     permission_classes = [IsAuthenticated]
 

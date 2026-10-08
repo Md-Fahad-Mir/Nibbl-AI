@@ -97,6 +97,10 @@ RESERVATION_GLOBAL_CAP = env.int("RESERVATION_GLOBAL_CAP", default=100_000)
 # Receipts / fraud (spec 2.7): soft cap on a customer's concurrent open claims.
 MAX_ACTIVE_CLAIMS = env.int("MAX_ACTIVE_CLAIMS", default=25)
 
+# Per-shopper active-claim slots (spec 1.9 "3 of 5"): hard limit on how many
+# claims a shopper can have open at once.
+ACTIVE_CLAIM_SLOTS = env.int("ACTIVE_CLAIM_SLOTS", default=5)
+
 # Reviews module: flat reward per AI-generated review (Apps.reviews).
 REVIEW_REWARD_AMOUNT = env("REVIEW_REWARD_AMOUNT", default="1.00")
 

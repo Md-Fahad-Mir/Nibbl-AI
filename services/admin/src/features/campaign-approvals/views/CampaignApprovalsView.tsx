@@ -42,6 +42,9 @@ const FIELD_LABELS: Record<string, string> = {
   end_at: "End",
   daily_budget: "Daily budget",
   image: "Campaign image",
+  retailers: "Where to buy (retailers)",
+  featured_retailers: "Featured retailers",
+  retailer_required: "Retailer required for receipts",
 };
 
 const display = (key: string, value: unknown): string => {
@@ -51,7 +54,12 @@ const display = (key: string, value: unknown): string => {
   if (["max_rebate", "fixed_reward", "daily_budget"].includes(key)) return money(value);
   if (key === "start_at" || key === "end_at") return dateTime(value);
   if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (Array.isArray(value)) return `${value.length} product(s)`;
+  if (Array.isArray(value)) {
+    // Current values arrive as [{id, name}], proposed ones as id lists.
+    const named = value.map((v) => (v && typeof v === "object" ? String((v as ApiRecord).name ?? "") : "")).filter(Boolean);
+    if (named.length) return named.join(", ");
+    return `${value.length} ${key === "product" ? "product(s)" : "selected"}`;
+  }
   return String(value);
 };
 
@@ -176,7 +184,15 @@ const ReviewCard = ({
           <Term label="Required quantity" value={String(campaign.required_quantity ?? "—")} />
         )}
         <Term label="Products" value={products.length ? products.join(", ") : "—"} />
-        <Term label="Retailers" value={String(campaign.allowed_merchants || "Any retailer")} />
+        <Term
+          label="Where to buy"
+          value={
+            Array.isArray(campaign.retailers) && campaign.retailers.length
+              ? (campaign.retailers as ApiRecord[]).map((r) => String(r.name)).join(", ")
+              : "—"
+          }
+        />
+        <Term label="Receipts accepted from" value={String(campaign.allowed_merchants || "Any retailer")} />
         <Term label="Cooldown" value={cooldownText(campaign)} />
         <Term
           label="25-hour goal"

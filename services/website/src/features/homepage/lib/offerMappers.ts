@@ -22,6 +22,10 @@ export interface DisplayOffer {
   /** Why the offer can't be claimed right now; null when claimable. */
   unavailableReason: string | null;
   products: { id: string; name: string; image: string | null }[];
+  /** Up to three retailers shown in the offer summary. */
+  featuredRetailers: string[];
+  /** Where to Buy (only the eligible retailers when one is required). */
+  whereToBuy: string[];
 }
 
 export interface DisplayReview {
@@ -128,6 +132,8 @@ export const displayOffer = (offer: ApiRecord, index = 0): DisplayOffer => ({
         };
       })
     : [],
+  featuredRetailers: Array.isArray(offer.featured_retailers) ? offer.featured_retailers.map(String) : [],
+  whereToBuy: Array.isArray(offer.where_to_buy) ? offer.where_to_buy.map(String) : [],
 });
 
 export const displayReviews = (offer?: ApiRecord | null): DisplayReview[] => {

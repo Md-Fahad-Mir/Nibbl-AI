@@ -126,6 +126,10 @@ export default function CampaignDetail({ campaignId, onBack, onEdit }: CampaignD
   const capacity = Number(campaign.claim_capacity ?? 0);
   const cycleClaims = isApproved ? Number(campaign.current_cycle_claims ?? 0) : 0;
   const dealType = String(campaign.deal_type ?? "free") as DealType;
+  const names = (value: unknown) =>
+    Array.isArray(value) ? value.map((r) => String((r as { name?: unknown }).name ?? "")).filter(Boolean) : [];
+  const retailerNames = names(campaign.retailers);
+  const featuredNames = names(campaign.featured_retailers);
   // Performance starts when the campaign becomes active (zeros while pending).
   const metric = (key: string) => (isApproved ? Number(metrics?.[key] ?? 0) : 0);
   const rate = isApproved && metrics?.redemption_rate != null ? `${String(metrics.redemption_rate)}%` : "—";
@@ -253,6 +257,10 @@ export default function CampaignDetail({ campaignId, onBack, onEdit }: CampaignD
               <Term label="25-hour goal" value={`${String(campaign.desired_redemptions ?? "—")} redemptions @ ${String(campaign.estimated_redemption_rate ?? "—")}%`} />
               <Term label="Claim capacity" value={`${capacity || "—"} per 25 hours`} />
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <Term label="Where to buy" value={retailerNames.join(", ") || "—"} />
+              <Term label="Featured retailers" value={featuredNames.join(", ") || "—"} />
+            </div>
             <Term label="Receipt eligibility" value={receiptWording(String(campaign.allowed_merchants ?? ""))} />
           </Card>
 
@@ -325,6 +333,8 @@ export default function CampaignDetail({ campaignId, onBack, onEdit }: CampaignD
             maxRebate={String(campaign.max_rebate ?? "")}
             fixedReward={String(campaign.fixed_reward ?? "")}
             allowedMerchants={String(campaign.allowed_merchants ?? "")}
+            featuredRetailers={featuredNames}
+            whereToBuy={retailerNames}
             cooldownDays={Number(campaign.cooldown_days ?? 0)}
             oneTimeOnly={Boolean(campaign.one_time_only)}
           />

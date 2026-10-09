@@ -94,7 +94,11 @@ export default function ViewDetails({ campaignId, onBack, onTabChange }: ViewDet
               </div>
               {details && (
                 <div className="mt-2 flex flex-col gap-1 text-[16px] leading-[20px] text-[#4D4D4D]">
+                  {details.featuredRetailers.length > 0 && (
+                    <p className="font-medium text-[#1F1D1D]">Available at {details.featuredRetailers.join(", ")}</p>
+                  )}
                   <p>{details.retailerWording}</p>
+                  {details.whereToBuy.length > 0 && <p>Where to buy: {details.whereToBuy.join(", ")}</p>}
                   <p>{details.cooldownWording}</p>
                   {details.unavailableReason && <p className="text-[#E65353]">{details.unavailableReason}</p>}
                 </div>

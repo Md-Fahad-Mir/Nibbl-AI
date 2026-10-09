@@ -22,7 +22,7 @@
 - [x] ✅ **7. Nibbl campaign approval workflow** — Save draft / Submit; approve / reject (final) / request changes with comments; revisions keep the approved version live; campaign detail page with status banner, assets, performance, review activity
 - [x] ✅ **8. Reservation rule snapshot** — each claim stores its deal terms, products, merchants and cooldown; later edits apply to new claims only
 - [x] ✅ **9. Reserved reward funding** — claim reserves the max reward; approval pays the actual reward and returns the difference; cooldown starts at the approved redemption
-- [ ] ⬜ **10. Retailer availability, featured retailers, receipt eligibility**
+- [x] ✅ **10. Retailer availability, featured retailers, receipt eligibility** — Nibbl retailer directory (seeded; brands add missing ones, flagged for Nibbl to verify in Django admin), Where to Buy, up to 3 Featured Retailers, Any Retailer / Retailer Required (receipt check + claim snapshot); builder, detail page, admin approvals, shopper website + app guide
 - [ ] ⬜ **11. Meta Pixel tracking per campaign**
 - [x] ✅ **12. Minimum purchase in units + BOGO flag**
 
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (24):** #2, #3, #4, #5, #6, #7, #8, #9, #12, #17, #18, #20, #21, #22, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
+**Done to spec (25):** #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #17, #18, #20, #21, #22, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)
@@ -101,7 +101,7 @@
 - Prod access via SSM, Stripe configured on prod (test keys), CI build optimization, backend health-check fix
 
 ## On hold (waiting on others)
-- **Turn Twilio on in prod** — activates #39 SMS verification (hold until web + mobile ready — user will say go)
+- **Twilio compliance profile** — Twilio is on in prod; sending is blocked (error 21608) until Alex completes the Primary Compliance Profile
 - **Mobile withdrawal verify UI** — app dev (API doc handed off)
 - **Stripe go-live keys** — Alex (webhook secret)
 - **Push/FCM** — Alex (Firebase service account)

@@ -150,9 +150,13 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
                 {details?.description || "Claim this backend offer and upload your receipt to receive the reward."}
               </p>
 
-              {/* Offer eligibility: receipt retailer rule + cooldown */}
+              {/* Offer eligibility: featured retailers, receipt retailer rule, where to buy, cooldown */}
               <div className="w-full max-w-[335px] flex flex-col gap-1 rounded-lg bg-[#F5F5FD] px-3 py-2 text-left text-[12px] leading-[16px] text-[#4D4D4D]">
+                {details && details.featuredRetailers.length > 0 && (
+                  <p className="font-semibold text-[#1F1D1D]">Available at {details.featuredRetailers.join(", ")}</p>
+                )}
                 <p>{details?.retailerWording}</p>
+                {details && details.whereToBuy.length > 0 && <p>Where to buy: {details.whereToBuy.join(", ")}</p>}
                 <p>{details?.cooldownWording}</p>
               </div>
 

@@ -6,6 +6,7 @@ from Apps.campaigns.models import (
     FallbackOffer,
     QRCode,
     Restriction,
+    Retailer,
     RewardTier,
 )
 
@@ -46,6 +47,16 @@ class CampaignAdmin(admin.ModelAdmin):
         return bool(obj.allowed_merchants.strip())
     has_merchant_restriction.short_description = "Merchant restricted"
     has_merchant_restriction.boolean = True
+
+
+@admin.register(Retailer)
+class RetailerAdmin(admin.ModelAdmin):
+    """Nibbl's retailer directory; verify retailers brands added."""
+
+    list_display = ("name", "is_verified", "added_by_brand", "created_at")
+    list_filter = ("is_verified",)
+    search_fields = ("name",)
+    list_editable = ("is_verified",)
 
 
 @admin.register(CampaignURL)

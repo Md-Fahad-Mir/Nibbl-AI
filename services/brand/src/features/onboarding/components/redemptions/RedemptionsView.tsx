@@ -78,6 +78,8 @@ const mapReviewQueueItem = (item: ApiRecord): RedemptionItem | null => {
 
   const imageUrl = backendAssetUrl(receipt.image_url, receiptPreviewFallback);
   const purchasedAt = receipt.purchased_at ?? item.created_at;
+  // "Submitted" = when the shopper uploaded the receipt (not the purchase date).
+  const uploadedAt = receipt.created_at ?? item.created_at;
   return {
     id: String(item.id),
     userName: String(receipt.user_name ?? "Customer"),
@@ -97,9 +99,9 @@ const mapReviewQueueItem = (item: ApiRecord): RedemptionItem | null => {
     receiptLineItems: Array.isArray(receipt.line_items) ? receipt.line_items as ApiRecord[] : [],
     claimedTierLabel: "Rewards",
     claimedTierValue: formatMoney(receipt.reward_amount),
-    submittedDate: formatDate(purchasedAt),
-    submittedTime: formatTime(purchasedAt),
-    submittedAt: typeof purchasedAt === "string" ? purchasedAt : undefined,
+    submittedDate: formatDate(uploadedAt),
+    submittedTime: formatTime(uploadedAt),
+    submittedAt: typeof uploadedAt === "string" ? uploadedAt : undefined,
     status: receiptStatus === "rejected" ? "Rejected" : "Manual Review",
     issue: String(receipt.decision_reason ?? "Receipt requires manual review"),
     priority: toNumber(receipt.total) >= 50 ? "High" : "Medium",

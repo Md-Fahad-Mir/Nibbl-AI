@@ -64,7 +64,9 @@ export default function RedemptionsTable({
 
   const filtered = useMemo(() => {
     let next = redemptions.filter((redemption) => redemption.status === activeTab);
-    if (dateFilter === "Last 30 Days") {
+    // Receipts awaiting review are never hidden by the date filter — each
+    // one has an auto-approval deadline the brand must act before.
+    if (dateFilter === "Last 30 Days" && activeTab !== "Manual Review") {
       next = next.filter((redemption) => {
         const source =
           redemption.submittedAt ||

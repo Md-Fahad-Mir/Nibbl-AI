@@ -83,6 +83,7 @@ DEAL_FIELDS = (
     "offer_headline", "offer_description", "desired_redemptions",
     "estimated_redemption_rate", "cooldown_days", "one_time_only",
     "allowed_merchants", "retailer_required",
+    "geography", "geography_states", "geography_areas",
 )
 # Many-to-many inputs handled like ``product`` (lists of ids).
 RETAILER_KEYS = ("retailers", "featured_retailers")
@@ -98,6 +99,7 @@ def _apply_deal(campaign: Campaign, *, regenerate_wording: bool) -> None:
         deals.validate_cooldown(campaign.cooldown_days, campaign.one_time_only)
     except deals.DealError as exc:
         raise CampaignError(str(exc))
+    validate_geography(campaign)
     headline, description = deals.suggested_wording_for(campaign)
     if regenerate_wording or not campaign.offer_headline:
         campaign.offer_headline = headline
@@ -110,6 +112,39 @@ def _apply_deal(campaign: Campaign, *, regenerate_wording: bool) -> None:
 # Retailers (Master: Retailer Availability, Featured Retailers, Receipt
 # Eligibility)
 # ---------------------------------------------------------------------------
+def validate_geography(campaign: Campaign) -> None:
+    """Master Discovery Geography: Nationwide, Selected States, or ZIP +
+    radius (5/10/25/50/100 miles, several areas allowed)."""
+    from Apps.offers.discovery import RADIUS_CHOICES
+    from Apps.offers.models import ZipCode
+
+    kind = campaign.geography
+    if kind == Campaign.Geography.STATES:
+        states = {str(s).upper() for s in campaign.geography_states or []}
+        if not states:
+            raise CampaignError("Select at least one state.")
+        known = set(ZipCode.objects.filter(state__in=states).values_list("state", flat=True))
+        if states - known:
+            raise CampaignError(f"Unknown state: {', '.join(sorted(states - known))}.")
+        campaign.geography_states = sorted(states)
+    elif kind == Campaign.Geography.ZIP_RADIUS:
+        areas = campaign.geography_areas or []
+        if not areas:
+            raise CampaignError("Add at least one ZIP code and radius.")
+        clean = []
+        for area in areas:
+            zip_code = str((area or {}).get("zip", "")).strip()
+            radius = int((area or {}).get("radius_miles", 0) or 0)
+            if radius not in RADIUS_CHOICES:
+                raise CampaignError("Radius must be 5, 10, 25, 50 or 100 miles.")
+            if not ZipCode.objects.filter(zip=zip_code).exists():
+                raise CampaignError(f"{zip_code or 'That'} isn't a valid US ZIP code.")
+            clean.append({"zip": zip_code, "radius_miles": radius})
+        campaign.geography_areas = clean
+    elif kind != Campaign.Geography.NATIONWIDE:
+        raise CampaignError("Choose the discovery geography.")
+
+
 def _resolve_retailers(brand, ids) -> list[Retailer]:
     """Directory retailers — verified ones, or ones this brand added."""
     from django.db.models import Q

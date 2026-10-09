@@ -27,10 +27,10 @@
 - [x] ✅ **12. Minimum purchase in units + BOGO flag**
 
 ## Discovery & Campaign Lifecycle
-- [ ] ⬜ **13. Location gate & discovery geography** — Nationwide / States / ZIP+radius
-- [ ] ⬜ **14. Ranking engine (CVR)** — Base CVR × Store Match × Brand Interest
-- [ ] 🟡 **15. Direct entry (QR, Meta ad, URL)** — QR/URL access exist; geography bypass N/A until #13
-- [ ] ⬜ **16. Campaign-level suppression (not brand-wide)**
+- [x] ✅ **13. Location gate & discovery geography** — campaign geography (Nationwide / Selected States / ZIP + 5–100 mi radius, multiple areas) in the builder + approvals; shopper location (ZIP or device position → nearest ZIP, saved); feed shows only geographically eligible campaigns; website "Find deals near you" gate. US ZIP data: GeoNames (CC BY 4.0)
+- [x] ✅ **14. Ranking engine (CVR)** — Base CVR (30-day redemptions ÷ views with admin pseudo-data prior) × Store Match (verified receipt at one of the campaign's retailers) × Brand Interest (viewed/claimed/redeemed with the brand in 30 days)
+- [x] ✅ **15. Direct entry (QR, Meta ad, URL)** — campaign URL/QR open the deal without location; bypasses geography only (status, claims, cooldown, capacity still apply)
+- [x] ✅ **16. Campaign-level suppression (not brand-wide)** — discovery hides only the campaign the shopper has an active claim on or is in cooldown for; other campaigns from the same brand still appear
 
 ## Shopper Claim & Receipt Flow
 - [x] ✅ **17. Consent capture** — two separate optional checkboxes at claim (Nibbl email+SMS, Brand email+SMS); snapshot on the reservation + per-user Nibbl / per-brand `MarketingConsent` with grant date; website claim screen has the boxes; app dev guide updated
@@ -84,7 +84,7 @@
 - [ ] ⬜ **47. Referral management / flag review**
 - [ ] ⬜ **48. Receipt brand discovery** — unpartnered-brand leads
 - [ ] 🟡 **49. Revenue analytics** — partial; subscription/rebate/review-fee breakdowns missing
-- [ ] 🟡 **50. Admin settings** — ✅ admin-configurable withdrawal-review thresholds ($25 single / $100 rolling-30d, over-threshold withdrawals get `needs_review`) + referral on/off toggle, with a Platform Settings admin page (`/admin/settings/`); ⬜ Discovery-ranking config lands with the ranking engine (#14)
+- [x] ✅ **50. Admin settings** — withdrawal-review thresholds + referral toggle; Discovery Ranking (pseudo-data views/redemptions, Store Match ×, Brand Interest ×) and the configurable "Going fast" threshold
 
 ## Cross-cutting
 - [ ] 🟡 **51. Fraud & abuse controls** — duplicate / velocity / manual ✓; device / IP / browser checks missing
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (29):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #17, #18, #19, #20, #21, #22, #28, #30, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
+**Done to spec (34):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #28, #30, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46, #50.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

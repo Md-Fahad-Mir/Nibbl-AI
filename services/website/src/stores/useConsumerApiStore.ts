@@ -28,6 +28,9 @@ export interface ConsumerApiState {
   user: ApiRecord | null;
   wallet: ApiRecord | null;
   offers: ApiRecord[];
+  /** Saved discovery location; null = none yet (ask before showing deals). */
+  discoveryLocation: { zip: string; state: string } | null;
+  saveDiscoveryLocation: (body: { zip?: string; lat?: number; lng?: number }) => Promise<void>;
   offerPagination: PaginationState;
   selectedOffer: ApiRecord | null;
   savedOffers: ApiRecord[];
@@ -244,6 +247,7 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
       user: null,
       wallet: null,
       offers: [],
+      discoveryLocation: null,
       offerPagination: {
         count: 0,
         next: null,
@@ -278,6 +282,7 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
           user: null,
           wallet: null,
           offers: [],
+          discoveryLocation: null,
           offerPagination: {
             count: 0,
             next: null,
@@ -432,7 +437,7 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
       loadHome: async (search, category, page = 1) => {
         set({ status: "loading", error: null });
         try {
-          const [wallet, offers, categories, unread, config] = await Promise.all([
+          const [wallet, offers, categories, unread, config, location] = await Promise.all([
             nibblApi.wallet(),
             nibblApi.offers({
               page,
@@ -442,9 +447,11 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
             nibblApi.offerCategories(),
             nibblApi.unreadCount(),
             nibblApi.config(),
+            nibblApi.discoveryLocation().catch(() => ({ location: null })),
           ]);
           set({
             wallet,
+            discoveryLocation: location.location,
             offers: listResults(offers),
             offerPagination: paginationMeta(offers, page),
             categories: ["All", ...categories.map((item) => String(item.category || "")).filter(Boolean)],
@@ -463,6 +470,11 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
           }
           set({ status: "error", error: readError(error) });
         }
+      },
+      saveDiscoveryLocation: async (body) => {
+        const saved = await nibblApi.saveDiscoveryLocation(body);
+        set({ discoveryLocation: saved.location });
+        await get().loadHome();
       },
       loadOfferDetails: async (campaignId) => {
         set({ status: "loading", error: null });

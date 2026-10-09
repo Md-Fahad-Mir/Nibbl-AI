@@ -122,6 +122,19 @@ class Campaign(BaseModel):
     featured_retailers = models.ManyToManyField(Retailer, blank=True, related_name="featured_in")
     retailer_required = models.BooleanField(default=False)
 
+    # Discovery Geography (Master): where the campaign appears in discovery.
+    # It never affects direct entry (URL / QR / ads) or receipt rules.
+    class Geography(models.TextChoices):
+        NATIONWIDE = "nationwide", "Nationwide"
+        STATES = "states", "Selected States"
+        ZIP_RADIUS = "zip_radius", "ZIP + Radius"
+
+    geography = models.CharField(max_length=12, choices=Geography.choices, default=Geography.NATIONWIDE)
+    # Selected States: two-letter codes, e.g. ["CA", "NV"].
+    geography_states = models.JSONField(default=list, blank=True)
+    # ZIP + Radius: [{"zip": "94103", "radius_miles": 25}, ...].
+    geography_areas = models.JSONField(default=list, blank=True)
+
     # True when paused automatically due to insufficient wallet funds, so the
     # funding sync can safely resume it (vs a manual pause).
     auto_paused = models.BooleanField(default=False)

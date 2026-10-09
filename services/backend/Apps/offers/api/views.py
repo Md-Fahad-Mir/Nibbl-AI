@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from Apps.campaigns.models import Campaign, CampaignURL, QRCode
 from Apps.common.pagination import paginate, paginated_response_serializer
+from Apps.offers import discovery
 from Apps.offers import serializers as s
 from Apps.offers import services
 from Apps.offers.models import OfferView
@@ -57,10 +58,35 @@ class OfferFeedView(generics.ListAPIView):
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
-        return active_offers(
+        offers = active_offers(
             search=self.request.query_params.get("search", ""),
             category=self.request.query_params.get("category", ""),
         )
+        # Discovery (Master): with a location — ?zip=, ?lat=&lng=, or the
+        # shopper's saved one — only geographically eligible, claimable
+        # campaigns, ranked. Without one the legacy list is returned and the
+        # X-Discovery-Location: required header tells clients to ask first.
+        location = self._resolved_location = self._location()
+        if location is None:
+            return offers
+        return discovery.discover(offers, self.request.user, location)
+
+    def _location(self):
+        params = self.request.query_params
+        try:
+            if params.get("zip"):
+                return discovery.from_zip(params["zip"])
+            if params.get("lat") and params.get("lng"):
+                return discovery.from_position(float(params["lat"]), float(params["lng"]))
+        except (discovery.LocationError, ValueError) as exc:
+            raise ValidationError({"detail": str(exc)})
+        return discovery.saved_location(self.request.user)
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        location = getattr(self, "_resolved_location", None)
+        response["X-Discovery-Location"] = location.zip if location else "required"
+        return response
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
@@ -235,3 +261,29 @@ class BookmarkDeleteView(APIView):
             raise NotFound("Bookmark not found.")
         services.remove_bookmark(bookmark)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=["offers"])
+class DiscoveryLocationView(APIView):
+    """The shopper's saved discovery location (Master: don't ask again).
+    PUT {"zip": "94103"} or {"lat": 37.77, "lng": -122.41}."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _payload(self, location):
+        return {"zip": location.zip, "state": location.state} if location else None
+
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        return Response({"location": self._payload(discovery.saved_location(request.user))})
+
+    @extend_schema(request=None, responses={200: None})
+    def put(self, request):
+        data = request.data or {}
+        try:
+            location = discovery.save_location(
+                request.user, zip_code=data.get("zip"), lat=data.get("lat"), lng=data.get("lng"),
+            )
+        except (discovery.LocationError, ValueError, TypeError) as exc:
+            raise ValidationError({"detail": str(exc)})
+        return Response({"location": self._payload(location)})

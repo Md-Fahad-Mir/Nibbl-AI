@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import math
 
 from django.conf import settings
 from django.utils import timezone
@@ -67,9 +68,12 @@ def resolve_offer(campaign: Campaign, user=None) -> dict:
     amount = deals.max_reward(campaign)
     remaining = deals.capacity_remaining(campaign)
     capacity_reached = remaining is not None and remaining <= 0
+    from Apps.offers.discovery import going_fast_fraction
+
+    # "Going fast" when the admin-set share (default 20%) or less remains.
     going_fast = (
         remaining is not None and 0 < remaining
-        and remaining <= max(1, -(-campaign.claim_capacity // 5))  # last 20%
+        and remaining <= max(1, math.ceil(campaign.claim_capacity * going_fast_fraction()))
     )
 
     available = campaign.is_live and bool(amount) and not in_cd and not capacity_reached

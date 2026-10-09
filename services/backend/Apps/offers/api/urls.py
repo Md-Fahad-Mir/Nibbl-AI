@@ -6,6 +6,7 @@ app_name = "offers"
 
 urlpatterns = [
     path("offers/", views.OfferFeedView.as_view(), name="feed"),
+    path("me/location/", views.DiscoveryLocationView.as_view(), name="discovery-location"),
     path("offers/categories/", views.OfferCategoriesView.as_view(), name="categories"),
     path("offers/saved/", views.SavedOffersView.as_view(), name="saved"),
     path(

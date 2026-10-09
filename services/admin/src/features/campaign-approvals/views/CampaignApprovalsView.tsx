@@ -45,6 +45,9 @@ const FIELD_LABELS: Record<string, string> = {
   retailers: "Where to buy (retailers)",
   featured_retailers: "Featured retailers",
   retailer_required: "Retailer required for receipts",
+  geography: "Discovery geography",
+  geography_states: "States",
+  geography_areas: "ZIP areas",
 };
 
 const display = (key: string, value: unknown): string => {
@@ -193,6 +196,18 @@ const ReviewCard = ({
           }
         />
         <Term label="Receipts accepted from" value={String(campaign.allowed_merchants || "Any retailer")} />
+        <Term
+          label="Geography"
+          value={
+            campaign.geography === "states"
+              ? `States: ${((campaign.geography_states as string[]) || []).join(", ")}`
+              : campaign.geography === "zip_radius"
+                ? ((campaign.geography_areas as ApiRecord[]) || [])
+                    .map((a) => `${String(a.radius_miles)} mi of ${String(a.zip)}`)
+                    .join("; ")
+                : "Nationwide"
+          }
+        />
         <Term label="Cooldown" value={cooldownText(campaign)} />
         <Term
           label="25-hour goal"

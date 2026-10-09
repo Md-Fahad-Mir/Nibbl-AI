@@ -1,4 +1,4 @@
-export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export interface ApiEndpoint {
   method: HttpMethod;
@@ -84,6 +84,8 @@ export const backendApi = {
   },
   consumer: {
     offers: { method: "GET", path: "/offers/", auth: true },
+    discoveryLocation: { method: "GET", path: "/me/location/", auth: true },
+    saveDiscoveryLocation: { method: "PUT", path: "/me/location/", auth: true },
     offerCategories: { method: "GET", path: "/offers/categories/", auth: true },
     savedOffers: { method: "GET", path: "/offers/saved/", auth: true },
     offerDetail: (campaignId: string): ApiEndpoint => ({
@@ -823,6 +825,10 @@ export const nibblApi = {
     requestEndpoint<PaginatedResponse<ApiRecord>>(backendApi.consumer.offers, undefined, query),
   offerCategories: () =>
     requestEndpoint<ApiRecord[]>(backendApi.consumer.offerCategories),
+  discoveryLocation: () =>
+    requestEndpoint<{ location: { zip: string; state: string } | null }>(backendApi.consumer.discoveryLocation),
+  saveDiscoveryLocation: (body: { zip?: string; lat?: number; lng?: number }) =>
+    requestEndpoint<{ location: { zip: string; state: string } }>(backendApi.consumer.saveDiscoveryLocation, body),
   savedOffers: () =>
     requestEndpoint<ApiRecord[] | PaginatedResponse<ApiRecord>>(backendApi.consumer.savedOffers),
   offerDetail: (campaignId: string) =>

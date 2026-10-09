@@ -5,6 +5,7 @@ import { ApiRecord } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import NibblReviewComment from "../NibblReviewComment";
 import OfferPreview from "./OfferPreview";
+import { geographyText } from "./GeographyPicker";
 import { DealType, cooldownText, dealLabel, money, receiptWording } from "./dealRules";
 
 interface CampaignDetailProps {
@@ -254,6 +255,7 @@ export default function CampaignDetail({ campaignId, onBack, onEdit }: CampaignD
               <Term label="Dates" value={`${dateText(campaign.start_at)} → ${campaign.end_at ? dateText(campaign.end_at) : "No end date"}`} />
               <Term label="Eligible products" value={campaignProducts.map((p) => p.name).join(", ") || "—"} />
               <Term label="Cooldown" value={cooldownText(campaign.cooldown_days, campaign.one_time_only)} />
+              <Term label="Discovery geography" value={geographyText(campaign.geography, campaign.geography_states, campaign.geography_areas)} />
               <Term label="25-hour goal" value={`${String(campaign.desired_redemptions ?? "—")} redemptions @ ${String(campaign.estimated_redemption_rate ?? "—")}%`} />
               <Term label="Claim capacity" value={`${capacity || "—"} per 25 hours`} />
             </div>

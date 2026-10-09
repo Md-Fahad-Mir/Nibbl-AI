@@ -299,7 +299,11 @@ A **reservation** = a claimed offer, held for the user while they upload a recei
     "status":"pending","merchant":"Starbucks","purchased_at":"2026-06-04T…","total":"25.50",
     "matched":true,"matched_units":1,"decision_reason":"","line_items":[…],"created_at":"…" }
   ```
-- **Errors `400`:** invalid/expired reservation, duplicate receipt, validation (in `detail`).
+- **Errors `400`:** invalid/expired reservation, validation (in `detail`).
+- **Error `409` — duplicate receipt** (show `detail` as-is):
+  - `"This receipt has already been used to claim this product."` — the purchased unit(s) were already credited to another claim. A line with quantity 2 can fund two claims; a third is refused.
+  - `"This receipt has already been submitted from another account."` — a receipt belongs to one shopper account.
+  - The same receipt can still fund **different** eligible products (or enough quantity) for the same shopper's other active claims.
 - `status: "pending"` = under review. More common now: a receipt whose price can't be read waits for a person instead of paying automatically. Show it as "Under review", not as an error.
   - A receipt under review is decided within **7 days of upload**: the brand approves or rejects it, otherwise it is approved automatically (at the offer's maximum reward). Safe to tell shoppers: *"We'll review your receipt within 7 days."*
   - While a receipt is under review, its reservation stays `active` (it is **not** expired at the 7-day claim deadline). Don't offer "Upload Receipt" again for a reservation that already has a pending receipt.

@@ -6,7 +6,7 @@ import datetime as dt
 from decimal import Decimal
 
 from django.conf import settings
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.utils import timezone
 
 from Apps.common.exceptions import DomainError
@@ -14,6 +14,7 @@ from Apps.common.text import normalize_text
 from Apps.products import services as product_services
 from Apps.products.models import Product, ProductAlias
 from Apps.products.selectors import match_product
+from Apps.receipts import identity as receipt_identity
 from Apps.receipts import ocr
 from Apps.receipts.signals import receipt_rejected, receipt_verified
 from Apps.receipts.models import (
@@ -102,48 +103,38 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
 
     review_note = merchant_note or date_note
 
-    # --- Fast duplicate path (receipt + claimed product) --------------------
-    # Only meaningful once merchant, date, time AND the claimed product are
-    # all known — a receipt missing any one of them simply has no complete
-    # identity to compare and falls through to manual review instead (see
-    # _assert_single_use). This lookup is an optimization (skip expensive
-    # matching for a receipt already known to be a duplicate); the UNIQUE
-    # constraint hit at INSERT time below is the actual race-safe guard.
-    identity_ready = bool(merchant_hash and date_hash and time_hash and description_hash)
-    if identity_ready and Receipt.objects.filter(
-        merchant_hash=merchant_hash,
-        purchase_date_hash=date_hash,
-        purchase_time_hash=time_hash,
-        product_description_hash=description_hash,
-    ).exists():
-        raise DuplicateReceipt("This receipt has already been used to claim this product.")
-
     with transaction.atomic():
+        # Write first, then resolve identity: concurrent uploads of the same
+        # receipt then queue on the write instead of both reading first.
+        receipt = Receipt.objects.create(
+            user=user,
+            reservation=reservation,
+            brand=brand,
+            campaign=campaign,
+            image=image,
+            merchant=extracted.merchant_name,
+            purchased_at=_aware(extracted.purchased_at),
+            total=extracted.total,
+            receipt_number=extracted.receipt_number[:100],
+            register_number=extracted.register_number[:50],
+            merchant_hash=merchant_hash,
+            purchase_date_hash=date_hash,
+            purchase_time_hash=time_hash,
+            product_description_hash=description_hash,
+            matched_product=eligible_product,
+            status=Receipt.Status.PENDING,
+        )
+        # Which physical receipt this is, and the one-account rule (see
+        # Apps.receipts.identity). Unidentifiable receipts get no identity.
         try:
-            with transaction.atomic():
-                receipt = Receipt.objects.create(
-                    user=user,
-                    reservation=reservation,
-                    brand=brand,
-                    campaign=campaign,
-                    image=image,
-                    merchant=extracted.merchant_name,
-                    purchased_at=_aware(extracted.purchased_at),
-                    total=extracted.total,
-                    receipt_number=extracted.receipt_number[:100],
-                    merchant_hash=merchant_hash,
-                    purchase_date_hash=date_hash,
-                    purchase_time_hash=time_hash,
-                    product_description_hash=description_hash,
-                    matched_product=eligible_product,
-                    status=Receipt.Status.PENDING,
-                )
-        except IntegrityError:
-            # The UNIQUE constraint is the real duplicate guard: it closes
-            # the check-then-insert race between two simultaneous submissions
-            # of the same physical receipt claiming the same product that
-            # both passed the fast-path lookup above before either inserted.
-            raise DuplicateReceipt("This receipt has already been used to claim this product.")
+            receipt.identity = receipt_identity.resolve(
+                user=user, merchant_hash=merchant_hash, date_hash=date_hash, time_hash=time_hash,
+                transaction_number=extracted.receipt_number,
+                register_number=extracted.register_number,
+            )
+        except receipt_identity.ReceiptAlreadyUsed as exc:
+            raise DuplicateReceipt(str(exc))
+        receipt.save(update_fields=["identity", "updated_at"])
 
         OCRResult.objects.create(
             receipt=receipt,
@@ -153,6 +144,12 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
             confidence=ocr.extract_confidence(extracted.raw),
         )
         _create_line_items(receipt, extracted)
+        # Credit the claim's units; units another claim already holds can't
+        # be credited again (Master: the same purchased unit only once).
+        try:
+            _allocate_eligible_units(receipt)
+        except receipt_identity.ReceiptAlreadyUsed as exc:
+            raise DuplicateReceipt(str(exc))
 
         receipt.matched = matched_units > 0
         receipt.matched_units = matched_units
@@ -162,6 +159,33 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
 
     receipt.refresh_from_db()
     return receipt
+
+
+def _eligible_ids(reservation) -> set[str]:
+    if reservation.deal_type:
+        return {str(pid) for pid in reservation.eligible_product_ids}
+    return {str(pid) for pid in reservation.campaign.products.values_list("id", flat=True)}
+
+
+def _required_units(reservation) -> int:
+    if reservation.deal_type:
+        from Apps.rebates.reward_math import required_units
+
+        return required_units(reservation.deal_type, reservation.required_quantity or 1)
+    campaign = reservation.campaign
+    return getattr(campaign.restriction, "min_units", campaign.min_purchase_units) \
+        if hasattr(campaign, "restriction") else campaign.min_purchase_units
+
+
+def _allocate_eligible_units(receipt) -> int:
+    """Credit the claim's required units from the receipt's eligible lines."""
+    eligible = _eligible_ids(receipt.reservation)
+    lines = [
+        (line, line.quantity)
+        for line in receipt.line_items.all()
+        if line.matched_product_id and str(line.matched_product_id) in eligible
+    ]
+    return receipt_identity.allocate(receipt, lines, _required_units(receipt.reservation))
 
 
 def _load_reservation(user, reservation_id) -> Reservation:
@@ -231,6 +255,7 @@ def _from_legacy(legacy: dict) -> ocr.ExtractedReceipt:
         purchase_date=purchased_at.date() if purchased_at else None,
         purchase_time=purchased_at.time().replace(microsecond=0) if purchased_at else None,
         receipt_number=receipt_number,
+        register_number=str(legacy.get("register_number", "") or ""),
         total=legacy.get("total"),
         items=[
             ocr.ExtractedItem(
@@ -503,22 +528,10 @@ def _assert_single_use(receipt: Receipt) -> None:
             "not already been used. Ask the customer to upload a clearer photo."
         )
 
-    if not (receipt.merchant_hash and receipt.purchase_time_hash and receipt.product_description_hash):
-        return
-
-    already_used = (
-        Receipt.objects.filter(
-            merchant_hash=receipt.merchant_hash,
-            purchase_date_hash=receipt.purchase_date_hash,
-            purchase_time_hash=receipt.purchase_time_hash,
-            product_description_hash=receipt.product_description_hash,
-            status=Receipt.Status.VERIFIED,
-        )
-        .exclude(pk=receipt.pk)
-        .exists()
-    )
-    if already_used:
-        raise DuplicateReceipt("This receipt has already been used to claim this product.")
+    # Duplicate protection itself — one account per receipt, each unit
+    # credited once — is enforced when units are allocated
+    # (Apps.receipts.identity), so a receipt line with quantity 2 can fund
+    # two claims while a third is refused.
 
 
 def _verify(receipt: Receipt, *, reviewer, reason: str, require_identity: bool = True) -> Receipt:
@@ -546,6 +559,7 @@ def _verify(receipt: Receipt, *, reviewer, reason: str, require_identity: bool =
 
 
 def _reject(receipt: Receipt, *, reason: str, reviewer=None) -> Receipt:
+    receipt_identity.release(receipt)  # its units can be credited elsewhere
     receipt.status = Receipt.Status.REJECTED
     receipt.decision_reason = reason
     receipt.reviewed_by = reviewer
@@ -664,6 +678,15 @@ def _apply_selection(item: ManualReviewItem, selection, product, reviewer) -> No
                 target_id=str(line.id),
                 metadata={"receipt": str(item.receipt_id), "before": before, "after": after},
             )
+    # Record exactly which lines/units fund this claim (Master).
+    receipt_identity.release(item.receipt)
+    try:
+        receipt_identity.allocate(
+            item.receipt, [(line, quantity) for line, quantity, _p in selection],
+            sum(quantity for _l, quantity, _p in selection),
+        )
+    except receipt_identity.ReceiptAlreadyUsed as exc:
+        raise DuplicateReceipt(str(exc))
     item.selected_lines = [
         {"line_item": str(line.id), "quantity": quantity, "unit_price": str(price) if price is not None else None}
         for line, quantity, price in selection
@@ -755,6 +778,8 @@ def reprocess_open_reviews(brand, *, exclude=None) -> int:
             continue
         try:
             with transaction.atomic():
+                receipt_identity.release(receipt)
+                _allocate_eligible_units(receipt)
                 _approve(item, reviewer=None, outcome=ManualReviewItem.Outcome.ALIAS_APPROVED,
                          reward=decision.amount, reason="Approved after a product alias was added.")
             approved += 1

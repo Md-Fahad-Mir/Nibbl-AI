@@ -279,7 +279,7 @@ class DuplicateReceiptTests(APITestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         body = str(resp.data).lower()
-        self.assertIn("already been used", body)
+        self.assertIn("already been submitted", body)
         # No detail about who used it first.
         self.assertNotIn("a@example.com", body)
         self.assertNotIn(str(u1.id), body)
@@ -307,25 +307,30 @@ class DifferentReceiptTests(APITestCase):
         self.assertEqual(Redemption.objects.count(), 2)
         self.assertEqual(balance(u2), Decimal("2.00"))
 
-    def test_receipt_number_and_total_do_not_affect_duplicate_identity(self):
-        """The identity hashes are merchant + date + time + claimed product
-        only (spec: never SKU, price, quantity, tax, payment, or the receipt
-        number). Two submissions differing *only* in receipt_number/total are
-        therefore the same identity — a duplicate — not two different
-        receipts as the old full-payload hash would have treated them."""
+    def test_total_never_distinguishes_but_transaction_numbers_do(self):
+        """Safe-hybrid identity: same merchant + date + time is the same
+        receipt — a differently-read total never makes it "new" — unless both
+        uploads clearly show different transaction numbers."""
         _, brand, product, campaign = build_world()
         u1, r1 = claim(campaign, "a@example.com")
         u2, r2 = claim(campaign, "b@example.com")
+        u3, r3 = claim(campaign, "c@example.com")
 
         with ocr_returning(payload(number="INV-12345")):
             services.upload_receipt(user=u1, reservation_id=r1.id, image=image())
 
-        with ocr_returning(payload(number="INV-12346", total="99.00")):
-            with self.assertRaises(services.DuplicateReceipt):
-                services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
+        # Same receipt re-read with a different total, or no number at all.
+        for user, reservation, number in ((u2, r2, "INV-12345"), (u3, r3, None)):
+            with ocr_returning(payload(number=number, total="99.00")):
+                with self.assertRaises(services.DuplicateReceipt):
+                    services.upload_receipt(user=user, reservation_id=reservation.id, image=image())
 
-        self.assertEqual(Redemption.objects.count(), 1)
-        self.assertEqual(balance(u2), Decimal("0.00"))
+        # A different transaction number at the same minute is another receipt.
+        with ocr_returning(payload(number="INV-99999")):
+            other = services.upload_receipt(user=u2, reservation_id=r2.id, image=image())
+        self.assertEqual(other.status, Receipt.Status.VERIFIED)
+        self.assertEqual(Redemption.objects.count(), 2)
+        self.assertEqual(balance(u3), Decimal("0.00"))
 
 
 # ---------------------------------------------------------------------------
@@ -916,9 +921,11 @@ class MultipleProductsOnOneReceiptTests(APITestCase):
         return brand, choc_campaign, cola_campaign
 
     def test_two_distinct_products_on_the_same_receipt_each_fund_a_reward(self):
+        # One shopper, two claims: a receipt belongs to one account (Master).
         brand, choc_campaign, cola_campaign = self._two_campaigns()
         u1, r1 = claim(choc_campaign, "a@example.com")
-        u2, r2 = claim(cola_campaign, "b@example.com")
+        r2 = reservation_services.create_reservation(user=u1, campaign_id=cola_campaign.id)
+        u2 = u1
 
         with ocr_returning(payload()):
             choc_receipt = services.upload_receipt(
@@ -940,9 +947,13 @@ class MultipleProductsOnOneReceiptTests(APITestCase):
             choc_receipt.product_description_hash, cola_receipt.product_description_hash
         )
         self.assertEqual(Redemption.objects.count(), 2)
-        self.assertEqual(balance(u1), Decimal("2.00"))
-        # Free deal: the verified price ($1.00 cola), under the $1.50 cap.
-        self.assertEqual(balance(u2), Decimal("1.00"))
+        # Free deals: $2.00 chocolate + the verified $1.00 cola (under its $1.50 cap).
+        self.assertEqual(balance(u1), Decimal("3.00"))
+        # Another account can't use this receipt for its own claim.
+        u3, r3 = claim(cola_campaign, "c@example.com")
+        with ocr_returning(payload()):
+            with self.assertRaises(services.DuplicateReceipt):
+                services.upload_receipt(user=u3, reservation_id=r3.id, image=image())
 
     def test_the_same_product_claimed_twice_off_the_same_receipt_is_blocked(self):
         brand, choc_campaign, _cola_campaign = self._two_campaigns()

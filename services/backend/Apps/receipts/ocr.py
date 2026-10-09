@@ -101,6 +101,8 @@ class ExtractedReceipt:
     purchase_date: dt.date | None = None
     purchase_time: dt.time | None = None
     receipt_number: str = ""
+    # Register / lane number, when the provider reads one (optional field).
+    register_number: str = ""
     total: Decimal | None = None
     items: list[ExtractedItem] = field(default_factory=list)
     provider: str = "receipt-intelligence-api"
@@ -253,6 +255,10 @@ def map_payload(payload: dict) -> ExtractedReceipt:
         or _parse_time(transaction.get("raw_time")),
         receipt_number=receipt_number,
         total=_to_decimal(data.get("total")),
+        register_number=_clean(
+            transaction.get("register_number") or transaction.get("register")
+            or data.get("register_number")
+        ),
         items=[_map_item(i) for i in (data.get("items") or []) if isinstance(i, dict)],
         raw=payload,
     )

@@ -34,6 +34,8 @@ user_patterns = [
     path("me/change-password/", views.ChangePasswordView.as_view(), name="change-password"),
     path("me/phone/", views.AddPhoneView.as_view(), name="add-phone"),
     path("me/phone/verify/", views.VerifyPhoneView.as_view(), name="verify-phone"),
+    path("me/consents/", views.MarketingConsentListView.as_view(), name="consents"),
+    path("me/consents/withdraw/", views.MarketingConsentWithdrawView.as_view(), name="consent-withdraw"),
     path("me/referrals/", views.ReferralView.as_view(), name="referrals"),
     path("me/referrals/invite/", views.ReferralInviteView.as_view(), name="referral-invite"),
 ]

@@ -134,7 +134,8 @@ export default function CampaignsTable() {
     };
 
     return [
-      ...campaigns.map((campaign) => {
+      // Archived = deleted; ended and paused campaigns still show (Master).
+      ...campaigns.filter((campaign) => String(campaign.status ?? "").toLowerCase() !== "archived").map((campaign) => {
         const metrics = analyticsByCampaign.get(campaignId(campaign));
         const results = resultsByCampaign.get(campaignId(campaign));
         const redemptions = toNumber(results?.redemptions ?? metrics?.redemptions);

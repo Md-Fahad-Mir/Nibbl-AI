@@ -51,7 +51,7 @@
 - [x] ✅ **28. Analytics to the specified definitions** — Cost & Results from actual wallet debits (rewards + fees, no subscriptions); Customer & Conversion (rebate views → claims, new vs returning); Campaign Performance from completed 25-hour cycles: Exhausted Early (<12 h, raise limit 25%) / On Pace / Behind / Building Data (<7 cycles)
 
 ## Customers
-- [ ] 🟡 **29. Customer directory & consent handling** — directory + plan-based gating ✓; **plan-gated CSV export ✓** (PII columns only for Pro/Scale); consent status / opt-in-out tracking still missing
+- [x] ✅ **29. Customer directory & consent handling** — brand-scoped consent badge (Opted In / Opted Out / none) with date, source and withdrawal date; shoppers can opt out (website profile + API) and keep their history; download = currently opted-in customers only (full name, email, phone, consent status/date, brand activity, last activity; plan-gated PII); summary (opted-in, open claims, active cooldowns, brand conversion); search + filters (open claim, cooldown, completed rebate, suspended, inactive). *Klaviyo/Postscript/Shopify 'coming soon' cards not built*
 
 ## Brand Wallet
 - [x] ✅ **30. Balances (available, reserved, promotional)** — wallet page shows Available Funds (real money for new claims; promo excluded), Reserved Funds (split rebates / reviews) and Promotional Credits (pays fees + plan charges, never rewards), each with its Master definition; API adds `reserved_rebates` / `reserved_reviews`
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (34):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #28, #30, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46, #50.
+**Done to spec (35):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #28, #29, #30, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46, #50.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

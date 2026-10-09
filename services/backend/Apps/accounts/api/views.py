@@ -2,6 +2,7 @@
 
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -277,3 +278,54 @@ class ReferralInviteView(APIView):
             contact=serializer.validated_data["contact"],
         )
         return Response(result, status=status.HTTP_202_ACCEPTED)
+
+
+@extend_schema(tags=["users"])
+class MarketingConsentListView(APIView):
+    """The shopper's email+SMS marketing consents: Nibbl's (brand null) and
+    each brand's, with status and dates."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        from Apps.accounts.models import MarketingConsent
+
+        consents = MarketingConsent.objects.filter(user=request.user).select_related("brand")
+        return Response([
+            {
+                "brand": str(c.brand_id) if c.brand_id else None,
+                "brand_name": c.brand.name if c.brand_id else "NibblAI",
+                "opted_in": c.opted_in,
+                "consented_at": c.consented_at,
+                "withdrawn_at": c.revoked_at,
+            }
+            for c in consents.order_by("brand__name")
+        ])
+
+
+@extend_schema(tags=["users"])
+class MarketingConsentWithdrawView(APIView):
+    """Withdraw marketing consent: {"brand": "<uuid>"} for one brand, or
+    {"brand": null} for NibblAI. History is kept; the brand sees Opted Out
+    and the shopper is left out of its downloads."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request):
+        from django.utils import timezone
+
+        from Apps.accounts.models import MarketingConsent
+
+        brand = (request.data or {}).get("brand")
+        consent = MarketingConsent.objects.filter(
+            user=request.user, **({"brand_id": brand} if brand else {"brand__isnull": True})
+        ).first()
+        if consent is None:
+            raise NotFound("No marketing consent to withdraw.")
+        if consent.opted_in:
+            consent.opted_in = False
+            consent.revoked_at = timezone.now()
+            consent.save(update_fields=["opted_in", "revoked_at", "updated_at"])
+        return Response({"brand": brand, "opted_in": False, "withdrawn_at": consent.revoked_at})

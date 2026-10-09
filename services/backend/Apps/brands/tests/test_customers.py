@@ -31,7 +31,9 @@ def _brand_with_customer(plan_slug):
     go_live(campaign)
 
     customer = User.objects.create_user(email="shopper@example.com", password="x", full_name="Shopper")
-    reservation = reservation_services.create_reservation(user=customer, campaign_id=campaign.id)
+    reservation = reservation_services.create_reservation(
+        user=customer, campaign_id=campaign.id, consent_brand=True
+    )
     receipt_services.upload_receipt(
         user=customer, reservation_id=reservation.id, **RECEIPT_META,
         items=[{"description": "Cola", "quantity": 1, "unit_price": "10.00"}],
@@ -174,3 +176,47 @@ class PerBrandSuspensionTests(APITestCase):
                 user=customer, detail__startswith="Repeated suspensions"
             ).exists()
         )
+
+
+class ConsentTests(APITestCase):
+    """Master #29: consent status in the directory; opted-out customers keep
+    their history but leave downloads; summary + filters."""
+
+    def test_opt_out_flow(self):
+        owner, brand, customer = _brand_with_customer("pro")
+        self.client.force_authenticate(owner)
+        data = self.client.get(reverse("v1:brands:customer-list", args=[brand.id])).data
+        row = data["customers"][0]
+        self.assertEqual((row["consent_status"], row["consent_source"]), ("opted_in", "claim"))
+        self.assertIsNotNone(row["consent_date"])
+        self.assertEqual(data["summary"]["opted_in_customers"], 1)
+
+        # The shopper withdraws consent for this brand.
+        self.client.force_authenticate(customer)
+        consents = self.client.get(reverse("v1:accounts:users:consents")).data
+        self.assertEqual([(c["brand_name"], c["opted_in"]) for c in consents], [(brand.name, True)])
+        resp = self.client.post(reverse("v1:accounts:users:consent-withdraw"), {"brand": str(brand.id)}, format="json")
+        self.assertEqual(resp.status_code, 200)
+
+        self.client.force_authenticate(owner)
+        row = self.client.get(reverse("v1:brands:customer-list", args=[brand.id])).data["customers"][0]
+        self.assertEqual(row["consent_status"], "opted_out")  # history kept, badge changes
+        self.assertIsNotNone(row["consent_withdrawn_at"])
+        self.assertEqual(row["redemptions"], 1)
+        export = self.client.get(reverse("v1:brands:customer-export", args=[brand.id])).content.decode()
+        self.assertNotIn("shopper@example.com", export)
+
+    def test_filters_and_search(self):
+        owner, brand, customer = _brand_with_customer("pro")
+        self.client.force_authenticate(owner)
+        url = reverse("v1:brands:customer-list", args=[brand.id])
+        self.assertEqual(self.client.get(url, {"status": "completed_rebate"}).data["count"], 1)
+        self.assertEqual(self.client.get(url, {"status": "open_claim"}).data["count"], 0)
+        self.assertEqual(self.client.get(url, {"search": "shopper@"}).data["count"], 1)
+        self.assertEqual(self.client.get(url, {"search": "nobody"}).data["count"], 0)
+
+    def test_withdraw_without_consent_is_404(self):
+        _owner, brand, customer = _brand_with_customer("pro")
+        self.client.force_authenticate(customer)
+        resp = self.client.post(reverse("v1:accounts:users:consent-withdraw"), {"brand": None}, format="json")
+        self.assertEqual(resp.status_code, 404)

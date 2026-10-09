@@ -125,3 +125,39 @@ class CooldownRecord(BaseModel):
     @property
     def is_active(self) -> bool:
         return timezone.now() < self.expires_at
+
+
+class ZipCode(models.Model):
+    """US ZIP → state + centroid (GeoNames, CC BY 4.0; see offers/data)."""
+
+    zip = models.CharField(max_length=5, primary_key=True)
+    state = models.CharField(max_length=2, db_index=True)
+    lat = models.FloatField()
+    lng = models.FloatField()
+
+    class Meta:
+        indexes = [models.Index(fields=["lat", "lng"])]
+
+    def __str__(self):
+        return self.zip
+
+
+class ShopperLocation(BaseModel):
+    """A shopper's saved discovery location (ZIP or device position resolved
+    to its nearest ZIP), so they aren't asked again (Master)."""
+
+    class Source(models.TextChoices):
+        ZIP = "zip", "Entered ZIP"
+        DEVICE = "device", "Device location"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="discovery_location"
+    )
+    zip = models.CharField(max_length=5)
+    state = models.CharField(max_length=2)
+    lat = models.FloatField()
+    lng = models.FloatField()
+    source = models.CharField(max_length=10, choices=Source.choices, default=Source.ZIP)
+
+    def __str__(self):
+        return f"{self.user_id} @ {self.zip}"

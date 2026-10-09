@@ -5,6 +5,7 @@ import Header from "./Header";
 import SearchBar from "./SearchBar";
 import WalletCard from "./WalletCard";
 import RewardsSection from "./RewardsSection";
+import LocationGate from "./LocationGate";
 import PendingRewards from "./PendingRewards";
 import ScanReceipt from "./ScanReceipt";
 import Footer from "./Footer";
@@ -23,6 +24,7 @@ export default function HomepageContainer({
 }: HomepageContainerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
+  const [changingLocation, setChangingLocation] = useState(false);
   const {
     wallet,
     offers,
@@ -36,6 +38,8 @@ export default function HomepageContainer({
     error,
     loadHome,
     loadRewardsHub,
+    discoveryLocation,
+    saveDiscoveryLocation,
   } = useConsumerApiStore();
 
   useEffect(() => {
@@ -70,8 +74,27 @@ export default function HomepageContainer({
           <WalletCard balance={balance} onViewWallet={() => onTabChange("wallet")} />
         </section>
 
-        {/* Rewards Section (Your Rewards title, Filter categories, Products Grid, Pagination) */}
+        {/* Discovery needs a location first (Master: never show unfiltered deals) */}
+        {status !== "loading" && (!discoveryLocation || changingLocation) ? (
+          <section className="w-full">
+            <LocationGate
+              onSave={async (body) => {
+                await saveDiscoveryLocation(body);
+                setChangingLocation(false);
+              }}
+              onCancel={discoveryLocation ? () => setChangingLocation(false) : undefined}
+            />
+          </section>
+        ) : (
         <section className="w-full">
+          {discoveryLocation && (
+            <p className="max-w-[1137px] mx-auto mb-4 text-[14px] text-[#575757]">
+              Deals near {discoveryLocation.zip} ·{" "}
+              <button onClick={() => setChangingLocation(true)} className="text-[#3E3EDF] underline cursor-pointer">
+                Change
+              </button>
+            </p>
+          )}
           <RewardsSection
             offers={offers}
             categories={categories}
@@ -88,6 +111,7 @@ export default function HomepageContainer({
             onViewOffer={onViewOffer}
           />
         </section>
+        )}
 
         {/* User Pending Rewards List */}
         <section className="w-full max-w-[1137px] mx-auto flex justify-start">

@@ -16,9 +16,21 @@ class PlatformSettingsSerializer(serializers.ModelSerializer):
             "withdrawal_review_rolling",
             "withdrawal_rolling_days",
             "referrals_enabled",
+            # Discovery ranking (Master #50)
+            "ranking_prior_views",
+            "ranking_prior_redemptions",
+            "store_match_multiplier",
+            "brand_interest_multiplier",
+            "going_fast_percent",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
+        extra_kwargs = {
+            "store_match_multiplier": {"min_value": Decimal("1.00"), "max_value": Decimal("5.00")},
+            "brand_interest_multiplier": {"min_value": Decimal("1.00"), "max_value": Decimal("5.00")},
+            "going_fast_percent": {"min_value": 1, "max_value": 100},
+            "ranking_prior_views": {"min_value": 1},
+        }
 
 
 class PromoCreditSerializer(serializers.Serializer):

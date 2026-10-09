@@ -6,6 +6,7 @@ import { DealCampaignInput, RetailerOption, useBrandApiStore } from "@/stores/us
 import NibblReviewComment from "../NibblReviewComment";
 import OfferPreview from "./OfferPreview";
 import RetailerPicker from "./RetailerPicker";
+import GeographyPicker, { GeoArea, Geography } from "./GeographyPicker";
 import {
   COOLDOWN_OPTIONS,
   DEAL_TYPES,
@@ -82,6 +83,13 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
   const [cooldown, setCooldown] = useState(
     initial("one_time_only") ? "one_time" : String(initial("cooldown_days") ?? "30")
   );
+  const [geography, setGeography] = useState<Geography>((initial("geography") as Geography) || "nationwide");
+  const [geoStates, setGeoStates] = useState<string[]>(
+    Array.isArray(initial("geography_states")) ? (initial("geography_states") as string[]) : []
+  );
+  const [geoAreas, setGeoAreas] = useState<GeoArea[]>(
+    Array.isArray(initial("geography_areas")) ? (initial("geography_areas") as GeoArea[]) : []
+  );
   const [busy, setBusy] = useState<"draft" | "submit" | null>(null);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -135,6 +143,9 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
     if (!shownHeadline.trim() || !shownDescription.trim()) out.push("Enter the shopper headline and description.");
     if (retailerRequired && !retailerIds.length) out.push("Select the retailers where receipts are accepted, or choose Any Retailer.");
     if (!capacity) out.push("Enter desired redemptions and an estimated redemption rate (1–100%).");
+    if (geography === "states" && !geoStates.length) out.push("Select at least one state.");
+    if (geography === "zip_radius" && !geoAreas.some((a) => /^\d{5}$/.test(a.zip)))
+      out.push("Enter at least one 5-digit ZIP code.");
     return out;
   };
 
@@ -174,6 +185,9 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
       retailers: retailerIds,
       featured_retailers: featuredIds,
       retailer_required: retailerRequired,
+      geography,
+      geography_states: geography === "states" ? geoStates : [],
+      geography_areas: geography === "zip_radius" ? geoAreas.filter((a) => a.zip) : [],
     };
     setBusy(submit ? "submit" : "draft");
     try {
@@ -451,7 +465,8 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
             </div>
           </Section>
 
-          <Section n="⑧" title="Customer cooldown">
+          <Section n="⑧" title="Campaign controls">
+            <span className="text-xs font-bold text-[#454656] uppercase tracking-wider">Customer cooldown</span>
             <select className={inputClass} value={cooldown} onChange={(e) => setCooldown(e.target.value)}>
               {COOLDOWN_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -462,6 +477,17 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
             <p className="text-xs text-[#64748B]">
               Cooldown begins after an approved redemption. An active claim always prevents another claim for this campaign.
             </p>
+            <span className="text-xs font-bold text-[#454656] uppercase tracking-wider mt-2">Discovery geography</span>
+            <GeographyPicker
+              geography={geography}
+              states={geoStates}
+              areas={geoAreas}
+              onChange={(g, st, ar) => {
+                setGeography(g);
+                setGeoStates(st);
+                setGeoAreas(ar);
+              }}
+            />
           </Section>
 
           {error && (

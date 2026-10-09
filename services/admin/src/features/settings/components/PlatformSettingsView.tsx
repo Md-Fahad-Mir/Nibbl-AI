@@ -37,6 +37,11 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
         withdrawal_review_rolling: text("withdrawal_review_rolling"),
         withdrawal_rolling_days: Number(text("withdrawal_rolling_days")),
         referrals_enabled: bool("referrals_enabled"),
+        ranking_prior_views: Number(text("ranking_prior_views")),
+        ranking_prior_redemptions: Number(text("ranking_prior_redemptions")),
+        store_match_multiplier: text("store_match_multiplier"),
+        brand_interest_multiplier: text("brand_interest_multiplier"),
+        going_fast_percent: Number(text("going_fast_percent")),
       });
       setDraft({});
       setMessage("Settings saved.");
@@ -116,6 +121,35 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
             />
             Referral bonuses enabled
           </label>
+        </div>
+
+        <div className="border-t border-[#F0F0F7] pt-4 flex flex-col gap-4">
+          <div>
+            <h3 className="text-base font-bold text-[#1A1A2E]">Discovery ranking</h3>
+            <p className="text-sm text-[#6B6B80] mt-1">
+              Eligible campaigns are ranked by Base CVR × Store Match × Brand Interest. Base CVR = (redemptions +
+              starting redemptions) ÷ (views + starting views) over 30 days, so new campaigns get a fair start.
+            </p>
+          </div>
+          {[
+            { field: "ranking_prior_views", label: "Starting views (pseudo-data)", step: "1", min: "1" },
+            { field: "ranking_prior_redemptions", label: "Starting redemptions (pseudo-data)", step: "1", min: "0" },
+            { field: "store_match_multiplier", label: "Store Match boost (×) — shopper bought at one of the campaign's retailers", step: "0.05", min: "1" },
+            { field: "brand_interest_multiplier", label: "Brand Interest boost (×) — viewed, claimed or redeemed with the brand in 30 days", step: "0.05", min: "1" },
+            { field: "going_fast_percent", label: "\"Going fast\" when this % or less of the 25-hour capacity remains", step: "1", min: "1" },
+          ].map((f) => (
+            <label key={f.field} className="flex flex-col gap-1 text-sm font-semibold text-[#454656]">
+              {f.label}
+              <input
+                className={inputClass}
+                type="number"
+                min={f.min}
+                step={f.step}
+                value={text(f.field)}
+                onChange={(e) => setDraft({ ...draft, [f.field]: e.target.value })}
+              />
+            </label>
+          ))}
         </div>
 
         {message && (

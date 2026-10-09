@@ -219,6 +219,15 @@ All changes are **additive**: existing fields keep their names and types, so the
 - **Query params:** `search` (free text over offer/brand/product name), `category` (e.g. `Food`; `all`/`explore` = no filter), `page`, `page_size`.
 - **Response:** paginated list of Offer objects.
 
+### Discovery location ⚠️ app update needed (Oct 2026)
+The Master requires a location **before** showing discovery deals ("Find deals near you"):
+- **Saved location:** `GET /me/location/` → `{ "location": { "zip":"94103","state":"CA" } }` or `{ "location": null }`.
+- **Save it:** `PUT /me/location/` with `{ "zip": "94103" }` **or** device position `{ "lat": 37.77, "lng": -122.41 }` (resolved to the nearest US ZIP). `400` with `detail` for an unknown ZIP / non-US position.
+- **Flow:** if `location` is null, show *"Find deals near you — Allow location or enter your ZIP code to see eligible deals"* with **Allow Location** and **Enter ZIP Code** (keep ZIP entry available if permission is declined). Let shoppers change it later. Don't show deals until it's set.
+- **Feed with a location** (`GET /offers/` uses the saved location, or pass `?zip=` / `?lat=&lng=`): only campaigns whose **discovery geography** (nationwide / states / ZIP + radius) includes the shopper, minus campaigns the shopper currently has an active claim on or is in cooldown for (that campaign only — other campaigns from the same brand still show), **ranked** for the shopper.
+- **Without any location** the feed still returns the old unfiltered list (for current app builds) and sends the header `X-Discovery-Location: required` — treat that as "ask for location first". With one, the header is the ZIP used.
+- **Direct links / QR codes** (`/offers/by-url/…`, `/offers/by-qr/…`) never need a location.
+
 ### Offer Categories
 - `GET /offers/categories/` · **Auth:** required · **Paginated: no** → `[{ "category": "Food" }, { "category": "Electronics" }]`
 
@@ -602,3 +611,4 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 5. **Reservation "pending"** filter value is **`active`**.
 6. **Rebate redesign (Oct 2026)** — see §4 "Rebate deals — what changed": title offers with `offer_headline` (never `name`/`campaign_name`), reward badge "Up to $X", "Going fast", claim-button states, receipt-eligibility and cooldown lines, product slider. `offer_type` is never `"fallback"` any more.
 7. **Receipt review (Oct 2026)** — see §6: receipts under review are decided within 7 days of upload (auto-approved otherwise); show `decision_reason` on rejected receipts; a reservation with a pending receipt stays `active`.
+8. **Discovery location (Oct 2026)** — see §4 "Discovery location": ask for location/ZIP before showing discovery; `PUT /me/location/`; header `X-Discovery-Location: required` means none is saved.

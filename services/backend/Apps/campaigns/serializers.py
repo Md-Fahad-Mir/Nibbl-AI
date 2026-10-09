@@ -121,6 +121,9 @@ class CampaignSerializer(serializers.ModelSerializer):
             "retailers",
             "featured_retailers",
             "retailer_required",
+            "geography",
+            "geography_states",
+            "geography_areas",
             "image_url",
         ]
         read_only_fields = fields
@@ -200,6 +203,12 @@ class _DealInputMixin(serializers.Serializer):
         child=serializers.UUIDField(), required=False, max_length=3
     )
     retailer_required = serializers.BooleanField(required=False)
+    # Discovery Geography: nationwide | states | zip_radius.
+    geography = serializers.ChoiceField(choices=Campaign.Geography.choices, required=False)
+    geography_states = serializers.ListField(
+        child=serializers.CharField(max_length=2), required=False
+    )
+    geography_areas = serializers.ListField(child=serializers.DictField(), required=False)
 
 
 class CampaignCreateSerializer(_DealInputMixin):

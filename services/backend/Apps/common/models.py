@@ -150,8 +150,7 @@ class PlatformSettings(models.Model):
     """Platform-wide, admin-configurable settings (a single row).
 
     Holds runtime knobs the client wants admins to control: withdrawal-review
-    thresholds and the referral toggle. (Discovery-ranking config lands with
-    the ranking engine.)
+    thresholds, the referral toggle, and discovery-ranking values.
     """
 
     id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
@@ -165,6 +164,18 @@ class PlatformSettings(models.Model):
     )
     withdrawal_rolling_days = models.PositiveIntegerField(default=30)
     referrals_enabled = models.BooleanField(default=True)
+
+    # --- Discovery ranking (Master: Base CVR × Store Match × Brand Interest) ---
+    # Base CVR = (redemptions + prior redemptions) ÷ (views + prior views) over
+    # the last 30 days; the "pseudo-data" prior keeps new campaigns ranked fairly.
+    ranking_prior_views = models.PositiveIntegerField(default=100)
+    ranking_prior_redemptions = models.PositiveIntegerField(default=5)
+    # Shopper has a verified receipt from one of the campaign's retailers.
+    store_match_multiplier = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal("1.25"))
+    # Shopper viewed / claimed / redeemed with this brand in the last 30 days.
+    brand_interest_multiplier = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal("1.15"))
+    # "Going fast" shows when this % or less of the cycle's capacity remains.
+    going_fast_percent = models.PositiveSmallIntegerField(default=20)
 
     updated_at = models.DateTimeField(auto_now=True)
 

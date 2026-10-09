@@ -244,6 +244,10 @@ export interface DealCampaignInput {
   featured_retailers: string[];
   /** true = receipts must be from one of `retailers`. */
   retailer_required: boolean;
+  /** Discovery geography: where the campaign appears in discovery. */
+  geography: "nationwide" | "states" | "zip_radius";
+  geography_states: string[];
+  geography_areas: { zip: string; radius_miles: number }[];
 }
 
 export interface RetailerOption {

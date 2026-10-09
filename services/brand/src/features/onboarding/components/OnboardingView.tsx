@@ -285,7 +285,8 @@ export default function OnboardingView() {
       <div className="flex-grow min-w-0 flex flex-col relative">
         <Header
           notifications={apiNotifications}
-          walletBalance={`$${String(wallet?.available ?? wallet?.balance ?? "0.00")}`}
+          walletBalance={`$${String(wallet?.reward_available ?? wallet?.available ?? wallet?.balance ?? "0.00")}`}
+          onOpenWallet={() => setActiveTab("Wallet")}
           userName={String(profile?.full_name ?? profile?.email ?? "Brand user")}
           userRole={String(profile?.role ?? "brand")}
           avatarUrl={typeof profile?.avatar_url === "string" ? profile.avatar_url : undefined}

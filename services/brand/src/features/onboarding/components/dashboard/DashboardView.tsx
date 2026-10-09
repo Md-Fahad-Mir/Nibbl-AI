@@ -1,13 +1,14 @@
 "use client";
 
-import RebateSnapshot from "../rebates/RebateSnapshot";
-import ReviewSnapshot from "../reviews/ReviewSnapshot";
+import DashboardSnapshots from "./DashboardSnapshots";
 import CampaignsTable from "../rebates/CampaignsTable";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
 export default function DashboardView() {
+  // Master: the brand name (from Brand Settings) in the welcome message.
+  const brand = useBrandApiStore((state) => state.brand);
   const profile = useBrandApiStore((state) => state.profile);
-  const displayName = String(profile?.full_name ?? profile?.email ?? "there");
+  const displayName = String(brand?.name ?? profile?.full_name ?? profile?.email ?? "there");
 
   return (
     <div className="flex flex-col gap-12 w-full">
@@ -21,9 +22,8 @@ export default function DashboardView() {
         </p>
       </div>
 
-      {/* SNAPSHOTS */}
-      <RebateSnapshot />
-      <ReviewSnapshot />
+      {/* SNAPSHOTS (last 30 days) */}
+      <DashboardSnapshots />
       <CampaignsTable />
     </div>
   );

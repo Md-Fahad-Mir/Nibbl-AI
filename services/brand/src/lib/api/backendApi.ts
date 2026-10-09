@@ -583,6 +583,11 @@ export const backendApi = {
       path: `/brands/${brandId}/analytics/rebates/summary/`,
       auth: true,
     }),
+    analyticsDashboard: (brandId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/analytics/dashboard/`,
+      auth: true,
+    }),
     analyticsCampaigns: (brandId: string): ApiEndpoint => ({
       method: "GET",
       path: `/brands/${brandId}/analytics/campaigns/`,

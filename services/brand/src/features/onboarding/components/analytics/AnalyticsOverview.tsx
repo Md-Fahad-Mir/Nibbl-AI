@@ -1,91 +1,117 @@
 "use client";
 
+import { ApiRecord } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
-import { formatDate, formatMoney, toNumber } from "../../utils/backendMappers";
+import { formatInteger, formatMoney } from "../../utils/backendMappers";
+
+const pct = (value: unknown) => (value === null || value === undefined ? "—" : `${Number(value).toFixed(1)}%`);
+const perResult = (value: unknown) => (value === null || value === undefined || value === "" ? "—" : formatMoney(value));
+
+// Master: Campaign Performance statuses from completed 25-hour cycles.
+const STATUS: Record<string, { label: string; tone: string }> = {
+  exhausted_early: { label: "Exhausted Early", tone: "bg-[#FEF2F2] text-[#DC2626]" },
+  on_pace: { label: "On Pace", tone: "bg-[#ECFDF5] text-[#059669]" },
+  behind: { label: "Behind", tone: "bg-[#FFF7ED] text-[#C2410C]" },
+  building_data: { label: "Building Data", tone: "bg-[#F1F5F9] text-[#475569]" },
+};
+
+const Card = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <section className="bg-white border border-[#C5C5D9]/15 shadow-[0px_24px_48px_rgba(19,27,46,0.04)] rounded-2xl p-6 flex flex-col gap-5">
+    <h3 className="font-jakarta font-bold text-lg text-[#131B2E]">{title}</h3>
+    {children}
+  </section>
+);
+
+const Stat = ({ label, value, sub }: { label: string; value: string; sub?: string }) => (
+  <div className="flex flex-col gap-1">
+    <span className="text-[11px] font-bold text-[#454656] tracking-[0.55px] uppercase">{label}</span>
+    <span className="font-jakarta font-extrabold text-2xl text-[#131B2E]">{value}</span>
+    {sub && <span className="text-xs text-[#64748B]">{sub}</span>}
+  </div>
+);
 
 export default function AnalyticsOverview() {
-  const analyticsOverview = useBrandApiStore((state) => state.analyticsOverview);
-  const redemptions = useBrandApiStore((state) => state.redemptions).slice(0, 5);
-  const spend = (analyticsOverview?.spend || {}) as Record<string, unknown>;
-  const approvals = toNumber(analyticsOverview?.approvals);
-  const reservations = toNumber(analyticsOverview?.reservations);
-  const redemptionsCount = toNumber(analyticsOverview?.redemptions);
-  const totalSpend = toNumber(spend.total);
-  const acquisitionCost = approvals ? totalSpend / approvals : 0;
-  const claimRate = reservations ? (approvals / reservations) * 100 : 0;
-  const redemptionRate = approvals ? (redemptionsCount / approvals) * 100 : 0;
+  const dashboard = useBrandApiStore((state) => state.analyticsDashboard);
+  if (!dashboard) {
+    return <p className="text-sm text-[#64748B]">Analytics are loading…</p>;
+  }
+  const rebates = (dashboard.rebates || {}) as ApiRecord;
+  const reviews = (dashboard.reviews || {}) as ApiRecord;
+  const conversion = (dashboard.conversion || {}) as ApiRecord;
+  const campaigns = (Array.isArray(dashboard.campaigns) ? dashboard.campaigns : []) as ApiRecord[];
 
   return (
     <div className="flex flex-col gap-8 w-full text-left font-manrope animate-slide-up">
-      
-      {/* KPI Cards Bento Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full items-stretch">
-        
-        {/* Cost per Acquisition */}
-        <div className="bg-white border border-[#C5C5D9]/15 shadow-[0px_24px_48px_rgba(19,27,46,0.04)] rounded-2xl p-6 flex flex-col text-left justify-between min-h-[125px]">
-          <span className="text-[11px] font-bold text-[#454656] tracking-[0.55px] uppercase">Cost Per Acquisition</span>
-          <h3 className="font-jakarta font-extrabold text-3xl text-[#131B2E] mt-3 tracking-tight">{formatMoney(acquisitionCost)}</h3>
+      {/* 1. Cost & Results */}
+      <Card title="Cost & Results">
+        <p className="text-xs text-[#64748B] -mt-3">
+          Total Brand Cost = shopper rewards + Nibbl fees from your wallet transactions (subscriptions excluded).
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <Stat label="Rebate brand cost" value={formatMoney(rebates.total_brand_cost)}
+            sub={`${perResult(rebates.cost_per_redemption)} per redemption`} />
+          <Stat label="Redemptions" value={formatInteger(rebates.redemptions)}
+            sub={`${pct(rebates.redemption_rate)} of ${formatInteger(rebates.claims)} claims`} />
+          <Stat label="Review brand cost" value={formatMoney(reviews.total_brand_cost)}
+            sub={`${perResult(reviews.cost_per_review)} per review`} />
+          <Stat label="Reviews completed" value={formatInteger(reviews.completed)}
+            sub={`${pct(reviews.completion_rate)} of ${formatInteger(reviews.invitations)} invitations`} />
         </div>
+      </Card>
 
-        {/* Claim Rate (With Blue Border accent on top) */}
-        <div className="bg-white border-t-4 border-t-[#001BD2] border-x border-b border-[#C5C5D9]/15 shadow-[0px_24px_48px_rgba(19,27,46,0.04)] rounded-2xl p-6 flex flex-col text-left justify-between min-h-[125px]">
-          <span className="text-[11px] font-bold text-[#454656] tracking-[0.55px] uppercase">Claim Rate</span>
-          <h3 className="font-jakarta font-extrabold text-3xl text-[#131B2E] mt-3 tracking-tight">{claimRate.toFixed(1)}%</h3>
+      {/* 2. Customer & Conversion (rebates only) */}
+      <Card title="Customer & Conversion">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <Stat label="Rebate campaign views" value={formatInteger(conversion.rebate_views)} />
+          <Stat label="View → claim" value={pct(conversion.view_to_claim_rate)}
+            sub={`${formatInteger(conversion.claims)} claims`} />
+          <Stat label="New customers" value={formatInteger(conversion.new_customers)} />
+          <Stat label="Returning customers" value={formatInteger(conversion.returning_customers)} />
         </div>
+      </Card>
 
-        {/* Redemption Rate */}
-        <div className="bg-white border border-[#C5C5D9]/15 shadow-[0px_24px_48px_rgba(19,27,46,0.04)] rounded-2xl p-6 flex flex-col text-left justify-between min-h-[125px]">
-          <span className="text-[11px] font-bold text-[#454656] tracking-[0.55px] uppercase">Redemption Rate</span>
-          <h3 className="font-jakarta font-extrabold text-3xl text-[#131B2E] mt-3 tracking-tight">{redemptionRate.toFixed(1)}%</h3>
-        </div>
-
-      </div>
-
-      {/* Recent Transaction Flow Card */}
-      <div className="w-full bg-white border border-slate-100 shadow-[0px_32px_64px_rgba(19,27,46,0.03)] rounded-2xl overflow-hidden flex flex-col">
-        <div className="bg-[#F2F3FF] px-8 py-5 border-b border-[#C5C5D9]/10">
-          <h3 className="font-jakarta font-bold text-lg text-[#131B2E]">Recent Transaction Flow</h3>
-        </div>
-        <div className="w-full overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-[#C5C5D9]/10 bg-[#FAF8FF]">
-                <th className="p-5 text-left text-[10px] font-bold tracking-wider text-[#454656] uppercase">Customer</th>
-                <th className="p-5 text-left text-[10px] font-bold tracking-wider text-[#454656] uppercase">Campaign</th>
-                <th className="p-5 text-left text-[10px] font-bold tracking-wider text-[#454656] uppercase">Redemption Date</th>
-                <th className="p-5 text-left text-[10px] font-bold tracking-wider text-[#454656] uppercase">Amount</th>
-                <th className="p-5 text-left text-[10px] font-bold tracking-wider text-[#454656] uppercase">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {redemptions.map((row, i) => (
-                <tr key={i} className="border-b border-[#C5C5D9]/10 hover:bg-[#F2F3FF]/30 transition-colors text-sm text-[#454656] font-manrope">
-                  <td className="p-5 text-left flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#D0E1FB] text-[#001BD2] font-bold text-xs flex items-center justify-center">C</div>
-                    <span className="font-bold text-[#131B2E]">{String(row.user_email ?? "Customer")}</span>
-                  </td>
-                  <td className="p-5 text-left font-medium">{String(row.campaign_name ?? "Campaign")}</td>
-                  <td className="p-5 text-left font-medium">{formatDate(row.issued_at ?? row.created_at)}</td>
-                  <td className="p-5 text-left font-bold text-[#131B2E]">{formatMoney(row.reward_amount)}</td>
-                  <td className="p-5 text-left">
-                    <span className="font-bold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider bg-blue-100 text-blue-700">
-                      {String(row.status ?? "processed")}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {redemptions.length === 0 && (
+      {/* 3. Campaign Performance (rebates, completed 25-hour cycles) */}
+      <Card title="Campaign Performance">
+        <p className="text-xs text-[#64748B] -mt-3">
+          Based on completed 25-hour cycles (the current cycle is excluded). Campaigns reset every 25 hours.
+        </p>
+        {campaigns.length === 0 ? (
+          <p className="text-sm text-[#64748B]">No rebate campaigns yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-wider text-[#454656] text-left">
                 <tr>
-                  <td colSpan={5} className="p-10 text-center text-sm font-semibold text-slate-400">
-                    No recent redemption flow yet.
-                  </td>
+                  <th className="py-2 pr-4">Campaign</th>
+                  <th className="py-2 pr-4">Status</th>
+                  <th className="py-2 pr-4">Avg. time to fill</th>
+                  <th className="py-2 pr-4">Cycles</th>
+                  <th className="py-2">Recommendation</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
+              </thead>
+              <tbody>
+                {campaigns.map((row) => {
+                  const perf = (row.performance || {}) as ApiRecord;
+                  const status = STATUS[String(perf.status)] ?? STATUS.building_data;
+                  return (
+                    <tr key={String(row.id)} className="border-t border-[#F1F2FA] align-top">
+                      <td className="py-3 pr-4 font-bold text-[#131B2E]">{String(row.name)}</td>
+                      <td className="py-3 pr-4">
+                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${status.tone}`}>{status.label}</span>
+                      </td>
+                      <td className="py-3 pr-4 text-[#454656]">
+                        {perf.average_fill_hours != null ? `${String(perf.average_fill_hours)} h` : "—"}
+                      </td>
+                      <td className="py-3 pr-4 text-[#454656]">{formatInteger(perf.completed_cycles)}</td>
+                      <td className="py-3 text-[#454656]">{String(perf.recommendation ?? "")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

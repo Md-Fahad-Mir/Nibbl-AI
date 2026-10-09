@@ -14,7 +14,6 @@ type DashboardCampaign = {
   name: string;
   type: "REBATE" | "REVIEW";
   status: string;
-  isActive: boolean;
   spend: number;
   activity: string;
   activitySub: string;
@@ -52,11 +51,6 @@ const statusText = (campaign: ApiRecord) => {
   const status = titleCase(campaignStatusValue(campaign));
   return campaign.pending_revision ? `${status} · Changes Pending Review` : status;
 };
-
-const isActiveCampaign = (campaign: ApiRecord) =>
-  campaignStatusValue(campaign).trim().toLowerCase() === "active" ||
-  campaign.is_active === true ||
-  campaign.active === true;
 
 const campaignTimestamp = (campaign: ApiRecord) => {
   const rawDate =
@@ -114,12 +108,17 @@ export default function CampaignsTable() {
   const campaigns = useBrandApiStore((state) => state.campaigns);
   const reviewCampaigns = useBrandApiStore((state) => state.reviewCampaigns);
   const analyticsCampaigns = useBrandApiStore((state) => state.analyticsCampaigns);
+  // Last-30-day results per campaign (Master: claims / redemptions).
+  const dashboard = useBrandApiStore((state) => state.analyticsDashboard);
   const products = useBrandApiStore((state) => state.products);
   const [now] = useState(() => Date.now());
 
   const rows: DashboardCampaign[] = useMemo(() => {
     const analyticsByCampaign = new Map(
       analyticsCampaigns.map((row) => [String(row.campaign_id), row])
+    );
+    const resultsByCampaign = new Map(
+      ((dashboard?.campaigns as ApiRecord[] | undefined) ?? []).map((row) => [String(row.id), row])
     );
     const productImageById = new Map(
       products.map((product) => [product.id, product.imageSrc])
@@ -137,16 +136,16 @@ export default function CampaignsTable() {
     return [
       ...campaigns.map((campaign) => {
         const metrics = analyticsByCampaign.get(campaignId(campaign));
-        const redemptions = toNumber(metrics?.redemptions);
-        const approvals = toNumber(metrics?.approvals);
+        const results = resultsByCampaign.get(campaignId(campaign));
+        const redemptions = toNumber(results?.redemptions ?? metrics?.redemptions);
+        const claims = toNumber(results?.claims ?? metrics?.reservations);
         return {
           id: campaignId(campaign),
           name: String(campaign.name ?? "Untitled rebate campaign"),
           type: "REBATE" as const,
           status: statusText(campaign),
-          isActive: isActiveCampaign(campaign),
           spend: toNumber(metrics?.total_spend),
-          activity: `${formatInteger(approvals)} Purchases`,
+          activity: `${formatInteger(claims)} Claims`,
           activitySub: `${formatInteger(redemptions)} Redemptions`,
           thumbnail: thumbnailForCampaign(campaign, "/Auth/rebateImage.svg"),
           timestamp: campaignTimestamp(campaign),
@@ -157,7 +156,6 @@ export default function CampaignsTable() {
         name: String(campaign.name ?? "Untitled review campaign"),
         type: "REVIEW" as const,
         status: statusText(campaign),
-        isActive: isActiveCampaign(campaign),
         spend: toNumber(campaign.daily_budget),
         activity: `${formatInteger(campaign.prompts instanceof Array ? campaign.prompts.length : 0)} Prompts`,
         activitySub: `${formatMoney(campaign.reward_amount)} Reward`,
@@ -165,7 +163,7 @@ export default function CampaignsTable() {
         timestamp: campaignTimestamp(campaign),
       })),
     ].filter((campaign) => campaign.id);
-  }, [analyticsCampaigns, campaigns, products, reviewCampaigns]);
+  }, [analyticsCampaigns, campaigns, dashboard, products, reviewCampaigns]);
 
   const activeRows = useMemo(() => {
     const dateWindow =
@@ -183,7 +181,8 @@ export default function CampaignsTable() {
         campaign.timestamp === null ||
         campaign.timestamp >= now - dateWindow;
 
-      return campaign.isActive && matchesType && matchesDate;
+      // Master: Campaign Performance includes ended campaigns.
+      return matchesType && matchesDate;
     });
   }, [dateFilter, now, rows, typeFilter]);
 
@@ -212,7 +211,7 @@ export default function CampaignsTable() {
     <section className="flex flex-col gap-6">
       <div className="flex justify-between items-center w-full">
         <h2 className="text-sm font-jakarta font-extrabold text-[#454656] opacity-70 tracking-widest uppercase">
-          ACTIVE CAMPAIGNS
+          CAMPAIGN PERFORMANCE
         </h2>
 
         {/* Dropdowns Filters */}
@@ -288,7 +287,7 @@ export default function CampaignsTable() {
               <th className="px-8 font-bold">TYPE</th>
               <th className="px-8 font-bold">STATUS</th>
               <th className="px-8 font-bold text-right">SPEND</th>
-              <th className="px-8 font-bold text-right">ACTIVITY</th>
+              <th className="px-8 font-bold text-right">RESULTS</th>
             </tr>
           </thead>
           <tbody>

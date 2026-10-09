@@ -8,6 +8,7 @@ _ba = "brands/<uuid:brand_id>/analytics"
 
 urlpatterns = [
     path(f"{_ba}/overview/", views.BrandOverviewView.as_view(), name="brand-overview"),
+    path(f"{_ba}/dashboard/", views.BrandDashboardView.as_view(), name="brand-dashboard"),
     path(
         f"{_ba}/rebates/summary/",
         views.BrandRebatesSummaryView.as_view(),

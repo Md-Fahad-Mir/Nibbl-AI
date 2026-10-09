@@ -46,4 +46,4 @@ can't be confirmed, the receipt goes to **manual review** — never auto-rejecte
    live), admin approval queue (#44).
 3. ✅ **Brand builder UI** (done 2026-10-08) — new campaign builder + campaign detail page
    (status banner, "Current cycle claims X of Y", review activity).
-4. **Shopper side** — headline/description on offer pages, "Going fast"; app guide.
+4. ✅ **Shopper side** (done 2026-10-09; app guide: docs/CONSUMER_API_HANDOVER.md §4) — headline/description on offer pages, "Going fast"; app guide.

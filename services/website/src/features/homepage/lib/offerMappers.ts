@@ -14,6 +14,14 @@ export interface DisplayOffer {
   image: string | null;
   description: string;
   category: string;
+  /** Brand's shopper headline (never the internal campaign name). */
+  headline: string;
+  retailerWording: string;
+  cooldownWording: string;
+  goingFast: boolean;
+  /** Why the offer can't be claimed right now; null when claimable. */
+  unavailableReason: string | null;
+  products: { id: string; name: string; image: string | null }[];
 }
 
 export interface DisplayReview {
@@ -55,7 +63,39 @@ export const rewardLabel = (offer?: ApiRecord | null) => {
   const label = text(offer.discount_label);
   if (label) return label;
   const amount = money(offer.reward_amount ?? offer.amount);
+  // Deal offers: reward_amount is the most one redemption pays.
+  if (amount && offer.deal_type) {
+    return offer.deal_type === "buy_x_get_y" ? `${amount} back` : `Up to ${amount}`;
+  }
   return amount || text(offer.offer_type, "Reward");
+};
+
+export const retailerWording = (offer: ApiRecord) => {
+  const retailers = Array.isArray(offer.eligible_retailers) ? offer.eligible_retailers.map(String) : [];
+  return offer.retailer_required && retailers.length
+    ? `Purchase required at: ${retailers.join(", ")}. Your receipt must clearly show the retailer name.`
+    : "Buy at any retailer — your receipt just needs to clearly show the eligible product.";
+};
+
+export const cooldownWording = (offer: ApiRecord) => {
+  if (offer.one_time_only) return "One redemption per customer.";
+  const days = Number(offer.cooldown_days ?? 0);
+  return days > 0
+    ? `After a redemption is approved, you can redeem this offer again in ${days} days.`
+    : "You can redeem this offer again once your previous redemption is approved.";
+};
+
+export const unavailableReason = (offer: ApiRecord): string | null => {
+  if (offer.claimable !== false) return null;
+  if (offer.temporarily_unavailable) {
+    return "Current rebates have been claimed. This offer is temporarily unavailable — check back soon.";
+  }
+  if (offer.in_cooldown) {
+    return offer.one_time_only
+      ? "You've already redeemed this offer."
+      : "You've redeemed this offer recently. It will be available again after your cooldown.";
+  }
+  return "This offer isn't available right now.";
 };
 
 export const displayOffer = (offer: ApiRecord, index = 0): DisplayOffer => ({
@@ -67,12 +107,27 @@ export const displayOffer = (offer: ApiRecord, index = 0): DisplayOffer => ({
   rating: Number(offer.rating ?? offer.average_rating ?? 0),
   reviewsCount: Number(offer.review_count ?? offer.reviews_count ?? 0),
   rewardLabel: rewardLabel(offer),
-  image: imageUrl(offer.product_image ?? offer.image ?? offer.thumbnail, "") || null,
+  image: imageUrl(text(offer.campaign_image) || (offer.product_image ?? offer.image ?? offer.thumbnail), "") || null,
   description: text(
-    offer.description ?? offer.product_description ?? offer.summary,
+    text(offer.offer_description) || (offer.description ?? offer.product_description ?? offer.summary),
     "Buy this product, upload your receipt, and receive your reward after verification."
   ),
   category: text(offer.category, "All"),
+  headline: text(offer.offer_headline, text(offer.product_name, "Reward offer")),
+  retailerWording: retailerWording(offer),
+  cooldownWording: cooldownWording(offer),
+  goingFast: Boolean(offer.going_fast),
+  unavailableReason: unavailableReason(offer),
+  products: Array.isArray(offer.eligible_products)
+    ? offer.eligible_products.map((item, i) => {
+        const product = item as ApiRecord;
+        return {
+          id: String(product.id ?? i),
+          name: text(product.name, "Eligible product"),
+          image: imageUrl(product.image, "") || null,
+        };
+      })
+    : [],
 });
 
 export const displayReviews = (offer?: ApiRecord | null): DisplayReview[] => {

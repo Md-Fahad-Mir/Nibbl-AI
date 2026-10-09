@@ -35,6 +35,14 @@ export default function ViewDetails({ campaignId, onBack, onTabChange }: ViewDet
   const offer = selectedOffer || fallbackOffer;
   const details = offer ? displayOffer(offer) : null;
   const reviews = displayReviews(offer);
+  // Steps come from the backend, worded for this offer's receipt rule.
+  const howItWorks = Array.isArray(offer?.how_it_works)
+    ? offer.how_it_works.map((step) => String((step as { text?: unknown }).text ?? "")).filter(Boolean)
+    : [
+        "Claim this offer, then buy the eligible product.",
+        "Upload your receipt in NibblAI within 7 days of claiming.",
+        "Get your reward in your Nibbl wallet once your receipt is approved.",
+      ];
 
   const handleSaveReward = async () => {
     const id = campaignId || details?.id;
@@ -66,7 +74,7 @@ export default function ViewDetails({ campaignId, onBack, onTabChange }: ViewDet
           <div className="w-full flex flex-col gap-6">
             <div className="w-full flex flex-col gap-[3px]">
               <h1 className="text-[32px] font-medium leading-[39px] text-[#2D2D2D] w-full">
-                {details?.campaignName || details?.title || "Offer Details"}
+                {details?.headline || details?.title || "Offer Details"}
               </h1>
               <span className="text-[18px] font-normal leading-[22px] text-[#4D4D4D]">
                 {details?.expires ? `Expires ${details.expires}` : "Backend offer"}
@@ -84,6 +92,13 @@ export default function ViewDetails({ campaignId, onBack, onTabChange }: ViewDet
                 <p>3. Upload a valid receipt for verification.</p>
                 <p>4. Receive {details?.rewardLabel || "your reward"} in your wallet after approval.</p>
               </div>
+              {details && (
+                <div className="mt-2 flex flex-col gap-1 text-[16px] leading-[20px] text-[#4D4D4D]">
+                  <p>{details.retailerWording}</p>
+                  <p>{details.cooldownWording}</p>
+                  {details.unavailableReason && <p className="text-[#E65353]">{details.unavailableReason}</p>}
+                </div>
+              )}
             </div>
           </div>
 
@@ -93,11 +108,7 @@ export default function ViewDetails({ campaignId, onBack, onTabChange }: ViewDet
             </h3>
 
             <div className="w-full flex flex-col gap-2">
-              {[
-                "Buy this product at any participating store or online retailer.",
-                "Upload your receipt through NibblAI to verify your purchase.",
-                "Receive your reward directly in your Nibbl wallet.",
-              ].map((step, index) => (
+              {howItWorks.map((step, index) => (
                 <div key={step} className="flex gap-2 items-center w-full">
                   <span className="w-6 h-6 flex-shrink-0 text-[#3E3EDF]">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">

@@ -34,6 +34,14 @@ class OfferSerializer(serializers.Serializer):
     required_quantity = serializers.IntegerField()
     going_fast = serializers.BooleanField()
     temporarily_unavailable = serializers.BooleanField()
+    # Shopper offer page: campaign image, receipt eligibility, product slider,
+    # cooldown terms.
+    campaign_image = serializers.CharField(allow_blank=True)
+    retailer_required = serializers.BooleanField()
+    eligible_retailers = serializers.ListField(child=serializers.CharField())
+    eligible_products = serializers.ListField(child=serializers.DictField())
+    cooldown_days = serializers.IntegerField()
+    one_time_only = serializers.BooleanField()
 
     def to_representation(self, campaign):
         from Apps.offers.services import resolve_offer

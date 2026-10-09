@@ -9,6 +9,8 @@ class ReservationSerializer(serializers.ModelSerializer):
     """Claim details — everything the app needs to submit a receipt."""
 
     campaign_name = serializers.CharField(source="campaign.name", read_only=True)
+    # Shopper-facing offer wording (campaign_name is the internal name).
+    offer_headline = serializers.CharField(source="campaign.offer_headline", read_only=True)
     brand_name = serializers.CharField(source="campaign.brand.name", read_only=True)
     product_name = serializers.SerializerMethodField()
     # Where the app POSTs the receipt photo. Our own endpoint — the OCR service
@@ -22,6 +24,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             "id",
             "campaign",
             "campaign_name",
+            "offer_headline",
             "brand_name",
             "product_name",
             "kind",

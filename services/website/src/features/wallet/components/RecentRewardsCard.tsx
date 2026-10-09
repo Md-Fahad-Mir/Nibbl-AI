@@ -12,7 +12,7 @@ interface RecentRewardsCardProps {
 export default function RecentRewardsCard({ redemptions = [] }: RecentRewardsCardProps) {
   const rewards: RewardItem[] = redemptions.map((item) => ({
     id: String(item.id),
-    title: String(item.campaign_name || item.brand_name || "Reward"),
+    title: String(item.offer_headline || item.campaign_name || item.brand_name || "Reward"),
     amount: `$${String(item.reward_amount || item.amount || "0.00")}`,
     status: item.status === "pending" ? "pending" : "verified",
   }));

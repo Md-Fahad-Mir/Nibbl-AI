@@ -74,10 +74,15 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
 
       {/* Main Page Layout Wrapper */}
       <main className="flex-grow flex flex-col items-center py-10 px-4 sm:px-6 max-w-[1440px] mx-auto w-full relative">
-        {/* Campaign Name Title */}
+        {/* Offer headline (the brand's shopper wording — never the internal campaign name) */}
         <h1 className="text-[32px] font-bold text-[#1F1D1D] text-center mb-6 mt-4">
-          {details?.campaignName || details?.title || "Offer Details"}
+          {details?.headline || details?.title || "Offer Details"}
         </h1>
+        {details?.goingFast && (
+          <span className="-mt-4 mb-6 rounded-full bg-[#FFF1E6] px-3 py-1 text-[13px] font-semibold text-[#E0700B]">
+            Going fast
+          </span>
+        )}
 
         {/* Claim Details Card (Frame 2147229230) */}
         <div className="w-full max-w-[614px] bg-[#FEFEFE] shadow-[0px_4px_11.5px_rgba(0,0,0,0.08)] rounded-[12px] p-6 sm:py-[12px] sm:px-[33px] flex flex-col items-center gap-[22px] border border-gray-100/50">
@@ -145,6 +150,26 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
                 {details?.description || "Claim this backend offer and upload your receipt to receive the reward."}
               </p>
 
+              {/* Offer eligibility: receipt retailer rule + cooldown */}
+              <div className="w-full max-w-[335px] flex flex-col gap-1 rounded-lg bg-[#F5F5FD] px-3 py-2 text-left text-[12px] leading-[16px] text-[#4D4D4D]">
+                <p>{details?.retailerWording}</p>
+                <p>{details?.cooldownWording}</p>
+              </div>
+
+              {/* Eligible products */}
+              {details && details.products.length > 1 && (
+                <div className="w-full max-w-[335px] flex gap-2 overflow-x-auto pb-1">
+                  {details.products.map((product) => (
+                    <div key={product.id} className="min-w-[90px] rounded-lg border border-gray-100 p-2 flex flex-col items-center gap-1">
+                      <div className="relative h-12 w-12 overflow-hidden rounded bg-gray-50">
+                        {product.image && <Image src={product.image} alt={product.name} fill sizes="48px" className="object-contain" />}
+                      </div>
+                      <span className="text-center text-[11px] leading-[13px] text-[#1F1D1D]">{product.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Marketing consents — two separate, optional checkboxes */}
               <div className="w-full max-w-[335px] flex flex-col gap-2 text-left">
                 <label className="flex items-start gap-2 text-[12px] leading-[16px] text-[#4D4D4D] cursor-pointer">
@@ -170,11 +195,15 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
               </div>
 
               {/* CTA Large Claim button (Frame 2147229219) */}
+              {details?.unavailableReason && (
+                <p className="text-center text-[13px] font-medium text-[#E65353]">{details.unavailableReason}</p>
+              )}
               <button
                 onClick={handleClaimClick}
-                className="w-full max-w-[197px] h-[46px] bg-gradient-to-b from-[#3E3EDF] to-[#3E3EDF] hover:opacity-90 active:scale-[0.98] text-[#FEFEFE] text-[16px] font-medium leading-[24px] rounded-lg shadow-[0_4px_4px_rgba(0,0,0,0.12),inset_0_4px_4px_rgba(255,255,255,0.12)] flex items-center justify-center cursor-pointer transition-all focus:outline-none"
+                disabled={Boolean(details?.unavailableReason)}
+                className="w-full max-w-[197px] h-[46px] bg-gradient-to-b from-[#3E3EDF] to-[#3E3EDF] hover:opacity-90 active:scale-[0.98] text-[#FEFEFE] text-[16px] font-medium leading-[24px] rounded-lg shadow-[0_4px_4px_rgba(0,0,0,0.12),inset_0_4px_4px_rgba(255,255,255,0.12)] flex items-center justify-center cursor-pointer transition-all focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Claim Offer
+                {details?.unavailableReason ? "Not available" : "Claim Offer"}
             </button>
             {message && (
               <p className={`text-center text-[13px] font-medium ${status === "error" ? "text-[#E65353]" : "text-[#00A671]"}`}>

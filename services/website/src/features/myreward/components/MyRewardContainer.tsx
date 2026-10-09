@@ -186,7 +186,7 @@ export default function MyRewardContainer({
 
   const receipts: Receipt[] = filteredApiReceipts.length
     ? filteredApiReceipts.map((receipt) => ({
-        title: String(receipt.campaign_name || receipt.merchant || "Receipt"),
+        title: String(receipt.offer_headline || receipt.campaign_name || receipt.merchant || "Receipt"),
         date: String(receipt.created_at || "").slice(0, 10),
         status:
           receipt.status === "verified"

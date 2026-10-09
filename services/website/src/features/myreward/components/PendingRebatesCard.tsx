@@ -54,7 +54,7 @@ export default function PendingRebatesCard({
           <div key={reservationId} className="w-full border-b border-[#E0E0E0] py-[10px]">
             <div className="flex items-center justify-between gap-4">
               <span className="text-[14px] font-normal leading-[17px] text-[#1F1D1D] truncate">
-                {String(reservation.campaign_name || reservation.product_name || "Pending rebate")}
+                {String(reservation.offer_headline || reservation.campaign_name || reservation.product_name || "Pending rebate")}
               </span>
               <button
                 onClick={() => onUploadReceiptClick(reservationId)}
@@ -79,7 +79,7 @@ export default function PendingRebatesCard({
         <div key={String(receipt.id || receipt.created_at)} className="w-full border-b border-[#E0E0E0] py-[10px]">
           <div className="flex items-center justify-between gap-4">
             <span className="text-[14px] font-normal leading-[17px] text-[#1F1D1D] truncate">
-              {String(receipt.campaign_name || receipt.merchant || "Pending receipt")}
+              {String(receipt.offer_headline || receipt.campaign_name || receipt.merchant || "Pending receipt")}
             </span>
             <span className="w-[134px] h-[29px] text-[#D7930A] bg-[#FFF7E6] text-[13px] font-medium rounded-[4px] flex items-center justify-center flex-shrink-0">
               Verification Pending

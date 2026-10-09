@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+from django.conf import settings
 from django.utils import timezone
 
 from Apps.brands.models import Brand
@@ -93,6 +94,8 @@ def resolve_offer(campaign: Campaign, user=None) -> dict:
         else ""
     )
     product_category = first_product.category if first_product else ""
+    # Receipt eligibility: none listed = Any Retailer.
+    retailers = [r.strip() for r in (campaign.allowed_merchants or "").split(",") if r.strip()]
 
     return {
         "campaign_id": str(campaign.id),
@@ -122,6 +125,21 @@ def resolve_offer(campaign: Campaign, user=None) -> dict:
         "required_quantity": campaign.min_purchase_units,
         "going_fast": going_fast,
         "temporarily_unavailable": capacity_reached,
+        # Shopper offer page (Master: Shopper output) — additive.
+        "campaign_image": campaign.image.url if campaign.image else "",
+        "retailer_required": bool(retailers),
+        "eligible_retailers": retailers,
+        "eligible_products": [
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "image": p.image_url.url if p.image_url else "",
+                **product_rating_summary(p.id),
+            }
+            for p in campaign.products.all()
+        ],
+        "cooldown_days": campaign.cooldown_days,
+        "one_time_only": campaign.one_time_only,
     }
 
 
@@ -172,11 +190,17 @@ def remove_bookmark(bookmark: Bookmark) -> None:
 # Offer save + consumer details
 # ---------------------------------------------------------------------------
 # Platform-constant explainer shown on consumer offer/campaign pages (Screen 4).
-HOW_IT_WORKS = [
-    {"icon": "gift", "text": "Buy this product at any participating store or online retailer."},
-    {"icon": "upload", "text": "Upload your receipt through NibblAI to verify your purchase."},
-    {"icon": "wallet", "text": "Receive your instant reward directly in your Nibbl wallet."},
-]
+def how_it_works(campaign: Campaign) -> list[dict]:
+    """The three offer steps, worded for this campaign's receipt rule."""
+    retailers = [r.strip() for r in (campaign.allowed_merchants or "").split(",") if r.strip()]
+    where = (
+        f"at {', '.join(retailers)}" if retailers else "at any store or online retailer"
+    )
+    return [
+        {"icon": "gift", "text": f"Claim this offer, then buy the eligible product {where}."},
+        {"icon": "upload", "text": f"Upload your receipt in NibblAI within {settings.RESERVATION_EXPIRY_DAYS} days of claiming."},
+        {"icon": "wallet", "text": "Get your reward in your Nibbl wallet once your receipt is approved."},
+    ]
 
 
 def save_offer(*, user, campaign: Campaign) -> Bookmark:
@@ -191,5 +215,5 @@ def build_offer_details(campaign: Campaign, user=None) -> dict:
     """Consumer campaign-detail content: offer resolution + description + steps."""
     data = resolve_offer(campaign, user)
     data["description"] = campaign.description
-    data["how_it_works"] = HOW_IT_WORKS
+    data["how_it_works"] = how_it_works(campaign)
     return data

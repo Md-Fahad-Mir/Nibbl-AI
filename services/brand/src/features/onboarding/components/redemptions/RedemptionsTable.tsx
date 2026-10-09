@@ -29,6 +29,11 @@ interface RedemptionItem {
   status: "Pending" | "Approved" | "Rejected" | "Expired" | "Manual Review";
   issue?: string;
   priority?: "High" | "Medium";
+  // Manual review: the raw queue item, its auto-approval deadline, and how
+  // an approved redemption was decided.
+  reviewItem?: Record<string, unknown>;
+  deadlineAt?: string;
+  approvalLabel?: string;
 }
 
 interface RedemptionsTableProps {

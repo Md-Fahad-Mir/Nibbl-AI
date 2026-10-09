@@ -27,6 +27,8 @@ interface Receipt {
   title: string;
   date: string;
   status: "Verified" | "Pending" | "Rejected";
+  /** Rejection reason, or "Under review" while pending. */
+  note?: string;
 }
 
 interface Activity {
@@ -194,6 +196,12 @@ export default function MyRewardContainer({
             : receipt.status === "rejected"
               ? "Rejected"
               : "Pending",
+        note:
+          receipt.status === "rejected"
+            ? String(receipt.decision_reason || "")
+            : receipt.status === "verified"
+              ? ""
+              : "Under review",
       }))
     : localReceipts;
 

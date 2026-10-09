@@ -49,10 +49,18 @@ def decide_reward(receipt, reservation) -> reward_math.RewardDecision | None:
 
 
 def payout_amount(receipt, reservation):
-    """What to pay for an approved receipt: the calculated reward (never more
-    than was reserved). A legacy claim, or one a reviewer approved although
-    the price/quantity couldn't be read, pays the reserved amount — until
-    reviewers can pick the qualifying lines themselves (Master #21)."""
+    """What to pay for an approved receipt (never more than was reserved):
+
+    * decided in manual review → the reward Nibbl calculated there (from the
+      reviewer's selected lines, or the maximum after the 7-day deadline);
+    * auto-verified → the calculated reward from the receipt;
+    * a claim made before the deal model → its reserved amount.
+    """
+    from Apps.receipts.models import ManualReviewItem
+
+    item = ManualReviewItem.objects.filter(receipt=receipt).first()
+    if item is not None and item.calculated_reward is not None:
+        return min(item.calculated_reward, reservation.reward_amount)
     decision = decide_reward(receipt, reservation)
     if decision is not None and decision.qualifies:
         return min(decision.amount, reservation.reward_amount)

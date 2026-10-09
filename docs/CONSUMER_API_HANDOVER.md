@@ -297,6 +297,10 @@ A **reservation** = a claimed offer, held for the user while they upload a recei
   ```
 - **Errors `400`:** invalid/expired reservation, duplicate receipt, validation (in `detail`).
 - `status: "pending"` = under review. More common now: a receipt whose price can't be read waits for a person instead of paying automatically. Show it as "Under review", not as an error.
+  - A receipt under review is decided within **7 days of upload**: the brand approves or rejects it, otherwise it is approved automatically (at the offer's maximum reward). Safe to tell shoppers: *"We'll review your receipt within 7 days."*
+  - While a receipt is under review, its reservation stays `active` (it is **not** expired at the 7-day claim deadline). Don't offer "Upload Receipt" again for a reservation that already has a pending receipt.
+- `status: "rejected"` → show `decision_reason` to the shopper. Brand rejections now use standard reasons:
+  "Purchase outside reservation period", "Required retailer not eligible", "Eligible item not found", "Required quantity not met", "Price not visible", "Receipt unreadable after resubmission", "Duplicate receipt or previously allocated item", "Final resubmission rejected" (sometimes followed by " — <brand note>").
 - If the offer requires specific retailers (`retailer_required`), show the receipt-eligibility line on this screen too (see §4).
 
 ### Receipt List
@@ -363,6 +367,7 @@ Earn extra cash by reviewing purchased products. **Lifecycle:** an opportunity (
 - `GET /redemptions/` · **Auth:** required · **Paginated: yes**
 - Items: `{ id, reservation, receipt, campaign, campaign_name, offer_headline, brand_name, reward_amount, fee_amount, status, issued_at, created_at }`.
 - `reward_amount` here is the **amount actually paid** — it can be lower than the offer's "up to" amount. Title rows with `offer_headline`, not `campaign_name`.
+- New: `approval_type` (`auto_verified` | `brand_approved` | `auto_approved` | `alias_approved`) + `approval_label` (e.g. "Automatically Approved — Review Deadline Passed"). Optional to show; useful in reward details.
 - `GET /redemptions/{redemption_id}/` → single redemption.
 
 ---
@@ -588,3 +593,4 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 4. **Receipt upload** is multipart and requires an existing **active** reservation.
 5. **Reservation "pending"** filter value is **`active`**.
 6. **Rebate redesign (Oct 2026)** — see §4 "Rebate deals — what changed": title offers with `offer_headline` (never `name`/`campaign_name`), reward badge "Up to $X", "Going fast", claim-button states, receipt-eligibility and cooldown lines, product slider. `offer_type` is never `"fallback"` any more.
+7. **Receipt review (Oct 2026)** — see §6: receipts under review are decided within 7 days of upload (auto-approved otherwise); show `decision_reason` on rejected receipts; a reservation with a pending receipt stays `active`.

@@ -188,7 +188,10 @@ class ManualReviewApiTests(APITestCase):
     def test_approve_verifies_receipt(self):
         self.client.force_authenticate(self.owner)
         resp = self.client.post(
-            reverse("v1:receipts:review-approve", args=[self.brand.id, self.item.id])
+            reverse("v1:receipts:review-approve", args=[self.brand.id, self.item.id]),
+            {"lines": [{"line_item": str(self.receipt.line_items.first().id)}],
+             "product": str(self.product.id)},
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.receipt.refresh_from_db()

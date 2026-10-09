@@ -4,6 +4,8 @@ interface ReceiptItem {
   title: string;
   date: string;
   status: "Verified" | "Pending" | "Rejected";
+  /** Rejection reason, or "Under review" while pending. */
+  note?: string;
 }
 
 interface ReceiptHistoryCardProps {
@@ -36,7 +38,7 @@ export default function ReceiptHistoryCard({ receipts }: ReceiptHistoryCardProps
         {receipts.length ? receipts.map((receipt, idx) => (
           <div
             key={idx}
-            className="w-full h-[65px] border-b border-[#E0E0E0] last:border-b-0 flex items-center justify-between py-[10px]"
+            className="w-full min-h-[65px] border-b border-[#E0E0E0] last:border-b-0 flex items-center justify-between py-[10px]"
           >
             {/* Left side text stack */}
             <div className="flex flex-col gap-[4px] min-w-0">
@@ -46,6 +48,11 @@ export default function ReceiptHistoryCard({ receipts }: ReceiptHistoryCardProps
               <span className="text-[14px] font-normal leading-[17px] text-[#575757]">
                 {receipt.date}
               </span>
+              {receipt.note && (
+                <span className={`text-[12px] leading-[15px] ${receipt.status === "Rejected" ? "text-[#FF5C5C]" : "text-[#575757]"}`}>
+                  {receipt.status === "Rejected" ? `Reason: ${receipt.note}` : receipt.note}
+                </span>
+              )}
             </div>
 
             {/* Right side status badge */}

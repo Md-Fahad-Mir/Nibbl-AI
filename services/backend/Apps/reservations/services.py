@@ -201,6 +201,9 @@ def expire_due_reservations(now=None) -> int:
         Reservation.objects.filter(
             status=Reservation.Status.ACTIVE, expires_at__lte=now
         )
+        # A claim whose receipt is waiting for a decision keeps its slot and
+        # funds until that receipt is approved or rejected (Master).
+        .exclude(receipts__status="pending")
         .select_related("hold")
     )
     count = 0

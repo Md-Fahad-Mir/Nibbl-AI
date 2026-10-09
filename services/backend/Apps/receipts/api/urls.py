@@ -22,6 +22,11 @@ urlpatterns = [
         name="review-approve",
     ),
     path(
+        f"{_queue}/<uuid:item_id>/preview/",
+        views.ReviewItemPreviewView.as_view(),
+        name="review-preview",
+    ),
+    path(
         f"{_queue}/<uuid:item_id>/decline/",
         views.ReviewItemDeclineView.as_view(),
         name="review-decline",

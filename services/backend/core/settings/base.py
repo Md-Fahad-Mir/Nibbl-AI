@@ -92,6 +92,10 @@ PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="http://localhost:8000")
 
 # Reservation system (spec 1.3): 7-day expiry + backend-controlled global cap.
 RESERVATION_EXPIRY_DAYS = env.int("RESERVATION_EXPIRY_DAYS", default=7)
+# A receipt left in a brand's manual review this long after submission is
+# approved automatically at the claim's maximum reward (Master: Seven-Day
+# Automatic Approval).
+MANUAL_REVIEW_AUTO_APPROVE_DAYS = env.int("MANUAL_REVIEW_AUTO_APPROVE_DAYS", default=7)
 RESERVATION_GLOBAL_CAP = env.int("RESERVATION_GLOBAL_CAP", default=100_000)
 
 # Receipts / fraud (spec 2.7): soft cap on a customer's concurrent open claims.

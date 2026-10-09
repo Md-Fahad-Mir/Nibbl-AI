@@ -110,3 +110,23 @@ class PlatformSnapshotListView(APIView):
         return Response(
             s.PlatformStatSerializer(PlatformStat.objects.all(), many=True).data
         )
+
+
+@extend_schema(tags=["analytics"])
+class BrandDashboardView(APIView):
+    """Dashboard snapshots, conversion and campaign performance to the Master
+    definitions (?days=30 default)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id):
+        from Apps.analytics.dashboard import brand_dashboard
+
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand)
+        try:
+            days = max(1, min(int(request.query_params.get("days", 30)), 365))
+        except ValueError:
+            days = 30
+        return Response(brand_dashboard(brand, days))

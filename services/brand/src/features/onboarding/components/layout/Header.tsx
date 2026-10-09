@@ -23,6 +23,8 @@ interface HeaderProps {
   userRole?: string;
   avatarUrl?: string;
   onOpenProfile?: () => void;
+  /** Opens the Wallet (Master: Available Funds links to Wallet). */
+  onOpenWallet?: () => void;
 }
 
 export default function Header({
@@ -34,6 +36,7 @@ export default function Header({
   userRole = "brand",
   avatarUrl,
   onOpenProfile,
+  onOpenWallet,
 }: HeaderProps) {
   const router = useRouter();
   const logout = useBrandApiStore((state) => state.logout);
@@ -88,14 +91,19 @@ export default function Header({
         </button>
 
         {/* Wallet Balance Tracker */}
-        <div className="flex flex-col items-end font-manrope">
+        <button
+          type="button"
+          onClick={onOpenWallet}
+          className="flex flex-col items-end font-manrope bg-transparent border-none cursor-pointer"
+          title="Open Wallet"
+        >
           <span className="text-[10px] font-bold text-[#454656] tracking-wider uppercase">
-            Balance
+            Available Funds
           </span>
           <span className="text-sm font-extrabold text-[#131B2E] leading-none mt-0.5">
             {walletBalance}
           </span>
-        </div>
+        </button>
 
         {/* Vertical Divider */}
         <div className="w-[1px] h-8 bg-[#C5C5D9]/15"></div>

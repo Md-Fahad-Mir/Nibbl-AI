@@ -271,6 +271,9 @@ interface BrandApiState {
   customers: ApiRecord[];
   analyticsOverview: ApiRecord | null;
   analyticsRebatesSummary: ApiRecord | null;
+  /** Dashboard snapshots, conversion and campaign performance (Master definitions). */
+  analyticsDashboard: ApiRecord | null;
+  loadAnalyticsDashboard: (days?: number) => Promise<void>;
   analyticsCampaigns: ApiRecord[];
   analyticsProducts: ApiRecord[];
   members: ApiRecord[];
@@ -365,6 +368,7 @@ export const useBrandApiStore = create<BrandApiState>()(
       customers: [],
       analyticsOverview: null,
       analyticsRebatesSummary: null,
+      analyticsDashboard: null,
       analyticsCampaigns: [],
       analyticsProducts: [],
       members: [],
@@ -514,8 +518,18 @@ export const useBrandApiStore = create<BrandApiState>()(
           set({ status: "error", error: readError(error) });
         }
       },
+      loadAnalyticsDashboard: async (days = 30) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) return;
+        const dashboard = await optionalRequest(
+          () => apiClient.request<ApiRecord>(backendApi.brand.analyticsDashboard(brandId), { query: { days: String(days) } }),
+          null
+        );
+        set({ analyticsDashboard: dashboard });
+      },
       selectBrand: async (brandId) => {
         set({ selectedBrandId: brandId });
+        void get().loadAnalyticsDashboard();
         const [
           brand,
           wallet,
@@ -961,6 +975,7 @@ export const useBrandApiStore = create<BrandApiState>()(
           customers: [],
           analyticsOverview: null,
           analyticsRebatesSummary: null,
+          analyticsDashboard: null,
           analyticsCampaigns: [],
           analyticsProducts: [],
           members: [],

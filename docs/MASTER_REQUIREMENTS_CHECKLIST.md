@@ -9,7 +9,7 @@
 ---
 
 ## Brand Dashboard Home
-- [ ] 🟡 **1. Dashboard snapshots & campaign performance table** — analytics exist; not to 25-hour-cycle states (Exhausted Early / On Pace / Behind / Building Data)
+- [x] ✅ **1. Dashboard snapshots & campaign performance table** — brand name in welcome; header "Available Funds" links to Wallet; last-30-day snapshots without charts/badges (Rebates: claims, redemptions, redemption rate, Total Brand Cost + cost per redemption; Reviews: invitations, completed, completion rate, Total Brand Cost + cost per review); "Campaign Performance" table incl. ended campaigns with claims/redemptions results. *Tracking note: review invitations = verified purchases eligible for a review until review campaigns (#23)*
 
 ## Product Library
 - [x] ✅ **2. Product records & identity** — per-flavor Product ID + aliases
@@ -48,7 +48,7 @@
 - [ ] 🟡 **27. Product reviews display & ratings** — numeric avg + count only; star distribution / AI summary / brand responses missing
 
 ## Brand Analytics
-- [ ] 🟡 **28. Analytics to the specified definitions** — overview exists; cost-per-result / view→claim / 25-hour states missing
+- [x] ✅ **28. Analytics to the specified definitions** — Cost & Results from actual wallet debits (rewards + fees, no subscriptions); Customer & Conversion (rebate views → claims, new vs returning); Campaign Performance from completed 25-hour cycles: Exhausted Early (<12 h, raise limit 25%) / On Pace / Behind / Building Data (<7 cycles)
 
 ## Customers
 - [ ] 🟡 **29. Customer directory & consent handling** — directory + plan-based gating ✓; **plan-gated CSV export ✓** (PII columns only for Pro/Scale); consent status / opt-in-out tracking still missing
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (27):** #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #17, #18, #19, #20, #21, #22, #30, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
+**Done to spec (29):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #17, #18, #19, #20, #21, #22, #28, #30, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

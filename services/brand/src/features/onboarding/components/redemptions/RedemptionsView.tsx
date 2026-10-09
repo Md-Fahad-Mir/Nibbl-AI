@@ -5,7 +5,8 @@ import { AlertCircle, X } from "lucide-react";
 import RedemptionsStats from "./RedemptionsStats";
 import RedemptionsTable from "./RedemptionsTable";
 import RedemptionDetailsView from "./RedemptionDetailsView";
-import RedemptionDrawer from "./RedemptionDrawer";
+import ReviewDecisionDrawer from "./ReviewDecisionDrawer";
+import type { ReviewSelection } from "@/stores/useBrandApiStore";
 import { ApiRecord, apiClient, backendApi, backendAssetUrl } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatDate, formatMoney, formatTime, toNumber } from "../../utils/backendMappers";
@@ -35,6 +36,11 @@ interface RedemptionItem {
   status: "Pending" | "Approved" | "Rejected" | "Expired" | "Manual Review";
   issue?: string;
   priority?: "High" | "Medium";
+  // Manual review: the raw queue item, its auto-approval deadline, and how
+  // an approved redemption was decided.
+  reviewItem?: Record<string, unknown>;
+  deadlineAt?: string;
+  approvalLabel?: string;
 }
 
 const receiptFallback = "/redemption/receipe.svg";
@@ -53,7 +59,8 @@ const mapIssuedRedemption = (item: ApiRecord): RedemptionItem => ({
   receiptThumbnailUrl: backendAssetUrl(item.receipt_image_url, receiptFallback),
   receiptImageUrl: backendAssetUrl(item.receipt_image_url, receiptPreviewFallback),
   receiptId: item.receipt ? String(item.receipt) : undefined,
-  claimedTierLabel: "Rewards",
+  claimedTierLabel: String(item.approval_label ?? "Rewards"),
+  approvalLabel: item.approval_label ? String(item.approval_label) : undefined,
   claimedTierValue: formatMoney(item.reward_amount),
   submittedDate: formatDate(item.issued_at ?? item.created_at),
   submittedTime: formatTime(item.issued_at ?? item.created_at),
@@ -96,6 +103,8 @@ const mapReviewQueueItem = (item: ApiRecord): RedemptionItem | null => {
     status: receiptStatus === "rejected" ? "Rejected" : "Manual Review",
     issue: String(receipt.decision_reason ?? "Receipt requires manual review"),
     priority: toNumber(receipt.total) >= 50 ? "High" : "Medium",
+    reviewItem: item,
+    deadlineAt: item.deadline_at ? String(item.deadline_at) : undefined,
   };
 };
 
@@ -196,33 +205,32 @@ export default function RedemptionsView() {
     }
   };
 
-  const handleApprove = async (id: string) => {
-    try {
-      setActionError("");
-      await approveReviewQueueItem(id);
-      setSelectedItem(null);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Could not approve review item.");
-    }
+  // Decisions happen in the review drawer: the brand selects lines and
+  // Nibbl calculates the reward (errors surface inside the drawer).
+  const handleApprove = async (id: string, selection: ReviewSelection) => {
+    await approveReviewQueueItem(id, selection);
+    setSelectedItem(null);
   };
 
-  const handleReject = async (id: string) => {
-    try {
-      setActionError("");
-      const source = redemptions.find((item) => item.id === id);
-      const receipt = await declineReviewQueueItem(id, "Declined from brand dashboard.");
-      if (source) {
-        const rejected = mergeRejectedReceipt(source, receipt);
-        setRejectedItems((items) => [
-          rejected,
-          ...items.filter((item) => item.id !== id),
-        ]);
-      }
-      setSelectedItem(null);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Could not reject review item.");
+  const handleReject = async (id: string, reasonCode: string, note: string) => {
+    const source = redemptions.find((item) => item.id === id);
+    const receipt = await declineReviewQueueItem(id, reasonCode, note);
+    if (source) {
+      const rejected = mergeRejectedReceipt(source, receipt);
+      setRejectedItems((items) => [
+        rejected,
+        ...items.filter((item) => item.id !== id),
+      ]);
     }
+    setSelectedItem(null);
   };
+
+  // Row approve/reject buttons open the review drawer.
+  const openReview = (id: string) => {
+    const item = redemptions.find((r) => r.id === id);
+    if (item) void handleViewDetails(item);
+  };
+  const pendingCount = redemptions.filter((r) => r.status === "Manual Review").length;
 
   const isDetailsPage = selectedItem && (
     selectedItem.status === "Approved" ||
@@ -284,20 +292,29 @@ export default function RedemptionsView() {
         </div>
       )}
 
+      {pendingCount > 0 && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold rounded-2xl px-5 py-4">
+          {pendingCount} receipt{pendingCount === 1 ? "" : "s"} awaiting your review. A receipt in manual review is
+          approved automatically at the campaign&apos;s maximum reward exactly 7 days after submission if you don&apos;t
+          approve or reject it before then. Automatic approval doesn&apos;t create a product alias.
+        </div>
+      )}
+
       {/* Main Redemptions List Table */}
       <RedemptionsTable
         redemptions={redemptions}
         onViewDetails={handleViewDetails}
-        onApprove={handleApprove}
-        onReject={handleReject}
+        onApprove={openReview}
+        onReject={openReview}
       />
 
-      {/* Side Audit Drawer Modal for Pending / Manual Review */}
-      {selectedItem && !isDetailsPage && (
-        <RedemptionDrawer
-          redemption={selectedItem}
+      {/* Manual review decision drawer */}
+      {selectedItem && !isDetailsPage && selectedItem.reviewItem && (
+        <ReviewDecisionDrawer
+          item={selectedItem.reviewItem}
           onClose={() => setSelectedItem(null)}
           onApprove={handleApprove}
+          onReject={handleReject}
         />
       )}
 

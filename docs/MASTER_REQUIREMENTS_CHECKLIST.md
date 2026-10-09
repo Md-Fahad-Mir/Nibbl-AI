@@ -18,7 +18,7 @@
 ## Rebate Campaigns
 - [x] ✅ **4. 25-Hour Claim Capacity** — desired ÷ rate (rounded up), cycles from activation (or start date), consumed slots never return; builder shows the live calculation, card + detail page show "Current cycle claims X of Y"
 - [x] ✅ **5. Offer types w/ locked reward math** — Free / BOGO Free / B1G1-50% / Buy X Get $Y; builder with suggested (editable) wording, locked system-rules summary, live shopper preview
-- [ ] 🟡 **6. Tier allocation must total 100%** — superseded by offer types; old tier builder still accepted and mapped (top tier → max rebate)
+- [x] ✅ **6. Tier allocation must total 100%** — superseded by offer types (Master #5); old tier input still accepted and mapped
 - [x] ✅ **7. Nibbl campaign approval workflow** — Save draft / Submit; approve / reject (final) / request changes with comments; revisions keep the approved version live; campaign detail page with status banner, assets, performance, review activity
 - [x] ✅ **8. Reservation rule snapshot** — each claim stores its deal terms, products, merchants and cooldown; later edits apply to new claims only
 - [x] ✅ **9. Reserved reward funding** — claim reserves the max reward; approval pays the actual reward and returns the difference; cooldown starts at the approved redemption
@@ -37,8 +37,8 @@
 - [x] ✅ **18. Active claim slots** — per-shopper hard cap (`ACTIVE_CLAIM_SLOTS`, default 5) enforced on claim; `GET /reservations/slots/` returns used/limit/available for the "3 of 5" display (app/website consume it)
 - [ ] 🟡 **19. Receipt validation / duplicate fingerprint / quantity allocation** — basic dup; richer fingerprint (store/register/txn#) + per-line qty missing
 - [x] ✅ **20. Reminder schedule (48h / 12h before expiry)** — fires at 48h and 12h before the reservation's exact deadline (each once, never extends it)
-- [ ] 🟡 **21. Manual-review decisioning** — queue + approve/decline; select-lines / system-calculated reward / standardized reasons missing
-- [ ] ⬜ **22. Seven-day automatic approval** — at max reward (cron scheduler ready; job not built)
+- [x] ✅ **21. Manual-review decisioning** — locked claim terms, full receipt viewer (zoom/rotate/download), select lines + correct qty/price (audit-logged), confirm product mapping, optional alias (unchecked; rechecks pending claims), Nibbl-calculated reward (no override), 8 standardized rejection reasons
+- [x] ✅ **22. Seven-day automatic approval** — at max reward, labelled "Automatically Approved — Review Deadline Passed", no alias; countdown + warning in the brand queue; claims under review no longer expire
 
 ## Review Campaigns & Product Reviews
 - [ ] ⬜ **23. Dedicated review campaign**
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (21):** #2, #3, #4, #5, #7, #8, #9, #12, #17, #18, #20, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
+**Done to spec (24):** #2, #3, #4, #5, #6, #7, #8, #9, #12, #17, #18, #20, #21, #22, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

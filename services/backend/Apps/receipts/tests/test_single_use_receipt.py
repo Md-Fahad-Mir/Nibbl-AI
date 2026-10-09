@@ -289,7 +289,10 @@ class SingleUseThroughManualApprovalTests(APITestCase):
         self.assertIsNotNone(receipt.purchase_date_hash)
         self.assertIsNone(receipt.product_description_hash)
         item = ManualReviewItem.objects.get(receipt=receipt)
-        approved = services.approve_review(item=item, reviewer=owner)
+        approved = services.approve_review(
+            item=item, reviewer=owner,
+            lines=[{"line_item": receipt.line_items.get().id}], product_id=product.id,
+        )
 
         self.assertEqual(approved.status, Receipt.Status.VERIFIED)
         self.assertEqual(Redemption.objects.count(), 1)

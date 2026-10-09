@@ -452,6 +452,11 @@ export const backendApi = {
       path: `/brands/${brandId}/review-queue/${itemId}/approve/`,
       auth: true,
     }),
+    previewReviewQueueItem: (brandId: string, itemId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/review-queue/${itemId}/preview/`,
+      auth: true,
+    }),
     declineReviewQueueItem: (brandId: string, itemId: string): ApiEndpoint => ({
       method: "POST",
       path: `/brands/${brandId}/review-queue/${itemId}/decline/`,

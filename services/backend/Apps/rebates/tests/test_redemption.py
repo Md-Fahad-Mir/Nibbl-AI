@@ -128,8 +128,11 @@ class ManualApprovalTests(APITestCase):
 
         item = ManualReviewItem.objects.get(receipt=receipt)
         self.client.force_authenticate(owner)
+        # The reviewer selects the line and confirms the product.
         resp = self.client.post(
-            reverse("v1:receipts:review-approve", args=[brand.id, item.id])
+            reverse("v1:receipts:review-approve", args=[brand.id, item.id]),
+            {"lines": [{"line_item": str(receipt.line_items.get().id)}], "product": str(product.id)},
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(Redemption.objects.filter(reservation=reservation).exists())

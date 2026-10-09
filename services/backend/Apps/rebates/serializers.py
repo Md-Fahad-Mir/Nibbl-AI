@@ -12,6 +12,10 @@ class RedemptionSerializer(serializers.ModelSerializer):
     brand_name = serializers.CharField(source="brand.name", read_only=True)
     user_email = serializers.EmailField(source="user.email", read_only=True)
     receipt_image_url = serializers.SerializerMethodField()
+    # How it was approved: auto_verified / brand_approved / auto_approved /
+    # alias_approved (+ a display label).
+    approval_type = serializers.SerializerMethodField()
+    approval_label = serializers.SerializerMethodField()
 
     class Meta:
         model = Redemption
@@ -20,6 +24,8 @@ class RedemptionSerializer(serializers.ModelSerializer):
             "reservation",
             "receipt",
             "receipt_image_url",
+            "approval_type",
+            "approval_label",
             "campaign",
             "campaign_name",
             "offer_headline",
@@ -32,6 +38,26 @@ class RedemptionSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+    def _review_item(self, obj):
+        from Apps.receipts.models import ManualReviewItem
+
+        return ManualReviewItem.objects.filter(receipt_id=obj.receipt_id).first()
+
+    def get_approval_type(self, obj) -> str:
+        item = self._review_item(obj)
+        if item is None:
+            return "auto_verified"
+        # Reviews decided before outcomes were recorded were brand decisions.
+        return item.outcome or "brand_approved"
+
+    def get_approval_label(self, obj) -> str:
+        from Apps.receipts.models import ManualReviewItem
+
+        kind = self.get_approval_type(obj)
+        if kind == "auto_verified":
+            return "Automatically verified"
+        return ManualReviewItem.Outcome(kind).label
 
     def get_receipt_image_url(self, obj):
         receipt = obj.receipt

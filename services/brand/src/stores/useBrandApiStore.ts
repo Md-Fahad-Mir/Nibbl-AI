@@ -217,6 +217,12 @@ export interface AutoRefillInput {
   payment_method_id: string;
 }
 
+export interface ReviewSelection {
+  lines: { line_item: string; quantity: number; unit_price: string | null }[];
+  product: string;
+  save_alias?: boolean;
+}
+
 export interface DealCampaignInput {
   name: string;
   start_at: string | null;
@@ -299,8 +305,12 @@ interface BrandApiState {
     rewardAmount?: string | number;
     isActive?: boolean;
   }) => Promise<void>;
-  approveReviewQueueItem: (itemId: string) => Promise<void>;
-  declineReviewQueueItem: (itemId: string, reason: string) => Promise<ApiRecord>;
+  /** Approve with Nibbl's calculated reward; `selection` = chosen receipt
+   *  lines (+ corrections), confirmed product, optional alias. */
+  approveReviewQueueItem: (itemId: string, selection?: ReviewSelection) => Promise<void>;
+  /** Reward Nibbl would pay for a selection (decides nothing). */
+  previewReviewQueueItem: (itemId: string, selection: ReviewSelection) => Promise<string>;
+  declineReviewQueueItem: (itemId: string, reasonCode: string, note?: string) => Promise<ApiRecord>;
   updateBrandProfile: (body: ApiRecord | FormData) => Promise<void>;
   inviteMember: (email: string, role: string) => Promise<void>;
   removeMember: (membershipId: string) => Promise<void>;
@@ -744,10 +754,12 @@ export const useBrandApiStore = create<BrandApiState>()(
         );
         set({ reviewCampaigns: listResults(reviewCampaigns) });
       },
-      approveReviewQueueItem: async (itemId) => {
+      approveReviewQueueItem: async (itemId, selection) => {
         const brandId = get().selectedBrandId;
         if (!brandId) throw new Error("Select a brand before approving reviews.");
-        await apiClient.request(backendApi.brand.approveReviewQueueItem(brandId, itemId));
+        await apiClient.request(backendApi.brand.approveReviewQueueItem(brandId, itemId), {
+          body: (selection ?? {}) as unknown as ApiRecord,
+        });
         const [reviewQueue, redemptions] = await Promise.all([
           apiClient.request<unknown>(backendApi.brand.reviewQueue(brandId)),
           apiClient.request<unknown>(backendApi.brand.redemptions(brandId)),
@@ -757,11 +769,20 @@ export const useBrandApiStore = create<BrandApiState>()(
           redemptions: listResults(redemptions),
         });
       },
-      declineReviewQueueItem: async (itemId, reason) => {
+      previewReviewQueueItem: async (itemId, selection) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        const result = await apiClient.request<ApiRecord>(
+          backendApi.brand.previewReviewQueueItem(brandId, itemId),
+          { body: selection as unknown as ApiRecord }
+        );
+        return String(result.reward ?? "");
+      },
+      declineReviewQueueItem: async (itemId, reasonCode, note = "") => {
         const brandId = get().selectedBrandId;
         if (!brandId) throw new Error("Select a brand before declining reviews.");
         const receipt = await apiClient.request<ApiRecord>(backendApi.brand.declineReviewQueueItem(brandId, itemId), {
-          body: { reason },
+          body: { reason_code: reasonCode, reason: note },
         });
         const reviewQueue = await apiClient.request<unknown>(
           backendApi.brand.reviewQueue(brandId)

@@ -12,6 +12,7 @@ from Apps.brands.access import get_brand_or_404, require_membership
 from Apps.common.exceptions import DomainError
 from Apps.common.pagination import paginate, paginated_response_serializer
 from Apps.receipts import serializers as s
+from Apps.receipts.models import ManualReviewItem
 from Apps.receipts import services
 from Apps.receipts.selectors import (
     get_brand_review_item,
@@ -128,9 +129,13 @@ class ReviewQueueView(APIView):
     def get(self, request, brand_id):
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand)
+        # ?status=open (default, oldest first) | resolved | all
+        wanted = request.query_params.get("status", "open")
+        status_filter = {"open": ManualReviewItem.Status.OPEN,
+                         "resolved": ManualReviewItem.Status.RESOLVED, "all": ""}.get(wanted, ManualReviewItem.Status.OPEN)
         return Response(
             s.ReviewItemSerializer(
-                review_queue_for_brand(brand), many=True, context={"request": request}
+                review_queue_for_brand(brand, status=status_filter), many=True, context={"request": request}
             ).data
         )
 
@@ -139,13 +144,41 @@ class ReviewQueueView(APIView):
 class ReviewItemApproveView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(request=None, responses={200: s.ReceiptSerializer})
+    @extend_schema(request=s.ApproveReviewSerializer, responses={200: s.ReceiptSerializer})
     def post(self, request, brand_id, item_id):
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand, manager=True, active=True)
         item = _get_item(brand, item_id)
-        receipt = _run(services.approve_review, item=item, reviewer=request.user)
+        serializer = s.ApproveReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        receipt = _run(
+            services.approve_review, item=item, reviewer=request.user,
+            lines=data.get("lines"), product_id=data.get("product"),
+            save_alias=data.get("save_alias", False),
+        )
         return Response(s.ReceiptSerializer(receipt).data)
+
+
+@extend_schema(tags=["review-queue"])
+class ReviewItemPreviewView(APIView):
+    """Nibbl's calculated reward for a line selection — decides nothing."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=s.ReviewSelectionSerializer, responses={200: None})
+    def post(self, request, brand_id, item_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand)
+        item = _get_item(brand, item_id)
+        serializer = s.ReviewSelectionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        result = _run(
+            services.preview_review, item=item, lines=data.get("lines") or [],
+            product_id=data.get("product"),
+        )
+        return Response({"reward": str(result["reward"])})
 
 
 @extend_schema(tags=["review-queue"])
@@ -163,7 +196,8 @@ class ReviewItemDeclineView(APIView):
             services.decline_review,
             item=item,
             reviewer=request.user,
-            reason=serializer.validated_data["reason"],
+            reason=serializer.validated_data.get("reason", ""),
+            reason_code=serializer.validated_data.get("reason_code", ""),
         )
         return Response(s.ReceiptSerializer(receipt).data)
 

@@ -460,7 +460,10 @@ def _decide(receipt: Receipt, *, matched_units: int, review_note: str) -> None:
     if review_note:
         receipt.decision_reason = review_note
         receipt.save(update_fields=["decision_reason", "updated_at"])
-    ManualReviewItem.objects.create(receipt=receipt, brand=receipt.brand)
+    ManualReviewItem.objects.create(
+        receipt=receipt, brand=receipt.brand,
+        deadline_at=receipt.created_at + _review_window(),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -518,8 +521,18 @@ def _assert_single_use(receipt: Receipt) -> None:
         raise DuplicateReceipt("This receipt has already been used to claim this product.")
 
 
-def _verify(receipt: Receipt, *, reviewer, reason: str) -> Receipt:
-    _assert_single_use(receipt)
+def _verify(receipt: Receipt, *, reviewer, reason: str, require_identity: bool = True) -> Receipt:
+    if require_identity:
+        _assert_single_use(receipt)
+    else:
+        # Deadline auto-approval (Master): pays even when the receipt can't
+        # be fully identified — but never a duplicate of a verified receipt.
+        try:
+            _assert_single_use(receipt)
+        except DuplicateReceipt:
+            raise
+        except ReceiptError:
+            pass
     receipt.status = Receipt.Status.VERIFIED
     receipt.decision_reason = reason
     receipt.reviewed_by = reviewer
@@ -555,25 +568,258 @@ def _resolve_item(item: ManualReviewItem, reviewer) -> None:
     item.save(update_fields=["status", "resolved_by", "resolved_at", "updated_at"])
 
 
-@transaction.atomic
-def approve_review(*, item: ManualReviewItem, reviewer) -> Receipt:
-    if item.status != ManualReviewItem.Status.OPEN:
-        raise ReceiptError("This review item is already resolved.")
-    receipt = item.receipt
-    _resolve_item(item, reviewer)
-    receipt.fraud_flags.filter(resolved=False).update(resolved=True)
-    return _verify(receipt, reviewer=reviewer, reason="Approved by brand.")
+def _review_window() -> dt.timedelta:
+    return dt.timedelta(days=settings.MANUAL_REVIEW_AUTO_APPROVE_DAYS)
+
+
+def _eligible_product(item: ManualReviewItem, product_id) -> Product:
+    """The campaign product the reviewer maps the lines to — one of the
+    claim's snapshotted eligible products."""
+    reservation = item.receipt.reservation
+    if reservation.deal_type:
+        eligible = {str(pid) for pid in reservation.eligible_product_ids}
+    else:
+        eligible = {str(pid) for pid in item.receipt.campaign.products.values_list("id", flat=True)}
+    if str(product_id) not in eligible:
+        raise ReceiptError("Choose one of this claim's eligible products.")
+    product = Product.objects.filter(id=product_id).first()
+    if product is None:
+        raise ReceiptError("Product not found.")
+    return product
+
+
+def _selected_lines(item: ManualReviewItem, lines: list[dict]) -> list[tuple]:
+    """Validate the reviewer's line selection → [(line_item, quantity, unit_price)]."""
+    if not lines:
+        raise ReceiptError("Select the receipt lines for the eligible purchase.")
+    by_id = {str(li.id): li for li in item.receipt.line_items.all()}
+    out, seen = [], set()
+    for row in lines:
+        line_id = str(row.get("line_item", ""))
+        line = by_id.get(line_id)
+        if line is None or line_id in seen:
+            raise ReceiptError("A selected line is not on this receipt.")
+        seen.add(line_id)
+        quantity = int(row.get("quantity", line.quantity) or 0)
+        if quantity < 1:
+            raise ReceiptError("Each selected line needs a quantity of at least 1.")
+        raw_price = row.get("unit_price", line.unit_price)
+        price = Decimal(str(raw_price)).quantize(Decimal("0.01")) if raw_price not in (None, "") else None
+        if price is not None and price < 0:
+            raise ReceiptError("Prices can't be negative.")
+        out.append((line, quantity, price))
+    return out
+
+
+def _calculate(item: ManualReviewItem, selection: list[tuple]):
+    """Nibbl's reward for the selected units under the claim's locked terms."""
+    from Apps.rebates import reward_math
+
+    reservation = item.receipt.reservation
+    if not reservation.deal_type:  # claim made before the deal model
+        return reward_math.RewardDecision(reward_math.QUALIFIES, reservation.reward_amount)
+    prices = []
+    for _line, quantity, price in selection:
+        prices.extend([price] * quantity)
+    decision = reward_math.decide(
+        deal_type=reservation.deal_type,
+        unit_prices=prices,
+        max_rebate=reservation.max_rebate,
+        fixed_reward=reservation.fixed_reward,
+        required_quantity=reservation.required_quantity or 1,
+    )
+    if decision.status == reward_math.NOT_ENOUGH_UNITS:
+        needed = reward_math.required_units(reservation.deal_type, reservation.required_quantity or 1)
+        raise ReceiptError(f"This offer needs {needed} qualifying unit(s). Select them on the receipt.")
+    if decision.status == reward_math.NEEDS_REVIEW:
+        raise ReceiptError("Enter the price for each selected unit so Nibbl can calculate the reward.")
+    return decision
+
+
+def preview_review(*, item: ManualReviewItem, lines: list[dict], product_id) -> dict:
+    """Calculated reward for a selection, without deciding (Master ⑦)."""
+    _eligible_product(item, product_id)
+    decision = _calculate(item, _selected_lines(item, lines))
+    return {"reward": decision.amount}
+
+
+def _apply_selection(item: ManualReviewItem, selection, product, reviewer) -> None:
+    """Confirm the mapping: correct the selected lines (audit-logged) and map
+    them to the product — for this receipt only."""
+    from Apps.common.models import AuditLog
+
+    for line, quantity, price in selection:
+        before = {"quantity": line.quantity, "unit_price": str(line.unit_price) if line.unit_price is not None else None,
+                  "matched_product": str(line.matched_product_id) if line.matched_product_id else None}
+        line.quantity = quantity
+        line.unit_price = price
+        line.matched_product = product
+        line.save(update_fields=["quantity", "unit_price", "matched_product", "updated_at"])
+        after = {"quantity": quantity, "unit_price": str(price) if price is not None else None,
+                 "matched_product": str(product.id)}
+        if before != after:
+            AuditLog.objects.create(
+                action=AuditLog.Action.UPDATE, actor_type="brand_user",
+                actor_id=str(reviewer.id) if reviewer else "", target_type="receipt_line_item",
+                target_id=str(line.id),
+                metadata={"receipt": str(item.receipt_id), "before": before, "after": after},
+            )
+    item.selected_lines = [
+        {"line_item": str(line.id), "quantity": quantity, "unit_price": str(price) if price is not None else None}
+        for line, quantity, price in selection
+    ]
+    item.confirmed_product = product
+
+
+def _approve(item: ManualReviewItem, *, reviewer, outcome, reward, reason: str,
+             require_identity: bool = True) -> Receipt:
+    item.outcome = outcome
+    item.calculated_reward = reward
+    item.status = ManualReviewItem.Status.RESOLVED
+    item.resolved_by = reviewer
+    item.resolved_at = timezone.now()
+    item.save()
+    item.receipt.fraud_flags.filter(resolved=False).update(resolved=True)
+    return _verify(item.receipt, reviewer=reviewer, reason=reason, require_identity=require_identity)
 
 
 @transaction.atomic
-def decline_review(*, item: ManualReviewItem, reviewer, reason: str) -> Receipt:
+def approve_review(*, item: ManualReviewItem, reviewer, lines=None, product_id=None,
+                   save_alias=False) -> Receipt:
+    """Approve with Nibbl's calculated reward (the brand can't type one).
+
+    With ``lines`` + ``product_id`` the reviewer has selected the qualifying
+    receipt lines (optionally correcting quantity/price) and confirmed the
+    product. Without them, the reward is calculated from the lines the
+    system already matched. ``save_alias`` also teaches the system this
+    wording and rechecks the brand's other pending receipts.
+    """
     if item.status != ManualReviewItem.Status.OPEN:
         raise ReceiptError("This review item is already resolved.")
-    if not reason:
+    if lines:
+        if not product_id:
+            raise ReceiptError("Confirm which eligible product the selected lines are.")
+        product = _eligible_product(item, product_id)
+        selection = _selected_lines(item, lines)
+        decision = _calculate(item, selection)
+        _apply_selection(item, selection, product, reviewer)
+    else:
+        if save_alias:
+            raise ReceiptError("Select the receipt lines to save as a product alias.")
+        from Apps.rebates.services import decide_reward
+
+        decision = decide_reward(item.receipt, item.receipt.reservation)
+        if decision is None:  # claim made before the deal model
+            reward = item.receipt.reservation.reward_amount
+        elif decision.qualifies:
+            reward = decision.amount
+        else:
+            raise ReceiptError(
+                "Select the qualifying receipt lines and confirm the product so Nibbl can "
+                "calculate the reward."
+            )
+    receipt = _approve(
+        item, reviewer=reviewer, outcome=ManualReviewItem.Outcome.BRAND_APPROVED,
+        reward=decision.amount if lines else reward, reason="Approved by brand.",
+    )
+    if save_alias:
+        for line, _q, _p in selection:
+            try:
+                product_services.add_alias(product=product, alias_text=line.description)
+            except product_services.ProductError:
+                pass  # this wording is already an alias
+        reprocess_open_reviews(item.brand, exclude=item)
+    return receipt
+
+
+def reprocess_open_reviews(brand, *, exclude=None) -> int:
+    """After a new alias, recheck the brand's pending receipts; one that now
+    passes every rule is approved at its calculated reward (Master ⑥)."""
+    from Apps.rebates.services import decide_reward
+
+    approved = 0
+    items = ManualReviewItem.objects.filter(brand=brand, status=ManualReviewItem.Status.OPEN)
+    if exclude is not None:
+        items = items.exclude(pk=exclude.pk)
+    for item in items.select_related("receipt", "receipt__reservation"):
+        receipt = item.receipt
+        if receipt.fraud_flags.filter(resolved=False, reason=FraudFlag.Reason.VELOCITY).exists():
+            continue
+        for line in receipt.line_items.filter(matched_product__isnull=True):
+            product = match_product(brand=brand, text=line.description)
+            if product is not None:
+                line.matched_product = product
+                line.save(update_fields=["matched_product", "updated_at"])
+        decision = decide_reward(receipt, receipt.reservation)
+        if decision is None or not decision.qualifies:
+            continue
+        try:
+            with transaction.atomic():
+                _approve(item, reviewer=None, outcome=ManualReviewItem.Outcome.ALIAS_APPROVED,
+                         reward=decision.amount, reason="Approved after a product alias was added.")
+            approved += 1
+        except DomainError:
+            continue
+    return approved
+
+
+@transaction.atomic
+def decline_review(*, item: ManualReviewItem, reviewer, reason: str = "", reason_code: str = "") -> Receipt:
+    """Reject with one of the Master's standardized reasons (shown to the
+    shopper, in the table, redemption details and audit history)."""
+    if item.status != ManualReviewItem.Status.OPEN:
+        raise ReceiptError("This review item is already resolved.")
+    if reason_code:
+        if reason_code not in ManualReviewItem.RejectionReason.values:
+            raise ReceiptError("Choose a valid rejection reason.")
+        label = ManualReviewItem.RejectionReason(reason_code).label
+        reason = f"{label} — {reason}" if reason else label
+    elif not reason:
         raise ReceiptError("A reason is required to decline.")
+    item.outcome = ManualReviewItem.Outcome.BRAND_REJECTED
+    item.rejection_reason = reason_code
+    item.save(update_fields=["outcome", "rejection_reason", "updated_at"])
     receipt = item.receipt
     _resolve_item(item, reviewer)
     return _reject(receipt, reason=reason, reviewer=reviewer)
+
+
+def auto_approve_overdue(now=None) -> dict:
+    """Seven-day automatic approval: a receipt still in manual review at its
+    deadline is approved at the claim's maximum reward (the price may never
+    have been verified). No product mapping or alias is created. A receipt
+    that duplicates an already-verified one is rejected instead."""
+    import logging
+
+    log = logging.getLogger(__name__)
+    now = now or timezone.now()
+    result = {"approved": 0, "rejected": 0, "skipped": 0}
+    due = ManualReviewItem.objects.filter(
+        status=ManualReviewItem.Status.OPEN, deadline_at__lte=now
+    ).select_related("receipt", "receipt__reservation")
+    for item in due:
+        try:
+            with transaction.atomic():
+                _approve(
+                    item, reviewer=None, outcome=ManualReviewItem.Outcome.AUTO_APPROVED,
+                    reward=item.receipt.reservation.reward_amount,
+                    reason=ManualReviewItem.Outcome.AUTO_APPROVED.label,
+                    require_identity=False,
+                )
+            result["approved"] += 1
+        except DuplicateReceipt:
+            with transaction.atomic():
+                item.refresh_from_db()
+                item.outcome = ManualReviewItem.Outcome.AUTO_REJECTED
+                item.rejection_reason = ManualReviewItem.RejectionReason.DUPLICATE
+                item.save(update_fields=["outcome", "rejection_reason", "updated_at"])
+                _resolve_item(item, None)
+                _reject(item.receipt, reason=ManualReviewItem.RejectionReason.DUPLICATE.label)
+            result["rejected"] += 1
+        except DomainError as exc:
+            log.warning("auto-approve skipped review item %s: %s", item.id, exc)
+            result["skipped"] += 1
+    return result
 
 
 def add_alias_from_review(*, item: ManualReviewItem, line_item_id, product_id) -> ProductAlias:

@@ -173,15 +173,86 @@ class ReviewQueueReceiptSerializer(serializers.ModelSerializer):
 
 class ReviewItemSerializer(serializers.ModelSerializer):
     receipt = ReviewQueueReceiptSerializer(read_only=True)
+    # Master: the claim's locked terms + the eligible products to map to.
+    locked_terms = serializers.SerializerMethodField()
+    outcome_label = serializers.SerializerMethodField()
+    rejection_reason_label = serializers.SerializerMethodField()
 
     class Meta:
         model = ManualReviewItem
-        fields = ["id", "status", "receipt", "created_at"]
+        fields = [
+            "id", "status", "receipt", "created_at",
+            # Decision (additive)
+            "deadline_at", "outcome", "outcome_label", "rejection_reason",
+            "rejection_reason_label", "calculated_reward", "selected_lines",
+            "confirmed_product", "resolved_at", "locked_terms",
+        ]
         read_only_fields = fields
+
+    def get_outcome_label(self, obj) -> str:
+        return obj.get_outcome_display() if obj.outcome else ""
+
+    def get_rejection_reason_label(self, obj) -> str:
+        return obj.get_rejection_reason_display() if obj.rejection_reason else ""
+
+    def get_locked_terms(self, obj) -> dict:
+        from Apps.products.models import Product
+        from Apps.rebates.reward_math import required_units
+
+        reservation = obj.receipt.reservation
+        if reservation.deal_type:
+            ids = list(reservation.eligible_product_ids)
+            needed = required_units(reservation.deal_type, reservation.required_quantity or 1)
+            merchants = reservation.allowed_merchants
+        else:
+            ids = [str(pid) for pid in obj.receipt.campaign.products.values_list("id", flat=True)]
+            needed = reservation.campaign.min_purchase_units
+            merchants = reservation.campaign.allowed_merchants
+        products = Product.objects.filter(id__in=ids).values("id", "name")
+        return {
+            "deal_type": reservation.deal_type or None,
+            "required_units": needed,
+            "max_rebate": str(reservation.max_rebate) if reservation.max_rebate is not None else None,
+            "fixed_reward": str(reservation.fixed_reward) if reservation.fixed_reward is not None else None,
+            "max_reward": str(reservation.reward_amount),
+            "eligible_products": [{"id": str(p["id"]), "name": p["name"]} for p in products],
+            "eligible_retailers": [m.strip() for m in (merchants or "").split(",") if m.strip()],
+            "claimed_at": reservation.created_at,
+            "claim_expires_at": reservation.expires_at,
+        }
+
+
+class ReviewLineSerializer(serializers.Serializer):
+    line_item = serializers.UUIDField()
+    quantity = serializers.IntegerField(min_value=1, required=False)
+    unit_price = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=0, required=False, allow_null=True
+    )
+
+
+class ReviewSelectionSerializer(serializers.Serializer):
+    """Reviewer's selected receipt lines + confirmed product (Master ④⑤)."""
+
+    lines = ReviewLineSerializer(many=True, required=False)
+    product = serializers.UUIDField(required=False)
+
+
+class ApproveReviewSerializer(ReviewSelectionSerializer):
+    # Optional and off by default (Master ⑥).
+    save_alias = serializers.BooleanField(required=False, default=False)
 
 
 class DeclineSerializer(serializers.Serializer):
-    reason = serializers.CharField(max_length=255)
+    # Standardized reason (Master); ``reason`` is an optional extra note.
+    reason_code = serializers.ChoiceField(
+        choices=ManualReviewItem.RejectionReason.choices, required=False
+    )
+    reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+
+    def validate(self, attrs):
+        if not attrs.get("reason_code") and not attrs.get("reason"):
+            raise serializers.ValidationError({"reason_code": "Choose a rejection reason."})
+        return attrs
 
 
 class AddAliasInlineSerializer(serializers.Serializer):

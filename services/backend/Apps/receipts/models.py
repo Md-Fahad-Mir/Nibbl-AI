@@ -249,10 +249,42 @@ class ManualReviewItem(BaseModel):
     )
     resolved_at = models.DateTimeField(null=True, blank=True)
 
+    # --- Decision (Master: Redemptions & Manual Review) ------------------------
+    class Outcome(models.TextChoices):
+        BRAND_APPROVED = "brand_approved", "Brand approved"
+        AUTO_APPROVED = "auto_approved", "Automatically Approved — Review Deadline Passed"
+        ALIAS_APPROVED = "alias_approved", "Approved after product alias"
+        BRAND_REJECTED = "brand_rejected", "Brand rejected"
+        AUTO_REJECTED = "auto_rejected", "Automatically rejected"
+
+    class RejectionReason(models.TextChoices):
+        OUTSIDE_PERIOD = "outside_period", "Purchase outside reservation period"
+        RETAILER_NOT_ELIGIBLE = "retailer_not_eligible", "Required retailer not eligible"
+        ITEM_NOT_FOUND = "item_not_found", "Eligible item not found"
+        QUANTITY_NOT_MET = "quantity_not_met", "Required quantity not met"
+        PRICE_NOT_VISIBLE = "price_not_visible", "Price not visible"
+        UNREADABLE = "unreadable", "Receipt unreadable after resubmission"
+        DUPLICATE = "duplicate", "Duplicate receipt or previously allocated item"
+        FINAL_RESUBMISSION = "final_resubmission", "Final resubmission rejected"
+
+    # Auto-approves at the claim's maximum reward if still open at this time.
+    deadline_at = models.DateTimeField(null=True, blank=True)
+    outcome = models.CharField(max_length=20, choices=Outcome.choices, blank=True)
+    rejection_reason = models.CharField(max_length=30, choices=RejectionReason.choices, blank=True)
+    # Reward Nibbl calculated for the approval (never typed by the brand).
+    calculated_reward = models.DecimalField(null=True, blank=True, **MONEY_FIELD)
+    # Reviewer's selection: [{"line_item": id, "quantity": n, "unit_price": "x"}].
+    selected_lines = models.JSONField(default=list, blank=True)
+    confirmed_product = models.ForeignKey(
+        "products.Product", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
     class Meta:
         ordering = ["created_at"]
         indexes = [
             models.Index(fields=["brand", "status"]),
+            models.Index(fields=["status", "deadline_at"]),
         ]
 
     def __str__(self):

@@ -1,6 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
+import { autoApproveCountdown } from "./ReviewDecisionDrawer";
+
 interface RedemptionItem {
   id: string;
   userName: string;
@@ -26,6 +28,11 @@ interface RedemptionItem {
   status: "Pending" | "Approved" | "Rejected" | "Expired" | "Manual Review";
   issue?: string;
   priority?: "High" | "Medium";
+  // Manual review: the raw queue item, its auto-approval deadline, and how
+  // an approved redemption was decided.
+  reviewItem?: Record<string, unknown>;
+  deadlineAt?: string;
+  approvalLabel?: string;
 }
 
 interface RedemptionRowProps {
@@ -125,9 +132,16 @@ export default function RedemptionRow({
             </div>
           </td>
           <td className="p-5 text-left">
-            <span className="font-medium text-[#131B2E] text-xs">
-              {redemption.submittedDate}, {redemption.submittedTime}
-            </span>
+            <div className="flex flex-col gap-0.5">
+              <span className="font-medium text-[#131B2E] text-xs">
+                {redemption.submittedDate}, {redemption.submittedTime}
+              </span>
+              {redemption.deadlineAt && (
+                <span className="text-[11px] font-bold text-[#D97706]">
+                  {autoApproveCountdown(redemption.deadlineAt)}
+                </span>
+              )}
+            </div>
           </td>
           <td className="p-5 text-right">
             <div className="flex items-center justify-end gap-2">
@@ -196,6 +210,11 @@ export default function RedemptionRow({
                 {redemption.status}
               </span>
             </div>
+            {redemption.approvalLabel && redemption.status === "Approved" && (
+              <span className="block mt-1 text-[10px] font-semibold text-[#454656]/70">
+                {redemption.approvalLabel}
+              </span>
+            )}
           </td>
         </>
       )}

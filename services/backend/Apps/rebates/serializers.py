@@ -7,6 +7,8 @@ from Apps.reviews.models import Review
 
 class RedemptionSerializer(serializers.ModelSerializer):
     campaign_name = serializers.CharField(source="campaign.name", read_only=True)
+    # Shopper-facing offer wording (campaign_name is the internal name).
+    offer_headline = serializers.CharField(source="campaign.offer_headline", read_only=True)
     brand_name = serializers.CharField(source="brand.name", read_only=True)
     user_email = serializers.EmailField(source="user.email", read_only=True)
     receipt_image_url = serializers.SerializerMethodField()
@@ -20,6 +22,7 @@ class RedemptionSerializer(serializers.ModelSerializer):
             "receipt_image_url",
             "campaign",
             "campaign_name",
+            "offer_headline",
             "brand_name",
             "user_email",
             "reward_amount",

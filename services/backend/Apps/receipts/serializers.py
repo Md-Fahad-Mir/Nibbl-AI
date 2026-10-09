@@ -39,6 +39,8 @@ class ReceiptSerializer(serializers.ModelSerializer):
 
     line_items = ReceiptLineItemSerializer(many=True, read_only=True)
     campaign_name = serializers.CharField(source="campaign.name", read_only=True)
+    # Shopper-facing offer wording (campaign_name is the internal name).
+    offer_headline = serializers.CharField(source="campaign.offer_headline", read_only=True)
     brand_name = serializers.CharField(source="brand.name", read_only=True)
     reward_amount = serializers.DecimalField(
         source="reservation.reward_amount", max_digits=14, decimal_places=2,
@@ -52,6 +54,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
             "reservation",
             "campaign",
             "campaign_name",
+            "offer_headline",
             "brand_name",
             "status",
             "merchant",
@@ -107,6 +110,8 @@ class ReviewQueueReceiptSerializer(serializers.ModelSerializer):
     """
 
     campaign_name = serializers.CharField(source="campaign.name", read_only=True)
+    # Shopper-facing offer wording (campaign_name is the internal name).
+    offer_headline = serializers.CharField(source="campaign.offer_headline", read_only=True)
     brand_name = serializers.CharField(source="brand.name", read_only=True)
     user_name = serializers.CharField(source="user.full_name", read_only=True)
     user_email = serializers.EmailField(source="user.email", read_only=True)
@@ -129,6 +134,7 @@ class ReviewQueueReceiptSerializer(serializers.ModelSerializer):
             "reservation",
             "campaign",
             "campaign_name",
+            "offer_headline",
             "brand_name",
             "user",
             "user_name",

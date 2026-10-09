@@ -215,3 +215,41 @@ class BookmarkTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Bookmark.objects.filter(id=bookmark.id).exists())
+
+
+class ShopperOfferPageFieldsTests(APITestCase):
+    """Phase 4: campaign image, receipt eligibility, product slider, cooldown."""
+
+    def test_any_retailer_offer(self):
+        _, product, campaign = _active_campaign()
+        self.client.force_authenticate(
+            User.objects.create_user(email="s@example.com", password="x", full_name="S")
+        )
+        resp = self.client.get(reverse("v1:offers:feed"))
+        offer = resp.data["results"][0]
+        self.assertEqual(offer["campaign_image"], "")
+        self.assertFalse(offer["retailer_required"])
+        self.assertEqual(offer["eligible_retailers"], [])
+        self.assertEqual(offer["eligible_products"][0]["id"], str(product.id))
+        self.assertEqual(offer["eligible_products"][0]["review_count"], 0)
+        self.assertEqual(offer["cooldown_days"], 30)
+        self.assertFalse(offer["one_time_only"])
+
+    def test_retailer_required_offer(self):
+        _, _, campaign = _active_campaign()
+        Campaign.objects.filter(pk=campaign.pk).update(allowed_merchants="Target, Kroger ,")
+        campaign.refresh_from_db()
+        offer = offer_services.resolve_offer(campaign)
+        self.assertTrue(offer["retailer_required"])
+        self.assertEqual(offer["eligible_retailers"], ["Target", "Kroger"])
+
+
+class HowItWorksTests(APITestCase):
+    def test_steps_follow_the_receipt_rule(self):
+        _, _, campaign = _active_campaign()
+        steps = [s["text"] for s in offer_services.how_it_works(campaign)]
+        self.assertIn("at any store or online retailer", steps[0])
+        self.assertIn("within 7 days", steps[1])
+        self.assertIn("once your receipt is approved", steps[2])
+        campaign.allowed_merchants = "Target, Kroger"
+        self.assertIn("at Target, Kroger", offer_services.how_it_works(campaign)[0]["text"])

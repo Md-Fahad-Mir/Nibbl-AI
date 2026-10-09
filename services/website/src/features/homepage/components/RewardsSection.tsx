@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { imageUrl } from "../lib/offerMappers";
+import { imageUrl, rewardLabel, unavailableReason } from "../lib/offerMappers";
 
 interface ProductOffer {
   id: number | string;
@@ -15,6 +15,8 @@ interface ProductOffer {
   discount: string;
   image: string | null;
   category: string;
+  goingFast: boolean;
+  unavailable: boolean;
 }
 
 interface RewardsSectionProps {
@@ -40,7 +42,7 @@ const offerImage = (value: unknown) =>
   imageUrl(value, "") || null;
 
 const discountText = (offer: Record<string, unknown>) =>
-  String(offer.discount_label || (offer.reward_amount ? `$${offer.reward_amount}` : ""));
+  offer.discount_label || offer.reward_amount ? rewardLabel(offer) : "";
 
 const normalizeCategory = (value: string) => value.trim().toLowerCase();
 
@@ -57,12 +59,14 @@ const mapOffer = (offer: Record<string, unknown>, index: number): ProductOffer =
   campaignId: String(offer.campaign_id ?? offer.id ?? ""),
   brand: String(offer.brand_name ?? offer.brand ?? ""),
   expires: String(offer.end_at ?? offer.expires ?? "").slice(0, 10),
-  title: String(offer.product_name ?? offer.name ?? ""),
+  title: String(offer.offer_headline || offer.product_name || offer.name || ""),
   rating: Number(offer.rating ?? 0),
   reviewsCount: Number(offer.review_count ?? 0),
   discount: discountText(offer),
-  image: offerImage(offer.product_image),
+  image: offerImage(offer.campaign_image || offer.product_image),
   category: String(offer.category ?? ""),
+  goingFast: Boolean(offer.going_fast),
+  unavailable: unavailableReason(offer) !== null,
 });
 
 export default function RewardsSection({
@@ -182,6 +186,12 @@ export default function RewardsSection({
                   </div>
                 )}
                 
+                {offer.goingFast && (
+                  <span className="absolute left-4 top-4 h-[26px] px-2 bg-[#FFF1E6] rounded-lg text-[#E0700B] text-[12px] font-semibold flex items-center z-10 select-none">
+                    Going fast
+                  </span>
+                )}
+
                 {/* Discount Badge */}
                 {offer.discount && (
                   <span className="absolute right-4 top-4 min-w-[64px] h-[30px] px-2 bg-[#E65353] shadow-[0px_4px_4px_rgba(0,0,0,0.12)] rounded-lg text-[#FEFEFE] text-[12px] font-medium leading-[15px] flex items-center justify-center z-10 select-none">
@@ -232,9 +242,10 @@ export default function RewardsSection({
                   {/* Claim Offer CTA */}
                   <button
                     onClick={() => onClaimOffer?.(offer.campaignId)}
-                    className="flex-grow h-[34px] bg-gradient-to-b from-[#3E3EDF] to-[#3E3EDF] hover:opacity-90 active:scale-[0.98] text-[#FEFEFE] text-[16px] font-medium leading-[24px] rounded-lg shadow-[0_4px_4px_rgba(0,0,0,0.12),inset_0_4px_4px_rgba(255,255,255,0.12)] flex items-center justify-center cursor-pointer focus:outline-none min-w-0"
+                    disabled={offer.unavailable}
+                    className="flex-grow h-[34px] bg-gradient-to-b from-[#3E3EDF] to-[#3E3EDF] hover:opacity-90 active:scale-[0.98] text-[#FEFEFE] text-[16px] font-medium leading-[24px] rounded-lg shadow-[0_4px_4px_rgba(0,0,0,0.12),inset_0_4px_4px_rgba(255,255,255,0.12)] flex items-center justify-center cursor-pointer focus:outline-none min-w-0 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Claim offer
+                    {offer.unavailable ? "Unavailable" : "Claim offer"}
                   </button>
                   
                   {/* View Offer CTA */}

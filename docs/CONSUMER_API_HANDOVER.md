@@ -139,16 +139,76 @@ The app/site has two consumer hubs: **Offers/Home** and **Rewards Hub (Scan)**. 
 
 ## 4. Offer APIs
 
-**Offer object** (returned by feed/detail/saved):
+**Offer object** (returned by feed / detail / by-url / by-qr / saved):
 ```json
 { "campaign_id":"…","name":"Summer Athletic Collection","brand_id":"…","brand_name":"Beast By",
   "product_id":"…","product_name":"Organic Popcorn","product_image":"https://…","category":"Food",
   "offer_type":"premium","reward_amount":"5.00","restriction":"","min_purchase_units":1,
   "is_bogo":false,"in_cooldown":false,"claimable":true,"end_at":"2025-02-28T00:00:00Z",
-  "rating":4.0,"review_count":100,"is_claimed":false,"reservation_id":null }
+  "rating":4.0,"review_count":100,"is_claimed":false,"reservation_id":null,
+  "deal_type":"free","offer_headline":"Free Organic Popcorn up to $5",
+  "offer_description":"Buy one eligible Organic Popcorn product and receive the verified purchase price back, up to $5.",
+  "required_quantity":1,"going_fast":false,"temporarily_unavailable":false,
+  "campaign_image":"https://…","retailer_required":false,"eligible_retailers":[],
+  "eligible_products":[{"id":"…","name":"Organic Popcorn","image":"https://…","rating":4.0,"review_count":100}],
+  "cooldown_days":30,"one_time_only":false }
 ```
 - `claimable` → show/enable the Claim button. `is_claimed` + `reservation_id` → user already has a live reservation (route to receipt upload instead).
-- ⚠️ **`discount_label` (the "20% OFF" badge text) is not finalized** — it appears only on Saved Offers and is currently `null` (pending a product decision). Until then, render the badge from `reward_amount`/`offer_type` per design guidance.
+- ⚠️ **`discount_label` (the "20% OFF" badge text) is not finalized** — it appears only on Saved Offers and is currently `null` (pending a product decision). Until then, render the badge from `reward_amount` + `deal_type` (see below).
+
+### Rebate deals — what changed (Oct 2026 redesign) ⚠️ app update needed
+
+All changes are **additive**: existing fields keep their names and types, so the current app keeps working. Update the app to match the Master Requirements:
+
+| Before | Now |
+|---|---|
+| Brands set reward tiers + a daily $ budget | Each campaign is one **deal type**: Free, BOGO Free, Buy 1 Get 1 50% Off, or Buy X Get $Y |
+| `reward_amount` = the reward paid | `reward_amount` = the **maximum** one redemption can pay. The actual reward comes from the verified receipt price (Free up to $5, item cost $3 → $3 paid) |
+| Fallback offer during cooldown (`offer_type: "fallback"`) | **Retired.** `offer_type` is `"premium"` or `null`, never `"fallback"` |
+| Cooldown started at claim | Cooldown starts when the redemption is **approved**. An expired claim never starts a cooldown |
+| Unlimited claims within the daily budget | **25-hour claim capacity.** When full, the offer is temporarily unavailable until the next 25-hour cycle |
+| Campaign dates not enforced for claims | Offers can't be claimed before their start date or after `end_at` |
+| Unreadable receipt price paid automatically | Unreadable price → receipt stays **pending review** until a person decides |
+
+**New offer fields**
+
+| Field | Type | Use |
+|---|---|---|
+| `deal_type` | `"free"` \| `"bogo_free"` \| `"bogo_half"` \| `"buy_x_get_y"` | Offer type |
+| `offer_headline` | string | **Main title of the offer** (brand-approved wording). Show exactly as sent |
+| `offer_description` | string | Offer description. Show exactly as sent |
+| `campaign_image` | URL or `""` | Image at the top of the offer; fall back to `product_image` |
+| `required_quantity` | int | Eligible units needed on one receipt (BOGO = 2, Buy X = X) |
+| `eligible_products` | `[{id, name, image, rating, review_count}]` | Product slider — every eligible flavor/size |
+| `retailer_required` | bool | `true` = receipt must be from a listed retailer |
+| `eligible_retailers` | string[] | Retailer names when `retailer_required` is true |
+| `cooldown_days` | int | Days before the shopper can redeem again after an approved redemption (0 = none) |
+| `one_time_only` | bool | One redemption ever, per shopper |
+| `going_fast` | bool | Show a **"Going fast"** badge |
+| `temporarily_unavailable` | bool | 25-hour capacity is full — show the unavailable state |
+
+> **Never show `name` / `campaign_name` to shoppers** — it's the brand's **internal** campaign name. Use `offer_headline` (fallback `product_name`). Reservations, receipts and redemptions now include `offer_headline` too.
+
+**What to display**
+- **Title:** `offer_headline` · **Image:** `campaign_image` → `product_image` · **Description:** `offer_description`.
+- **Reward badge:** `buy_x_get_y` → `"$<reward_amount> back"`; every other type → `"Up to $<reward_amount>"` (never a fixed amount). `reward_amount` is `null` when not claimable — hide the badge.
+- **"Going fast"** badge when `going_fast`.
+- **Product slider** from `eligible_products` (ratings belong to each product).
+- **Receipt eligibility** — show before claiming, after claiming, in My Offers and on receipt upload:
+  - not required → *"Buy at any retailer — your receipt just needs to clearly show the eligible product."*
+  - required → *"Purchase required at: Target, Kroger. Your receipt must clearly show the retailer name."*
+- **Cooldown line:** `one_time_only` → *"One redemption per customer."* · `cooldown_days > 0` → *"After a redemption is approved, you can redeem this offer again in N days."* · `0` → *"You can redeem this offer again once your previous redemption is approved."*
+
+**Claim button states**
+
+| Condition | Button | Message |
+|---|---|---|
+| `claimable: true` | **Claim offer** | — |
+| `temporarily_unavailable: true` | Disabled | "Current rebates have been claimed. This offer is temporarily unavailable — check back soon." |
+| `in_cooldown` + `one_time_only` | Disabled | "You've already redeemed this offer." |
+| `in_cooldown: true` | Disabled | "You've redeemed this offer recently. It will be available again after your cooldown." |
+| `is_claimed: true` | Go to the existing claim (`reservation_id`) | Continue to receipt upload |
+| otherwise `claimable: false` | Disabled | "This offer isn't available right now." |
 
 ### Offer List (feed)
 - `GET /offers/` · **Auth:** required · **Paginated: yes**
@@ -165,10 +225,11 @@ The app/site has two consumer hubs: **Offers/Home** and **Rewards Hub (Scan)**. 
 - `GET /offers/{campaign_id}/details/` · **Auth:** required → Offer object **plus**:
   ```json
   { "...offer fields...":"…","description":"Step into summer…",
-    "how_it_works":[{"icon":"gift","text":"Buy this product…"},
-                    {"icon":"upload","text":"Upload your receipt…"},
-                    {"icon":"wallet","text":"Receive your reward…"}] }
+    "how_it_works":[{"icon":"gift","text":"Claim this offer, then buy the eligible product at any store or online retailer."},
+                    {"icon":"upload","text":"Upload your receipt in NibblAI within 7 days of claiming."},
+                    {"icon":"wallet","text":"Get your reward in your Nibbl wallet once your receipt is approved."}] }
   ```
+- `how_it_works` is worded per offer: when the offer requires specific retailers, step 1 names them (e.g. "…buy the eligible product at Target, Kroger."). Render the `text` as sent.
 
 ### Public entry points (no login required)
 - `GET /offers/by-url/{token}/` and `GET /offers/by-qr/{token}/` · **Auth:** none → Offer object. Use for shared links / scanned QR landing.
@@ -196,14 +257,19 @@ A **reservation** = a claimed offer, held for the user while they upload a recei
 
 **Reservation object:**
 ```json
-{ "id":"…","campaign":"…","campaign_name":"Summer…","brand_name":"Beast By","product_name":"Organic Popcorn",
+{ "id":"…","campaign":"…","campaign_name":"Summer…","offer_headline":"Free Organic Popcorn up to $5","brand_name":"Beast By","product_name":"Organic Popcorn",
   "kind":"premium","offer_type":"premium","reward_amount":"5.00","status":"active",
   "expires_at":"2026-06-12T…","redeemed_at":null,"created_at":"2026-06-05T…" }
 ```
 
 ### Create Reservation (claim)
 - `POST /reservations/` `{ "campaign": "<campaign_id>" }` · **Auth:** required → `201` Reservation.
-- **Errors `400`:** cooldown active, already reserved, budget exhausted, offer not live (message in `detail`).
+- `reward_amount` on a reservation is the **reserved maximum**; the paid amount is on the redemption (§8) once approved.
+- **Errors `400`** (show `detail` as-is):
+  - `"Current rebates have been claimed. This offer is temporarily unavailable."` — 25-hour capacity filled
+  - `"You've already redeemed this offer recently."` — cooldown
+  - `"You already have an active claim for this offer."` — already reserved
+  - `"This offer is not available."` — not live, before its start date, or past its end date
 
 ### Reservation List
 - `GET /reservations/` · **Auth:** required · **Paginated: yes** · **Query:** `status` (e.g. `active`), `page`.
@@ -225,11 +291,13 @@ A **reservation** = a claimed offer, held for the user while they upload a recei
 - **File rules:** images (`image/jpeg`, `image/png`) — validate MIME + size client-side (recommend ≤10 MB). A structured "digital receipt" (items without image) is also accepted.
 - **Response `201`:** Receipt object:
   ```json
-  { "id":"…","reservation":"…","campaign":"…","campaign_name":"…","brand_name":"…",
+  { "id":"…","reservation":"…","campaign":"…","campaign_name":"…","offer_headline":"…","brand_name":"…",
     "status":"pending","merchant":"Starbucks","purchased_at":"2026-06-04T…","total":"25.50",
     "matched":true,"matched_units":1,"decision_reason":"","line_items":[…],"created_at":"…" }
   ```
 - **Errors `400`:** invalid/expired reservation, duplicate receipt, validation (in `detail`).
+- `status: "pending"` = under review. More common now: a receipt whose price can't be read waits for a person instead of paying automatically. Show it as "Under review", not as an error.
+- If the offer requires specific retailers (`retailer_required`), show the receipt-eligibility line on this screen too (see §4).
 
 ### Receipt List
 - `GET /receipts/` · **Auth:** required · **Paginated: yes** → Receipt objects (newest first). Use for "Receipt History".
@@ -293,7 +361,8 @@ Earn extra cash by reviewing purchased products. **Lifecycle:** an opportunity (
 
 ### Redemptions (reward history)
 - `GET /redemptions/` · **Auth:** required · **Paginated: yes**
-- Items: `{ id, reservation, receipt, campaign, campaign_name, brand_name, reward_amount, fee_amount, status, issued_at, created_at }`.
+- Items: `{ id, reservation, receipt, campaign, campaign_name, offer_headline, brand_name, reward_amount, fee_amount, status, issued_at, created_at }`.
+- `reward_amount` here is the **amount actually paid** — it can be lower than the offer's "up to" amount. Title rows with `offer_headline`, not `campaign_name`.
 - `GET /redemptions/{redemption_id}/` → single redemption.
 
 ---
@@ -518,3 +587,4 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 3. **Avatar** is URL-only; **phone/SMS** and **social login** are not active; **legal content** is static.
 4. **Receipt upload** is multipart and requires an existing **active** reservation.
 5. **Reservation "pending"** filter value is **`active`**.
+6. **Rebate redesign (Oct 2026)** — see §4 "Rebate deals — what changed": title offers with `offer_headline` (never `name`/`campaign_name`), reward badge "Up to $X", "Going fast", claim-button states, receipt-eligibility and cooldown lines, product slider. `offer_type` is never `"fallback"` any more.

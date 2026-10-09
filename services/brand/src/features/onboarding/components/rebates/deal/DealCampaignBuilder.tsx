@@ -1,10 +1,11 @@
 /* eslint-disable @next/next/no-img-element */
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ImagePlus, Search } from "lucide-react";
 import { ApiRecord } from "@/lib/api/backendApi";
-import { DealCampaignInput, useBrandApiStore } from "@/stores/useBrandApiStore";
+import { DealCampaignInput, RetailerOption, useBrandApiStore } from "@/stores/useBrandApiStore";
 import NibblReviewComment from "../NibblReviewComment";
 import OfferPreview from "./OfferPreview";
+import RetailerPicker from "./RetailerPicker";
 import {
   COOLDOWN_OPTIONS,
   DEAL_TYPES,
@@ -23,7 +24,10 @@ interface DealCampaignBuilderProps {
 
 const dateValue = (value: unknown) => (typeof value === "string" && value ? value.slice(0, 10) : "");
 const toIso = (date: string) => (date ? new Date(`${date}T00:00:00`).toISOString() : null);
-const ids = (value: unknown) => (Array.isArray(value) ? value.map((v) => String(v)) : []);
+const ids = (value: unknown) =>
+  Array.isArray(value)
+    ? value.map((v) => (v && typeof v === "object" ? String((v as { id?: unknown }).id) : String(v)))
+    : [];
 
 const inputClass =
   "w-full h-11 px-3 rounded-xl border border-[#E0E3F5] bg-white text-sm text-[#131B2E] outline-none focus:border-[#001BD2] focus:ring-2 focus:ring-[#001BD2]/15";
@@ -42,6 +46,8 @@ const Section = ({ n, title, children }: { n: string; title: string; children: R
 export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: DealCampaignBuilderProps) {
   const products = useBrandApiStore((state) => state.products);
   const saveDealCampaign = useBrandApiStore((state) => state.saveDealCampaign);
+  const loadRetailers = useBrandApiStore((state) => state.loadRetailers);
+  const addRetailer = useBrandApiStore((state) => state.addRetailer);
 
   const pending = (campaign?.pending_revision as ApiRecord | null)?.changes as ApiRecord | undefined;
   // Show the brand's pending (unapproved) edits when reopening a revision.
@@ -62,8 +68,15 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
   const [description, setDescription] = useState(String(initial("offer_description") ?? ""));
   // Wording follows Nibbl's suggestion until the brand edits it.
   const [wordingEdited, setWordingEdited] = useState(Boolean(campaign));
-  const [retailerRequired, setRetailerRequired] = useState(Boolean(String(initial("allowed_merchants") ?? "")));
-  const [retailers, setRetailers] = useState(String(initial("allowed_merchants") ?? ""));
+  const [retailerRequired, setRetailerRequired] = useState(
+    initial("retailer_required") != null ? Boolean(initial("retailer_required")) : Boolean(String(initial("allowed_merchants") ?? ""))
+  );
+  const [retailerIds, setRetailerIds] = useState<string[]>(ids(initial("retailers")));
+  const [featuredIds, setFeaturedIds] = useState<string[]>(ids(initial("featured_retailers")));
+  // Directory starts with the campaign's own retailers so names show before loading.
+  const [directory, setDirectory] = useState<RetailerOption[]>(() =>
+    ((campaign?.retailers as { id: string; name: string }[] | undefined) ?? []).map((r) => ({ ...r, is_verified: true }))
+  );
   const [desired, setDesired] = useState(String(initial("desired_redemptions") ?? ""));
   const [rate, setRate] = useState(String(initial("estimated_redemption_rate") ?? "30"));
   const [cooldown, setCooldown] = useState(
@@ -82,7 +95,27 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
   const suggestion = suggestedWording(dealType, firstName, maxRebate, fixedReward, quantity);
   const shownHeadline = wordingEdited ? headline : suggestion.headline;
   const shownDescription = wordingEdited ? description : suggestion.description;
-  const merchants = retailerRequired ? retailers : "";
+  const nameOf = (id: string) => directory.find((r) => r.id === id)?.name ?? "";
+  const retailerNames = retailerIds.map(nameOf).filter(Boolean);
+  const merchants = retailerRequired ? retailerNames.join(", ") : "";
+
+  useEffect(() => {
+    let cancelled = false;
+    loadRetailers()
+      .then((list) => {
+        if (!cancelled) setDirectory((cur) => [...list, ...cur.filter((c) => !list.some((r) => r.id === c.id))]);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [loadRetailers]);
+
+  const handleAddRetailer = async (retailerName: string) => {
+    const retailer = await addRetailer(retailerName);
+    setDirectory((cur) => (cur.some((r) => r.id === retailer.id) ? cur : [...cur, retailer]));
+    return retailer;
+  };
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -100,7 +133,7 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
       if (!(Number(fixedReward) > 0)) out.push("Enter the fixed reward.");
     } else if (!(Number(maxRebate) > 0)) out.push("Enter the maximum rebate.");
     if (!shownHeadline.trim() || !shownDescription.trim()) out.push("Enter the shopper headline and description.");
-    if (retailerRequired && !retailers.trim()) out.push("List the eligible retailers, or choose Any Retailer.");
+    if (retailerRequired && !retailerIds.length) out.push("Select the retailers where receipts are accepted, or choose Any Retailer.");
     if (!capacity) out.push("Enter desired redemptions and an estimated redemption rate (1–100%).");
     return out;
   };
@@ -138,7 +171,9 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
       estimated_redemption_rate: rate || "100",
       cooldown_days: cooldown === "one_time" ? 0 : Number(cooldown),
       one_time_only: cooldown === "one_time",
-      allowed_merchants: merchants.trim(),
+      retailers: retailerIds,
+      featured_retailers: featuredIds,
+      retailer_required: retailerRequired,
     };
     setBusy(submit ? "submit" : "draft");
     try {
@@ -357,11 +392,24 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
             </div>
           </Section>
 
-          <Section n="⑤" title="Receipt eligibility">
+          <Section n="⑤" title="Retailer availability">
+            <RetailerPicker
+              directory={directory}
+              selected={retailerIds}
+              featured={featuredIds}
+              onChange={(selected, featured) => {
+                setRetailerIds(selected);
+                setFeaturedIds(featured);
+              }}
+              onAdd={handleAddRetailer}
+            />
+          </Section>
+
+          <Section n="⑥" title="Receipt eligibility">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
                 { value: false, title: "Any Retailer", text: "Receipts from any retailer qualify when the eligible product and purchase details are identifiable." },
-                { value: true, title: "Retailer Required", text: "Shoppers must buy from one of your eligible retailers. The receipt must clearly show the retailer name." },
+                { value: true, title: "Retailer Required", text: "Shoppers must buy from one of the retailers selected above. The receipt must clearly show the retailer name." },
               ].map((opt) => (
                 <button
                   key={opt.title}
@@ -377,14 +425,13 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
               ))}
             </div>
             {retailerRequired && (
-              <label className={labelClass}>
-                Eligible retailers (comma-separated)
-                <input className={inputClass} placeholder="Target, Kroger, Whole Foods" value={retailers} onChange={(e) => setRetailers(e.target.value)} />
-              </label>
+              <p className="text-xs text-[#454656]">
+                Eligible receipt retailers: <b>{retailerNames.join(", ") || "select retailers above"}</b>
+              </p>
             )}
           </Section>
 
-          <Section n="⑥" title="25-hour claim capacity">
+          <Section n="⑦" title="25-hour claim capacity">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className={labelClass}>
                 Desired redemptions per 25 hours
@@ -404,7 +451,7 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
             </div>
           </Section>
 
-          <Section n="⑦" title="Customer cooldown">
+          <Section n="⑧" title="Customer cooldown">
             <select className={inputClass} value={cooldown} onChange={(e) => setCooldown(e.target.value)}>
               {COOLDOWN_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -450,6 +497,8 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
             maxRebate={maxRebate}
             fixedReward={fixedReward}
             allowedMerchants={merchants}
+            featuredRetailers={featuredIds.map(nameOf).filter(Boolean)}
+            whereToBuy={retailerNames}
             cooldownDays={cooldown === "one_time" ? 0 : Number(cooldown)}
             oneTimeOnly={cooldown === "one_time"}
           />

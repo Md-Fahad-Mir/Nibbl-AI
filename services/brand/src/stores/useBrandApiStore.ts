@@ -238,7 +238,18 @@ export interface DealCampaignInput {
   estimated_redemption_rate: string;
   cooldown_days: number;
   one_time_only: boolean;
-  allowed_merchants: string;
+  /** Retailer directory ids: where it's sold (Where to Buy). */
+  retailers: string[];
+  /** Up to three of `retailers`, shown in the offer summary. */
+  featured_retailers: string[];
+  /** true = receipts must be from one of `retailers`. */
+  retailer_required: boolean;
+}
+
+export interface RetailerOption {
+  id: string;
+  name: string;
+  is_verified: boolean;
 }
 
 interface BrandApiState {
@@ -297,6 +308,10 @@ interface BrandApiState {
   campaignAction: (campaignId: string, action: "submit" | "activate" | "pause") => Promise<void>;
   refreshCampaigns: () => Promise<void>;
   loadCampaignExtras: (campaignId: string) => Promise<{ reviews: ApiRecord[]; access: ApiRecord }>;
+  /** Nibbl's retailer directory (+ retailers this brand added). */
+  loadRetailers: () => Promise<RetailerOption[]>;
+  /** Add a retailer missing from the directory (returns the existing one on a name match). */
+  addRetailer: (name: string) => Promise<RetailerOption>;
   createReviewCampaign: (body: {
     name: string;
     description?: string;
@@ -701,6 +716,17 @@ export const useBrandApiStore = create<BrandApiState>()(
           ),
         ]);
         return { reviews: listResults(reviews), access };
+      },
+      loadRetailers: async () => {
+        const response = await apiClient.request<unknown>(backendApi.brand.retailers);
+        return listResults(response) as unknown as RetailerOption[];
+      },
+      addRetailer: async (name) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        return apiClient.request<RetailerOption>(backendApi.brand.addRetailer(brandId), {
+          body: { name },
+        });
       },
       refreshCampaigns: async () => {
         const brandId = get().selectedBrandId;

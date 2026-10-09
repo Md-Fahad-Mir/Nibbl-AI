@@ -14,6 +14,7 @@ from Apps.campaigns.models import (
     FallbackOffer,
     QRCode,
     Restriction,
+    Retailer,
     RewardTier,
 )
 from Apps.common.money import ZERO, to_money
@@ -81,8 +82,11 @@ DEAL_FIELDS = (
     "deal_type", "max_rebate", "fixed_reward", "required_quantity",
     "offer_headline", "offer_description", "desired_redemptions",
     "estimated_redemption_rate", "cooldown_days", "one_time_only",
-    "allowed_merchants",
+    "allowed_merchants", "retailer_required",
 )
+# Many-to-many inputs handled like ``product`` (lists of ids).
+RETAILER_KEYS = ("retailers", "featured_retailers")
+MAX_FEATURED_RETAILERS = 3
 
 
 def _apply_deal(campaign: Campaign, *, regenerate_wording: bool) -> None:
@@ -102,9 +106,61 @@ def _apply_deal(campaign: Campaign, *, regenerate_wording: bool) -> None:
 
 
 @transaction.atomic
+# ---------------------------------------------------------------------------
+# Retailers (Master: Retailer Availability, Featured Retailers, Receipt
+# Eligibility)
+# ---------------------------------------------------------------------------
+def _resolve_retailers(brand, ids) -> list[Retailer]:
+    """Directory retailers — verified ones, or ones this brand added."""
+    from django.db.models import Q
+
+    ids = list(dict.fromkeys(str(i) for i in ids))
+    found = list(
+        Retailer.objects.filter(id__in=ids).filter(Q(is_verified=True) | Q(added_by_brand=brand))
+    )
+    if len(found) != len(ids):
+        raise CampaignError("One or more retailers were not found in the directory.")
+    return found
+
+
+def _set_retailers(campaign: Campaign, retailer_ids=None, featured_ids=None) -> None:
+    if retailer_ids is not None:
+        campaign.retailers.set(_resolve_retailers(campaign.brand, retailer_ids))
+    available = set(campaign.retailers.values_list("id", flat=True))
+    if featured_ids is not None:
+        featured = _resolve_retailers(campaign.brand, featured_ids)
+        if len(featured) > MAX_FEATURED_RETAILERS:
+            raise CampaignError("Choose up to three featured retailers.")
+        if any(r.id not in available for r in featured):
+            raise CampaignError("Featured retailers must be among the retailers where it's sold.")
+        campaign.featured_retailers.set(featured)
+    else:
+        # A retailer removed from availability can't stay featured.
+        campaign.featured_retailers.remove(
+            *campaign.featured_retailers.exclude(id__in=available)
+        )
+
+
+def _sync_receipt_retailers(campaign: Campaign) -> None:
+    """Retailer Required → receipts must show one of the campaign's
+    retailers (``allowed_merchants`` drives the receipt check and is
+    snapshotted on each claim). Any Retailer → no restriction."""
+    names = list(campaign.retailers.values_list("name", flat=True))
+    if names:
+        value = ", ".join(names) if campaign.retailer_required else ""
+    elif not campaign.retailer_required:
+        value = ""
+    else:
+        return  # older campaign with a free-text retailer list: keep it
+    if value != campaign.allowed_merchants:
+        campaign.allowed_merchants = value
+        campaign.save(update_fields=["allowed_merchants", "updated_at"])
+
+
 def create_campaign(*, brand, product_ids, name, daily_budget=None, description="",
                     min_purchase_units=1, is_bogo=False, cooldown_days=30,
-                    start_at=None, end_at=None, **deal) -> Campaign:
+                    start_at=None, end_at=None, retailers=None, featured_retailers=None,
+                    **deal) -> Campaign:
     products = _resolve_products(brand, product_ids)
     deal = {k: v for k, v in deal.items() if k in DEAL_FIELDS and v is not None}
     is_deal_model = "deal_type" in deal
@@ -140,6 +196,8 @@ def create_campaign(*, brand, product_ids, name, daily_budget=None, description=
     if is_deal_model:
         _apply_deal(campaign, regenerate_wording=False)
         campaign.save()
+    _set_retailers(campaign, retailers, featured_retailers)
+    _sync_receipt_retailers(campaign)
     regenerate_restriction(campaign)
     ensure_access(campaign)
     return campaign
@@ -173,6 +231,8 @@ def apply_update(campaign: Campaign, **fields) -> Campaign:
     product_ids = fields.pop("product", None)
     if product_ids is not None:
         products = _resolve_products(campaign.brand, product_ids)
+    retailer_ids = fields.pop("retailers", None)
+    featured_ids = fields.pop("featured_retailers", None)
 
     if "daily_budget" in fields:
         fields["daily_budget"] = to_money(fields["daily_budget"])
@@ -200,6 +260,10 @@ def apply_update(campaign: Campaign, **fields) -> Campaign:
     elif "daily_budget" in fields:
         deals.apply_legacy_inputs(campaign)
     campaign.save()
+    if retailer_ids is not None or featured_ids is not None:
+        _set_retailers(campaign, retailer_ids, featured_ids)
+    if retailer_ids is not None or "retailer_required" in fields:
+        _sync_receipt_retailers(campaign)
 
     if restriction_changed:
         regenerate_restriction(campaign)
@@ -335,6 +399,8 @@ def validate_ready(campaign: Campaign) -> None:
     }
     if len(categories) > 1:
         raise CampaignError("All eligible products must belong to the same category.")
+    if campaign.retailer_required and not (campaign.allowed_merchants or "").strip():
+        raise CampaignError("Select the retailers where receipts are accepted.")
     if not deals.max_reward(campaign):
         raise CampaignError("Set the offer's reward before activating.")
     if not campaign.claim_capacity:

@@ -72,7 +72,7 @@ def _from_json(changes: dict) -> dict:
     """Stored revision values → model values."""
     fields = {}
     for key, value in changes.items():
-        if key == "product" or value is None:
+        if key in ("product", *services.RETAILER_KEYS) or value is None:
             fields[key] = value
         else:
             fields[key] = Campaign._meta.get_field(key).to_python(value)
@@ -96,8 +96,9 @@ def _actual_changes(campaign: Campaign, fields: dict) -> dict:
     form, and an unchanged field shouldn't trigger a re-review."""
     changed = {}
     for key, value in fields.items():
-        if key == "product":
-            current = {str(pid) for pid in campaign.products.values_list("id", flat=True)}
+        if key in ("product", *services.RETAILER_KEYS):
+            relation = campaign.products if key == "product" else getattr(campaign, key)
+            current = {str(pid) for pid in relation.values_list("id", flat=True)}
             if {str(pid) for pid in value or []} != current:
                 changed[key] = value
             continue

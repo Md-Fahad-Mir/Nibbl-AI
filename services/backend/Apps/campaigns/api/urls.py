@@ -7,6 +7,8 @@ app_name = "campaigns"
 _base = "brands/<uuid:brand_id>/campaigns"
 
 urlpatterns = [
+    path("retailers/", views.RetailerListView.as_view(), name="retailer-list"),
+    path("brands/<uuid:brand_id>/retailers/", views.BrandRetailerCreateView.as_view(), name="brand-retailer-create"),
     path(f"{_base}/", views.CampaignListCreateView.as_view(), name="campaign-list"),
     path(
         f"{_base}/<uuid:campaign_id>/",

@@ -96,6 +96,10 @@ def resolve_offer(campaign: Campaign, user=None) -> dict:
     product_category = first_product.category if first_product else ""
     # Receipt eligibility: none listed = Any Retailer.
     retailers = [r.strip() for r in (campaign.allowed_merchants or "").split(",") if r.strip()]
+    # Where to Buy: Retailer Required → only the eligible receipt retailers;
+    # otherwise the full availability list (informational).
+    available = list(campaign.retailers.values_list("name", flat=True))
+    where_to_buy = retailers if retailers else available
 
     return {
         "campaign_id": str(campaign.id),
@@ -140,6 +144,8 @@ def resolve_offer(campaign: Campaign, user=None) -> dict:
         ],
         "cooldown_days": campaign.cooldown_days,
         "one_time_only": campaign.one_time_only,
+        "where_to_buy": where_to_buy,
+        "featured_retailers": list(campaign.featured_retailers.values_list("name", flat=True)),
     }
 
 

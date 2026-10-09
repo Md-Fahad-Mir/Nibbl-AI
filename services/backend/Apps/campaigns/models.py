@@ -18,6 +18,24 @@ from Apps.common.money import MONEY_FIELD
 from Apps.common.text import random_code
 
 
+class Retailer(BaseModel):
+    """Nibbl's retailer directory (Master: Retailer Availability). Brands pick
+    from it; a brand may add a missing retailer, flagged for Nibbl to verify."""
+
+    name = models.CharField(max_length=120, unique=True)
+    is_verified = models.BooleanField(default=True)
+    added_by_brand = models.ForeignKey(
+        "brands.Brand", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="added_retailers",
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Campaign(BaseModel):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
@@ -95,6 +113,14 @@ class Campaign(BaseModel):
     # by shop) is unaffected unless a brand opts in. See
     # Apps.receipts.services._check_merchant.
     allowed_merchants = models.TextField(blank=True)
+
+    # Retailer Availability (Where to Buy + discovery store match), up to
+    # three Featured Retailers for the offer summary, and the receipt rule:
+    # Retailer Required → the receipt must be from one of ``retailers``
+    # (kept in ``allowed_merchants`` for receipt checks and claim snapshots).
+    retailers = models.ManyToManyField(Retailer, blank=True, related_name="campaigns")
+    featured_retailers = models.ManyToManyField(Retailer, blank=True, related_name="featured_in")
+    retailer_required = models.BooleanField(default=False)
 
     # True when paused automatically due to insufficient wallet funds, so the
     # funding sync can safely resume it (vs a manual pause).

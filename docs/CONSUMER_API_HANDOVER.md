@@ -151,7 +151,8 @@ The app/site has two consumer hubs: **Offers/Home** and **Rewards Hub (Scan)**. 
   "required_quantity":1,"going_fast":false,"temporarily_unavailable":false,
   "campaign_image":"https://…","retailer_required":false,"eligible_retailers":[],
   "eligible_products":[{"id":"…","name":"Organic Popcorn","image":"https://…","rating":4.0,"review_count":100}],
-  "cooldown_days":30,"one_time_only":false }
+  "cooldown_days":30,"one_time_only":false,
+  "where_to_buy":["Kroger","Target","Walmart"],"featured_retailers":["Target"] }
 ```
 - `claimable` → show/enable the Claim button. `is_claimed` + `reservation_id` → user already has a live reservation (route to receipt upload instead).
 - ⚠️ **`discount_label` (the "20% OFF" badge text) is not finalized** — it appears only on Saved Offers and is currently `null` (pending a product decision). Until then, render the badge from `reward_amount` + `deal_type` (see below).
@@ -184,6 +185,8 @@ All changes are **additive**: existing fields keep their names and types, so the
 | `eligible_retailers` | string[] | Retailer names when `retailer_required` is true |
 | `cooldown_days` | int | Days before the shopper can redeem again after an approved redemption (0 = none) |
 | `one_time_only` | bool | One redemption ever, per shopper |
+| `where_to_buy` | string[] | **Where to Buy** list. When `retailer_required`, it's only the eligible receipt retailers — show them all, no "+ more" |
+| `featured_retailers` | string[] | Up to 3 retailers to show in the offer summary (e.g. *"Available at Target"*). Informational — doesn't change receipt rules |
 | `going_fast` | bool | Show a **"Going fast"** badge |
 | `temporarily_unavailable` | bool | 25-hour capacity is full — show the unavailable state |
 
@@ -194,6 +197,7 @@ All changes are **additive**: existing fields keep their names and types, so the
 - **Reward badge:** `buy_x_get_y` → `"$<reward_amount> back"`; every other type → `"Up to $<reward_amount>"` (never a fixed amount). `reward_amount` is `null` when not claimable — hide the badge.
 - **"Going fast"** badge when `going_fast`.
 - **Product slider** from `eligible_products` (ratings belong to each product).
+- **Retailers:** `featured_retailers` in the offer summary/card ("Available at …"); `where_to_buy` on the offer details page.
 - **Receipt eligibility** — show before claiming, after claiming, in My Offers and on receipt upload:
   - not required → *"Buy at any retailer — your receipt just needs to clearly show the eligible product."*
   - required → *"Purchase required at: Target, Kroger. Your receipt must clearly show the retailer name."*

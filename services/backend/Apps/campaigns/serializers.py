@@ -6,6 +6,7 @@ from Apps.campaigns.models import (
     Campaign,
     CampaignReview,
     FallbackOffer,
+    Retailer,
     Restriction,
     RewardTier,
 )
@@ -32,6 +33,17 @@ class FallbackOfferSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class RetailerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Retailer
+        fields = ["id", "name", "is_verified"]
+        read_only_fields = fields
+
+
+class RetailerCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120)
+
+
 class CampaignReviewSerializer(serializers.ModelSerializer):
     """One entry of a campaign's review activity (Master ⑥)."""
 
@@ -55,6 +67,9 @@ class CampaignSerializer(serializers.ModelSerializer):
     # rejected / approved / scheduled / active / paused / ended.
     display_status = serializers.CharField(read_only=True)
     image_url = serializers.SerializerMethodField(read_only=True)
+    # Retailer Availability (Where to Buy) + Featured Retailers: [{id, name}].
+    retailers = serializers.SerializerMethodField(read_only=True)
+    featured_retailers = serializers.SerializerMethodField(read_only=True)
     # 25-hour cycle state for the brand ("Current Cycle Claims: 12 of 34").
     current_cycle_claims = serializers.SerializerMethodField(read_only=True)
     current_cycle_started_at = serializers.SerializerMethodField(read_only=True)
@@ -103,6 +118,9 @@ class CampaignSerializer(serializers.ModelSerializer):
             "review_comment",
             "display_status",
             "allowed_merchants",
+            "retailers",
+            "featured_retailers",
+            "retailer_required",
             "image_url",
         ]
         read_only_fields = fields
@@ -116,6 +134,12 @@ class CampaignSerializer(serializers.ModelSerializer):
 
         review = open_revision(obj)
         return CampaignReviewSerializer(review).data if review else None
+
+    def get_retailers(self, obj) -> list[dict]:
+        return [{"id": str(r.id), "name": r.name} for r in obj.retailers.all()]
+
+    def get_featured_retailers(self, obj) -> list[dict]:
+        return [{"id": str(r.id), "name": r.name} for r in obj.featured_retailers.all()]
 
     def get_image_url(self, obj):
         if not obj.image:
@@ -170,6 +194,12 @@ class _DealInputMixin(serializers.Serializer):
     # Receipt eligibility: blank = Any Retailer; otherwise the receipt must
     # show one of these (comma-separated) retailer names.
     allowed_merchants = serializers.CharField(required=False, allow_blank=True)
+    # Retailer directory ids; Retailer Required → receipts must be from one.
+    retailers = serializers.ListField(child=serializers.UUIDField(), required=False)
+    featured_retailers = serializers.ListField(
+        child=serializers.UUIDField(), required=False, max_length=3
+    )
+    retailer_required = serializers.BooleanField(required=False)
 
 
 class CampaignCreateSerializer(_DealInputMixin):

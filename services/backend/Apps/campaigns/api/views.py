@@ -238,3 +238,52 @@ class CampaignPreviewView(APIView):
         require_membership(request.user, brand)
         preview = services.build_preview(_get_campaign(brand, campaign_id))
         return Response(s.CampaignPreviewSerializer(preview).data)
+
+
+@extend_schema(tags=["campaigns"])
+class RetailerListView(APIView):
+    """Search Nibbl's retailer directory (?search=). Includes retailers this
+    user's brands added that Nibbl hasn't verified yet."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: s.RetailerSerializer(many=True)})
+    def get(self, request):
+        from django.db.models import Q
+
+        from Apps.campaigns.models import Retailer
+
+        brand_ids = request.user.brand_memberships.values_list("brand_id", flat=True)
+        qs = Retailer.objects.filter(Q(is_verified=True) | Q(added_by_brand_id__in=brand_ids))
+        search = request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(name__icontains=search)
+        return Response(s.RetailerSerializer(qs[:200], many=True).data)
+
+
+@extend_schema(tags=["campaigns"])
+class BrandRetailerCreateView(APIView):
+    """Add a retailer missing from the directory (Master: "request or add a
+    missing retailer"). Returns the existing one when the name matches."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=s.RetailerCreateSerializer, responses={201: s.RetailerSerializer})
+    def post(self, request, brand_id):
+        from Apps.campaigns.models import Retailer
+
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True, active=True)
+        serializer = s.RetailerCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        name = " ".join(serializer.validated_data["name"].split())
+        if not name:
+            raise ValidationError({"name": "Enter the retailer name."})
+        retailer = Retailer.objects.filter(name__iexact=name).first()
+        created = retailer is None
+        if created:
+            retailer = Retailer.objects.create(name=name, is_verified=False, added_by_brand=brand)
+        return Response(
+            s.RetailerSerializer(retailer).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )

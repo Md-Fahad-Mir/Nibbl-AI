@@ -402,6 +402,12 @@ export const backendApi = {
       path: `/brands/${brandId}/campaigns/${campaignId}/preview/`,
       auth: true,
     }),
+    retailers: { method: "GET", path: "/retailers/", auth: true } as ApiEndpoint,
+    addRetailer: (brandId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/retailers/`,
+      auth: true,
+    }),
     campaignImage: (brandId: string, campaignId: string): ApiEndpoint => ({
       method: "PUT",
       path: `/brands/${brandId}/campaigns/${campaignId}/image/`,

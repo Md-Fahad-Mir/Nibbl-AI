@@ -11,6 +11,8 @@ interface OfferPreviewProps {
   maxRebate?: string | null;
   fixedReward?: string | null;
   allowedMerchants: string;
+  featuredRetailers?: string[];
+  whereToBuy?: string[];
   cooldownDays: number;
   oneTimeOnly: boolean;
 }
@@ -26,6 +28,8 @@ export default function OfferPreview({
   maxRebate,
   fixedReward,
   allowedMerchants,
+  featuredRetailers = [],
+  whereToBuy = [],
   cooldownDays,
   oneTimeOnly,
 }: OfferPreviewProps) {
@@ -65,7 +69,13 @@ export default function OfferPreview({
                 ))}
               </div>
             )}
+            {featuredRetailers.length > 0 && (
+              <p className="text-[11px] font-semibold text-[#131B2E]">Available at {featuredRetailers.join(", ")}</p>
+            )}
             <p className="text-[10px] text-[#64748B] leading-4">{receiptWording(allowedMerchants)}</p>
+            {whereToBuy.length > 0 && (
+              <p className="text-[10px] text-[#64748B] leading-4">Where to buy: {whereToBuy.join(", ")}</p>
+            )}
             <p className="text-[10px] text-[#64748B]">Cooldown: {cooldownText(cooldownDays, oneTimeOnly)}</p>
             <button className="h-10 rounded-full bg-[#001BD2] text-white text-sm font-bold" disabled>
               Claim offer

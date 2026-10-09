@@ -99,6 +99,12 @@
 ### Avatar Upload — ⚠️ URL-only (no binary upload)
 - There is **no** multipart avatar-upload endpoint. Set the avatar by sending a hosted URL via `PATCH /users/me/ { "avatar_url": "…" }`. (Binary upload is postponed until object storage is provisioned.)
 
+### Marketing consent (email + SMS) ⚠️ app update needed (Oct 2026)
+Consent is given with the two checkboxes when claiming an offer (`consent_nibbl` / `consent_brand` on `POST /reservations/`). Shoppers must be able to withdraw it:
+- `GET /users/me/consents/` → `[{ "brand": "<uuid>|null", "brand_name": "NibblAI"|"<Brand>", "opted_in": true, "consented_at": "…", "withdrawn_at": null }]` (`brand: null` = NibblAI).
+- `POST /users/me/consents/withdraw/` `{ "brand": "<uuid>" }` (or `{ "brand": null }` for NibblAI) → `200 { "opted_in": false, "withdrawn_at": "…" }`; `404` if there's no consent to withdraw.
+- Show a "Marketing preferences" list in Profile with an **Opt out** action per row. Opting out keeps claim/redemption history; the brand sees the shopper as *Opted Out* and can't download them.
+
 ### Delete Account
 - **Endpoint:** `/users/me/` · **Method:** `DELETE` · **Auth:** required
 - **Request (body required):** `{ "password": "Sup3rSecret!" }`
@@ -612,3 +618,4 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 6. **Rebate redesign (Oct 2026)** — see §4 "Rebate deals — what changed": title offers with `offer_headline` (never `name`/`campaign_name`), reward badge "Up to $X", "Going fast", claim-button states, receipt-eligibility and cooldown lines, product slider. `offer_type` is never `"fallback"` any more.
 7. **Receipt review (Oct 2026)** — see §6: receipts under review are decided within 7 days of upload (auto-approved otherwise); show `decision_reason` on rejected receipts; a reservation with a pending receipt stays `active`.
 8. **Discovery location (Oct 2026)** — see §4 "Discovery location": ask for location/ZIP before showing discovery; `PUT /me/location/`; header `X-Discovery-Location: required` means none is saved.
+9. **Marketing consent (Oct 2026)** — see §2 "Marketing consent": list consents and let shoppers opt out per brand / NibblAI.

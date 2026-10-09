@@ -258,7 +258,13 @@ class BrandCustomerListView(APIView):
 
         brand = _get_brand_or_404(brand_id)
         _require_membership(request.user, brand)
-        return Response(brand_customers(brand))
+        # ?search= (name/email/phone; full-access plans) and ?status=
+        # open_claim | cooldown | completed_rebate | suspended | inactive | opted_in
+        return Response(brand_customers(
+            brand,
+            search=request.query_params.get("search", ""),
+            status_filter=request.query_params.get("status", ""),
+        ))
 
 
 class BrandCustomerSuspendView(APIView):
@@ -316,13 +322,19 @@ class BrandCustomerExportView(APIView):
         brand = _get_brand_or_404(brand_id)
         _require_membership(request.user, brand)
 
-        data = brand_customers(brand)
+        # Master: only customers currently opted in for this brand; no
+        # receipt images or site-wide activity.
+        data = brand_customers(brand, status_filter="opted_in")
         full = data["data_access_level"] == "full"
 
         buffer = io.StringIO()
         writer = csv.writer(buffer)
         base_header = ["customer_ref", "redemptions", "reviews", "total_earned"]
-        writer.writerow((["full_name", "email"] + base_header) if full else base_header)
+        consent_header = ["consent_status", "consent_date", "last_activity"]
+        writer.writerow(
+            (["full_name", "email"] + base_header + ["phone"] + consent_header)
+            if full else base_header + consent_header
+        )
         for row in data["customers"]:
             base = [
                 row["customer_ref"],
@@ -330,10 +342,15 @@ class BrandCustomerExportView(APIView):
                 row["reviews"],
                 row["total_earned"],
             ]
+            consent = [
+                row["consent_status"],
+                row["consent_date"].isoformat() if row["consent_date"] else "",
+                row["last_activity"].isoformat() if row["last_activity"] else "",
+            ]
             writer.writerow(
-                ([row.get("full_name") or "", row.get("email") or ""] + base)
+                ([row.get("full_name") or "", row.get("email") or ""] + base + [row.get("phone") or ""] + consent)
                 if full
-                else base
+                else base + consent
             )
 
         response = HttpResponse(buffer.getvalue(), content_type="text/csv")

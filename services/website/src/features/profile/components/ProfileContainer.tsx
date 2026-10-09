@@ -9,6 +9,7 @@ import Footer from "../../homepage/components/Footer";
 import { LoadState, useConsumerApiStore } from "@/stores/useConsumerApiStore";
 import { ApiError, ApiRecord, nibblApi } from "@/lib/api/backendApi";
 import { displayOffer, imageUrl, text } from "@/features/homepage/lib/offerMappers";
+import MarketingPreferences from "./MarketingPreferences";
 
 type ProfileView = "menu" | "edit" | "saved" | "privacy" | "terms" | "notifications" | "help" | "faq" | "contact-us";
 
@@ -308,6 +309,10 @@ export default function ProfileContainer({
                 }
               />
               <ProfileRow label="Saved" onClick={() => setActiveView("saved")} />
+            </ProfileGroup>
+
+            <ProfileGroup title="Marketing Preferences">
+              <MarketingPreferences />
             </ProfileGroup>
 
             <ProfileGroup title="Policy Center">

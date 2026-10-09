@@ -239,6 +239,13 @@ class MarketingConsent(BaseModel):
     consented_at = models.DateTimeField(null=True, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
 
+    class Source(models.TextChoices):
+        CLAIM = "claim", "Offer claim checkbox"
+
+    # Where the consent was given (Master: store consent date, source and
+    # withdrawal date internally).
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.CLAIM)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(

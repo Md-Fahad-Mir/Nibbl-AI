@@ -15,6 +15,12 @@ export interface CustomerData {
   reviews: number;
   rewards: string;
   status: "Active" | "Suspended";
+  // Brand marketing consent (Master): badge + date.
+  consent: "Opted In" | "Opted Out" | "No consent";
+  consentDate: string;
+  openClaim: boolean;
+  inCooldown: boolean;
+  lastActivityAt: string | null;
   lastActivity: string;
   avatar: string;
   memberSince: string;
@@ -76,6 +82,7 @@ export default function CustomerLedger({ customers, onSelectCustomer, onToggleSu
               <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Contact Information</th>
               <th className="p-5 text-center text-[11px] font-bold tracking-wider text-[#454656] uppercase">Claims</th>
               <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Rewards Earned</th>
+              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Consent</th>
               <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Status</th>
               <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Last Activity</th>
               <th className="p-5 text-right text-[11px] font-bold tracking-wider text-[#454656] uppercase">Actions</th>
@@ -112,6 +119,20 @@ export default function CustomerLedger({ customers, onSelectCustomer, onToggleSu
                 <td className="p-5 text-center font-bold text-[#131B2E]">{c.claims}</td>
                 <td className="p-5 text-left font-bold text-[#001BD2]">{c.rewards}</td>
                 <td className="p-5 text-left">
+                  <div className="flex flex-col gap-0.5">
+                    <span className={`font-bold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider w-fit ${
+                      c.consent === "Opted In"
+                        ? "bg-[#E2E7FF] text-[#001BD2]"
+                        : c.consent === "Opted Out"
+                          ? "bg-slate-200 text-slate-600"
+                          : "bg-slate-100 text-slate-400"
+                    }`}>
+                      {c.consent}
+                    </span>
+                    {c.consentDate && <span className="text-[10px] text-slate-400">{c.consentDate}</span>}
+                  </div>
+                </td>
+                <td className="p-5 text-left">
                   <span className={`font-bold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider ${
                     c.status === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
                   }`}>
@@ -133,7 +154,7 @@ export default function CustomerLedger({ customers, onSelectCustomer, onToggleSu
             ))}
             {paginatedCustomers.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-10 text-center text-sm font-semibold text-slate-400">
+                <td colSpan={8} className="p-10 text-center text-sm font-semibold text-slate-400">
                   No customers available.
                 </td>
               </tr>

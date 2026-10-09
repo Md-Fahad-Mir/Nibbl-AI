@@ -75,6 +75,8 @@ export const backendApi = {
     },
     addPhone: { method: "POST", path: "/users/me/phone/", auth: true },
     verifyPhone: { method: "POST", path: "/users/me/phone/verify/", auth: true },
+    marketingConsents: { method: "GET", path: "/users/me/consents/", auth: true },
+    withdrawConsent: { method: "POST", path: "/users/me/consents/withdraw/", auth: true },
     referrals: { method: "GET", path: "/users/me/referrals/", auth: true },
     inviteReferral: {
       method: "POST",
@@ -779,6 +781,10 @@ export const nibblApi = {
   logout: (refresh: string) =>
     requestEndpoint<null>(backendApi.auth.logout, { refresh }),
   me: () => requestEndpoint<ApiRecord>(backendApi.users.me),
+  marketingConsents: () =>
+    requestEndpoint<ApiRecord[]>(backendApi.users.marketingConsents),
+  withdrawConsent: (brand: string | null) =>
+    requestEndpoint<ApiRecord>(backendApi.users.withdrawConsent, { brand }),
   addPhone: (phone: string, country?: string) =>
     requestEndpoint<{ phone: string } | null>(
       backendApi.users.addPhone,

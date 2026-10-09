@@ -10,6 +10,10 @@ class WalletSerializer(serializers.ModelSerializer):
     available = serializers.SerializerMethodField()
     promotional = serializers.SerializerMethodField()
     reward_available = serializers.SerializerMethodField()
+    # Reserved funds split (Master: show rebate and review reservations
+    # separately); together they make up ``held``.
+    reserved_rebates = serializers.SerializerMethodField()
+    reserved_reviews = serializers.SerializerMethodField()
 
     class Meta:
         model = Wallet
@@ -22,6 +26,8 @@ class WalletSerializer(serializers.ModelSerializer):
             "available",
             "promotional",
             "reward_available",
+            "reserved_rebates",
+            "reserved_reviews",
             "updated_at",
         ]
         read_only_fields = fields
@@ -34,6 +40,26 @@ class WalletSerializer(serializers.ModelSerializer):
 
     def get_promotional(self, obj) -> Decimal:
         return obj.promo_balance()
+
+    def _reserved(self, obj, kind) -> Decimal:
+        from django.db.models import Sum
+
+        from Apps.wallets.models import Hold
+
+        total = obj.holds.filter(
+            status=Hold.Status.ACTIVE, reservation__kind=kind
+        ).aggregate(s=Sum("amount"))["s"]
+        return total or Decimal("0.00")
+
+    def get_reserved_rebates(self, obj) -> Decimal:
+        from Apps.reservations.models import Reservation
+
+        return self._reserved(obj, Reservation.Kind.REBATE)
+
+    def get_reserved_reviews(self, obj) -> Decimal:
+        from Apps.reservations.models import Reservation
+
+        return self._reserved(obj, Reservation.Kind.REVIEW)
 
     def get_reward_available(self, obj) -> Decimal:
         return obj.reward_available()

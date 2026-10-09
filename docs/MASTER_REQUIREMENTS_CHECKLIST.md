@@ -54,7 +54,7 @@
 - [ ] 🟡 **29. Customer directory & consent handling** — directory + plan-based gating ✓; **plan-gated CSV export ✓** (PII columns only for Pro/Scale); consent status / opt-in-out tracking still missing
 
 ## Brand Wallet
-- [ ] 🟡 **30. Balances (available, reserved, promotional)** — available/reserved ✓; promotional balance now tracked separately (`promotional`/`reward_available` on wallet API, shown on brand promo card); full three-way breakdown on the main balance card still pending
+- [x] ✅ **30. Balances (available, reserved, promotional)** — wallet page shows Available Funds (real money for new claims; promo excluded), Reserved Funds (split rebates / reviews) and Promotional Credits (pays fees + plan charges, never rewards), each with its Master definition; API adds `reserved_rebates` / `reserved_reviews`
 - [x] ✅ **31. Automatic refill (Stripe)** — 25% of 7-day estimate, recommended amount, in-app failure notification *(done this engagement)*
 - [ ] 🟡 **32. Statements & ledger export** — statement exists; **detailed ledger CSV export ✓** (brand wallet, `GET /brands/<id>/wallet/transactions/export/` + Export button on the ledger tab); recurring weekly statements still missing
 
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (26):** #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #17, #18, #19, #20, #21, #22, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
+**Done to spec (27):** #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #17, #18, #19, #20, #21, #22, #30, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

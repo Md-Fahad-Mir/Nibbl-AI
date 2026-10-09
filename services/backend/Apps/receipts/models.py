@@ -41,6 +41,14 @@ class Receipt(BaseModel):
     # when OCR could read one — not every receipt has one, and it plays no
     # part in the identity hashes below (see Apps.receipts.ocr).
     receipt_number = models.CharField(max_length=100, blank=True)
+    # Register / lane number, when the scan shows one.
+    register_number = models.CharField(max_length=50, blank=True)
+    # The physical receipt this upload is (Master: duplicate fingerprint);
+    # NULL when it can't be identified (merchant/date/time unreadable).
+    identity = models.ForeignKey(
+        "receipts.ReceiptIdentity", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="receipts",
+    )
 
     # --- Identity hashes (duplicate detection) ------------------------------
     # SHA-256 of the normalized merchant name / purchase date / purchase time
@@ -108,20 +116,68 @@ class Receipt(BaseModel):
             models.Index(fields=["brand", "status"]),
             models.Index(fields=["user", "status"]),
         ]
+        # Duplicate protection lives in ReceiptIdentity + ReceiptUnitAllocation
+        # (one shopper per receipt; each purchased unit credited once).
+
+    def __str__(self):
+        return f"Receipt {self.id} ({self.status})"
+
+
+class ReceiptIdentity(BaseModel):
+    """One physical receipt (Master: Duplicate Receipt and Quantity Allocation).
+
+    Uploads with the same merchant + date + time are the same receipt unless
+    both clearly show a different transaction number or register — a
+    misread total or number never makes a re-photographed receipt "new".
+    A receipt belongs to one shopper account.
+    """
+
+    # SHA-256 of merchant + date + time hashes (Apps.receipts.identity).
+    core_hash = models.CharField(max_length=64, db_index=True)
+    # Normalized (A-Z0-9); blank when not read.
+    transaction_number = models.CharField(max_length=100, blank=True)
+    register_number = models.CharField(max_length=50, blank=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="receipt_identities"
+    )
+
+    class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=[
-                    "merchant_hash",
-                    "purchase_date_hash",
-                    "purchase_time_hash",
-                    "product_description_hash",
-                ],
-                name="uniq_receipt_identity_per_product",
+                fields=["core_hash", "transaction_number", "register_number"],
+                name="uniq_receipt_identity",
             ),
         ]
 
     def __str__(self):
-        return f"Receipt {self.id} ({self.status})"
+        return f"Receipt identity {self.core_hash[:8]}"
+
+
+class ReceiptUnitAllocation(BaseModel):
+    """One purchased unit on a physical receipt credited to one claim. The
+    unique constraint makes double-crediting a unit impossible, even for
+    simultaneous uploads; rejecting the receipt releases its units."""
+
+    identity = models.ForeignKey(ReceiptIdentity, on_delete=models.CASCADE, related_name="allocations")
+    # Hash of the receipt line's normalized description (same wording on
+    # several lines pools their quantities).
+    line_hash = models.CharField(max_length=64)
+    unit_index = models.PositiveSmallIntegerField()
+    receipt = models.ForeignKey(Receipt, on_delete=models.CASCADE, related_name="allocations")
+    line_item = models.ForeignKey(
+        "receipts.ReceiptLineItem", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="allocations",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["identity", "line_hash", "unit_index"], name="uniq_receipt_unit",
+            ),
+        ]
+
+    def __str__(self):
+        return f"unit {self.unit_index} of {self.line_hash[:8]}"
 
 
 class OCRResult(BaseModel):

@@ -35,6 +35,37 @@ class BrandWalletApiTests(APITestCase):
         self.assertEqual(Decimal(resp.data["balance"]), Decimal("0.00"))
         self.assertEqual(resp.data["kind"], "brand")
 
+    def test_balance_breakdown(self):
+        """Available / reserved (rebate vs review) / promotional (Master #30)."""
+        from Apps.campaigns import services as campaign_services
+        from Apps.campaigns.models import Campaign
+        from Apps.common.testing import go_live
+        from Apps.products.services import create_product
+        from Apps.reservations import services as reservation_services
+
+        wallet = wallet_services.get_or_create_brand_wallet(self.brand)
+        wallet_services.credit(wallet=wallet, amount=Decimal("100.00"), category=LedgerEntry.Category.FUNDING)
+        wallet_services.credit(
+            wallet=wallet, amount=Decimal("20.00"), category=LedgerEntry.Category.ADJUSTMENT,
+            is_promotional=True,
+        )
+        product = create_product(brand=self.brand, name="Cola", category="Drinks")
+        campaign = campaign_services.create_campaign(
+            brand=self.brand, product_ids=[product.id], name="Deal", deal_type=Campaign.DealType.FREE,
+            max_rebate=Decimal("5.00"), desired_redemptions=5, estimated_redemption_rate=Decimal("100"),
+        )
+        go_live(campaign)
+        shopper = User.objects.create_user(email="s@example.com", password="x", full_name="S")
+        reservation_services.create_reservation(user=shopper, campaign_id=campaign.id)
+
+        self.client.force_authenticate(self.owner)
+        data = self.client.get(reverse("v1:wallets:brand-wallet", args=[self.brand.id])).data
+        self.assertEqual(Decimal(data["reward_available"]), Decimal("95.00"))  # 100 real − 5 reserved
+        self.assertEqual(Decimal(data["held"]), Decimal("5.00"))
+        self.assertEqual(Decimal(data["reserved_rebates"]), Decimal("5.00"))
+        self.assertEqual(Decimal(data["reserved_reviews"]), Decimal("0.00"))
+        self.assertEqual(Decimal(data["promotional"]), Decimal("20.00"))
+
     def test_non_member_blocked_from_wallet(self):
         self.client.force_authenticate(self.outsider)
         resp = self.client.get(

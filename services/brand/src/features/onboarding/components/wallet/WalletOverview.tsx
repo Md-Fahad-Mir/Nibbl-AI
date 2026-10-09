@@ -17,10 +17,13 @@ export default function WalletOverview({ onViewAll }: WalletOverviewProps) {
   const [fundAmount, setFundAmount] = useState("250");
   const [fundError, setFundError] = useState("");
   const [modalAmount, setModalAmount] = useState<string | null>(null);
-  const available = wallet?.available ?? wallet?.balance ?? 0;
+  // Master balances: Available Funds (real money free for new claims —
+  // promotional credit never funds rewards), Reserved Funds, Promotional Credits.
+  const available = wallet?.reward_available ?? wallet?.available ?? wallet?.balance ?? 0;
   const held = toNumber(wallet?.held);
-  const balance = toNumber(wallet?.balance);
-  const usagePercent = balance > 0 ? Math.min(100, Math.round((held / balance) * 100)) : 0;
+  const reservedRebates = toNumber(wallet?.reserved_rebates);
+  const reservedReviews = toNumber(wallet?.reserved_reviews);
+  const promotional = toNumber(wallet?.promotional);
 
   const handleFundWallet = () => {
     const amount = Number(fundAmount);
@@ -47,8 +50,9 @@ export default function WalletOverview({ onViewAll }: WalletOverviewProps) {
           <div className="absolute -right-10 -top-10 w-64 h-64 bg-white/10 rounded-full filter blur-xl"></div>
           
           <div className="flex flex-col gap-2 text-left z-10 relative">
-            <span className="text-sm font-semibold tracking-[0.7px] text-[#CACDFF] uppercase">Available Balance</span>
+            <span className="text-sm font-semibold tracking-[0.7px] text-[#CACDFF] uppercase">Available Funds</span>
             <h2 className="text-5xl md:text-6xl font-extrabold tracking-tighter text-white mt-1">{formatMoney(available)}</h2>
+            <span className="text-xs font-medium text-[#CACDFF]">Funds available for new rebate claims and review opportunities.</span>
           </div>
 
           <div className="flex flex-col items-end self-end text-right opacity-60 z-10 relative mt-4">
@@ -79,36 +83,34 @@ export default function WalletOverview({ onViewAll }: WalletOverviewProps) {
           {fundError && <p className="z-10 relative mt-3 text-xs font-bold text-red-100">{fundError}</p>}
         </div>
 
-        {/* Usage This Month Card */}
-        <div className="bg-white border border-[#C5C5D9]/10 shadow-[0px_1px_2px_rgba(0,0,0,0.05)] rounded-[32px] p-8 flex flex-col justify-between min-h-[268px]">
-          <div className="flex justify-between items-start gap-4">
-            <div className="flex flex-col text-left">
-              <span className="font-bold text-[#131B2E] text-lg">Usage This Month</span>
-              <span className="text-xs text-[#454656] font-medium mt-1">Current wallet position</span>
+        {/* Balance breakdown (Master: Balances) */}
+        <div className="bg-white border border-[#C5C5D9]/10 shadow-[0px_1px_2px_rgba(0,0,0,0.05)] rounded-[32px] p-8 flex flex-col gap-4 min-h-[268px]">
+          <span className="font-bold text-[#131B2E] text-lg">Balance Breakdown</span>
+          {[
+            {
+              label: "Available Funds",
+              value: available,
+              note: "For new rebate claims and review opportunities.",
+            },
+            {
+              label: "Reserved Funds",
+              value: held,
+              note: `Committed to existing claims — rebates ${formatMoney(reservedRebates)} · reviews ${formatMoney(reservedReviews)}.`,
+            },
+            {
+              label: "Promotional Credits",
+              value: promotional,
+              note: "Pays eligible transaction fees and plan charges. Never pays shopper rewards; not refundable.",
+            },
+          ].map((row) => (
+            <div key={row.label} className="bg-[#F2F3FF] p-4 rounded-2xl flex flex-col gap-1 text-left">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold text-[#454656]/80 uppercase">{row.label}</span>
+                <span className="text-lg font-bold text-[#131B2E]">{formatMoney(row.value)}</span>
+              </div>
+              <span className="text-[11px] text-[#454656]">{row.note}</span>
             </div>
-            <span className="text-xl font-bold text-[#001BD2]">{formatMoney(held)}</span>
-          </div>
-
-          <div className="flex flex-col gap-3 mt-4">
-            <div className="flex justify-between items-center text-xs font-semibold text-[#454656]">
-              <span>Spending Limit</span>
-              <span className="text-[#131B2E] font-bold">{formatMoney(balance)}</span>
-            </div>
-            <div className="w-full h-3 bg-[#E2E7FF] rounded-full overflow-hidden relative">
-              <div className="absolute top-0 bottom-0 left-0 bg-[#001BD2] rounded-full" style={{ width: `${usagePercent}%` }}></div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div className="bg-[#F2F3FF] p-4 rounded-2xl flex flex-col text-left gap-1">
-              <span className="text-[10px] font-bold text-[#454656]/80 uppercase">Held Funds</span>
-              <span className="text-lg font-bold text-[#131B2E]">{formatMoney(held)}</span>
-            </div>
-            <div className="bg-[#F2F3FF] p-4 rounded-2xl flex flex-col text-left gap-1">
-              <span className="text-[10px] font-bold text-[#454656]/80 uppercase">Currency</span>
-              <span className="text-lg font-bold text-[#131B2E]">{String(wallet?.currency ?? "USD")}</span>
-            </div>
-          </div>
+          ))}
         </div>
 
       </div>

@@ -10,7 +10,7 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 from stripe import SignatureVerificationError
 
 from Apps.billing import serializers as s
-from Apps.billing import services, stripe_gateway
+from Apps.billing import plans, services, stripe_gateway
 from Apps.billing.models import Plan
 from Apps.billing.serializers import PlanSerializer
 from Apps.billing.stripe_gateway import StripeNotConfigured
@@ -153,6 +153,55 @@ class RedeemPromoCodeView(APIView):
                 }
             ).data
         )
+
+
+@extend_schema(tags=["billing"])
+class BrandPlanView(APIView):
+    """Current plan, renewal, campaign usage, 30-day spend, billing history,
+    recommendation and any scheduled change (Master: Plans)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand)
+        try:
+            return Response(plans.plan_overview(brand))
+        except plans.PlanChangeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(tags=["billing"])
+class BrandPlanChangeView(APIView):
+    """POST schedules a change for the next renewal; DELETE cancels it."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=s.PlanChangeSerializer, responses={200: None})
+    def post(self, request, brand_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True, active=True)
+        payload = s.PlanChangeSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        try:
+            plans.schedule_change(
+                brand=brand, plan_slug=payload.validated_data["plan"],
+                keep_campaign_ids=payload.validated_data["keep_campaign_ids"], actor=request.user,
+            )
+        except plans.PlanChangeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(plans.plan_overview(brand))
+
+    @extend_schema(request=None, responses={200: None})
+    def delete(self, request, brand_id):
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True)
+        try:
+            plans.cancel_change(brand=brand, actor=request.user)
+        except plans.PlanChangeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(plans.plan_overview(brand))
 
 
 @extend_schema(tags=["billing"], request=None, responses={200: None})

@@ -56,12 +56,12 @@
 ## Brand Wallet
 - [x] ✅ **30. Balances (available, reserved, promotional)** — wallet page shows Available Funds (real money for new claims; promo excluded), Reserved Funds (split rebates / reviews) and Promotional Credits (pays fees + plan charges, never rewards), each with its Master definition; API adds `reserved_rebates` / `reserved_reviews`
 - [x] ✅ **31. Automatic refill (Stripe)** — 25% of 7-day estimate, recommended amount, in-app failure notification *(done this engagement)*
-- [ ] 🟡 **32. Statements & ledger export** — statement exists; **detailed ledger CSV export ✓** (brand wallet, `GET /brands/<id>/wallet/transactions/export/` + Export button on the ledger tab); recurring weekly statements still missing
+- [x] ✅ **32. Statements & ledger export** — Weekly Statements on the Wallet page: one row per week (rebate rewards, review rewards, fees, plan charges, credits applied, total cash spent = cost after promo credits; deposits/refunds excluded), each week downloadable as a CSV (summary + that week's ledger); detailed ledger CSV for a chosen date range incl. reward reservations and released reservations
 
 ## Plans
 - [x] ✅ **33. Plan definitions & data access** — Starter/Pro/Scale, fees, data-access tiers (enforced)
 - [x] ✅ **34. Active-campaign limit enforcement** — 1 / 3 / 10 enforced on activation (pausing frees a slot)
-- [ ] 🟡 **35. Plan changes** — admin change-plan ✓; self-serve / on-renewal / downgrade missing
+- [x] ✅ **35. Plan changes** — brand Plans page: current plan + price, next renewal, active campaigns used, 30-day Nibbl spend, billing history; recommendation (monthly spend + campaign capacity); plan options/comparison; self-serve change scheduled for the next renewal (current pricing/access until then), cancellable; downgrade over the limit makes the brand choose which campaigns stay active (others pause at renewal); renewal charged at the new price; admin change-plan stays immediate. Master pricing applied (Starter $39 / Pro $199 / Scale $999 every 30 days; review $5 / $4 / $3 incl. the $1 reward); renewals every 30 days from the subscription date
 
 ## Settings & Tag Generator
 - [ ] 🟡 **36. Settings** — roles (no Viewer), per-member notif prefs, Meta Pixel ID validation, session security
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (40):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #25, #26, #27, #28, #29, #30, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46, #50.
+**Done to spec (42):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #25, #26, #27, #28, #29, #30, #31, #32, #33, #34, #35, #37, #39, #41, #43, #44, #45, #46, #50.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

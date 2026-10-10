@@ -4,6 +4,8 @@ from rest_framework.routers import DefaultRouter
 from Apps.billing.api.views import (
     AddFundsView,
     AutoRefillView,
+    BrandPlanChangeView,
+    BrandPlanView,
     PlanViewSet,
     RedeemPromoCodeView,
     SavedCardsView,
@@ -41,6 +43,16 @@ urlpatterns = [
         "brands/<uuid:brand_id>/billing/redeem-promo/",
         RedeemPromoCodeView.as_view(),
         name="redeem-promo",
+    ),
+    path(
+        "brands/<uuid:brand_id>/billing/plan/",
+        BrandPlanView.as_view(),
+        name="brand-plan",
+    ),
+    path(
+        "brands/<uuid:brand_id>/billing/plan/change/",
+        BrandPlanChangeView.as_view(),
+        name="brand-plan-change",
     ),
     path(
         "billing/webhooks/stripe/",

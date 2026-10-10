@@ -1,8 +1,10 @@
 """Wallet HTTP layer: brand escrow wallet + customer wallet."""
 
+import datetime as dt
+
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -11,7 +13,7 @@ from Apps.brands.models import Brand
 from Apps.brands.selectors import get_active_membership
 from Apps.common.pagination import paginate, paginated_response_serializer
 from Apps.wallets import serializers as s
-from Apps.wallets import services
+from Apps.wallets import services, statements
 from Apps.wallets.selectors import customer_statement, ledger_for_wallet
 
 
@@ -66,46 +68,98 @@ class BrandWalletTransactionsView(generics.ListAPIView):
 
 @extend_schema(tags=["wallets"])
 class BrandWalletLedgerExportView(APIView):
-    """CSV export of the brand wallet's full ledger (detailed statement export)."""
+    """CSV export of the brand wallet's detailed ledger: every ledger entry
+    plus reward reservations and released reservations.
+    Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD (inclusive)."""
 
     permission_classes = [IsAuthenticated]
 
     @extend_schema(responses={200: None})
     def get(self, request, brand_id):
-        import csv
-        import io
-
-        from django.http import HttpResponse
-
         brand = _brand_or_404(brand_id)
         _require_membership(request.user, brand)
         wallet = services.get_or_create_brand_wallet(brand)
-        entries = ledger_for_wallet(wallet).order_by("created_at")
-
-        buffer = io.StringIO()
-        writer = csv.writer(buffer)
-        writer.writerow([
-            "date", "type", "category", "amount", "balance_after",
-            "promotional", "reference_type", "reference_id", "description",
-        ])
-        for entry in entries:
-            writer.writerow([
-                entry.created_at.isoformat(),
-                entry.entry_type,
-                entry.category,
-                str(entry.signed_amount),
-                str(entry.balance_after),
-                "yes" if entry.is_promotional else "no",
-                entry.reference_type,
-                entry.reference_id,
-                entry.description,
-            ])
-
-        response = HttpResponse(buffer.getvalue(), content_type="text/csv")
-        response["Content-Disposition"] = (
-            f'attachment; filename="{brand.slug}-wallet-ledger.csv"'
+        start = _parse_day(request.query_params.get("from"))
+        end = _parse_day(request.query_params.get("to"))
+        rows = statements.ledger_rows(
+            wallet,
+            start=statements.day_bounds(start)[0] if start else None,
+            end=statements.day_bounds(end)[0] + dt.timedelta(days=1) if end else None,
         )
-        return response
+        return _csv(
+            f"{brand.slug}-wallet-ledger.csv",
+            [statements.LEDGER_HEADER, *(statements.ledger_csv_row(r) for r in rows)],
+        )
+
+
+def _parse_day(value):
+    if not value:
+        return None
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError:
+        raise ValidationError({"detail": "Dates must be YYYY-MM-DD."})
+
+
+def _csv(filename, rows):
+    import csv
+    import io
+
+    from django.http import HttpResponse
+
+    buffer = io.StringIO()
+    csv.writer(buffer).writerows(rows)
+    response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@extend_schema(tags=["wallets"])
+class BrandWeeklyStatementsView(APIView):
+    """One summarized row per week, newest first (?weeks=, default 12, max 104)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id):
+        brand = _brand_or_404(brand_id)
+        _require_membership(request.user, brand)
+        wallet = services.get_or_create_brand_wallet(brand)
+        try:
+            weeks = min(max(int(request.query_params.get("weeks", 12)), 1), 104)
+        except ValueError:
+            weeks = 12
+        return Response(statements.weekly_statements(wallet, weeks))
+
+
+@extend_schema(tags=["wallets"])
+class BrandWeeklyStatementExportView(APIView):
+    """CSV for one week: the summary, then that week's detailed ledger."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id, week_start):
+        brand = _brand_or_404(brand_id)
+        _require_membership(request.user, brand)
+        wallet = services.get_or_create_brand_wallet(brand)
+        start = statements.week_start(_parse_day(week_start))
+        summary = statements.week_summary(wallet, start)
+        begin, end = statements.day_bounds(start)
+        rows = [
+            ["Weekly statement", brand.name],
+            ["Week", f"{summary['week_start']} to {summary['week_end']}"],
+            ["Rebate rewards", summary["rebate_rewards"]],
+            ["Review rewards", summary["review_rewards"]],
+            ["Fees", summary["fees"]],
+            ["Plan charges", summary["plan_charges"]],
+            ["Credits applied", summary["credits_applied"]],
+            ["Total cash spent", summary["total_cash_spent"]],
+            [],
+            statements.LEDGER_HEADER,
+            *(statements.ledger_csv_row(r) for r in statements.ledger_rows(wallet, start=begin, end=end)),
+        ]
+        return _csv(f"{brand.slug}-statement-{start}.csv", rows)
 
 
 # ---------------------------------------------------------------------------

@@ -555,6 +555,26 @@ export const backendApi = {
       path: `/brands/${brandId}/review-campaigns/${campaignId}/prompts/${promptId}/`,
       auth: true,
     }),
+    brandPlan: (brandId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/billing/plan/`,
+      auth: true,
+    }),
+    schedulePlanChange: (brandId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/billing/plan/change/`,
+      auth: true,
+    }),
+    cancelPlanChange: (brandId: string): ApiEndpoint => ({
+      method: "DELETE",
+      path: `/brands/${brandId}/billing/plan/change/`,
+      auth: true,
+    }),
+    weeklyStatements: (brandId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/wallet/statements/`,
+      auth: true,
+    }),
     brandReviews: (brandId: string): ApiEndpoint => ({
       method: "GET",
       path: `/brands/${brandId}/reviews/`,

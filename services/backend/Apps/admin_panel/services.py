@@ -93,7 +93,14 @@ def change_plan(*, brand, plan_slug, admin):
     subscription = getattr(brand, "subscription", None)
     if subscription is not None:
         subscription.plan = plan
-        subscription.save(update_fields=["plan", "updated_at"])
+        # An admin change is immediate and replaces any self-serve change
+        # the brand had scheduled for renewal.
+        subscription.scheduled_plan = None
+        subscription.scheduled_at = None
+        subscription.scheduled_keep_campaign_ids = []
+        subscription.save(update_fields=[
+            "plan", "scheduled_plan", "scheduled_at", "scheduled_keep_campaign_ids", "updated_at",
+        ])
     _audit(
         admin=admin, action=AuditLog.Action.UPDATE,
         target_type="brand", target_id=brand.id,

@@ -19,6 +19,7 @@ class PlanSerializer(serializers.ModelSerializer):
             "data_access_level",
             "customer_data_module",
             "sort_order",
+            "max_active_campaigns",
         ]
         read_only_fields = fields
 
@@ -117,3 +118,8 @@ class PromoRedemptionResultSerializer(serializers.Serializer):
     code = serializers.CharField()
     amount = serializers.DecimalField(max_digits=12, decimal_places=2)
     promotional_balance = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class PlanChangeSerializer(serializers.Serializer):
+    plan = serializers.CharField()
+    keep_campaign_ids = serializers.ListField(child=serializers.UUIDField(), required=False, default=list)

@@ -22,6 +22,7 @@ const menuItems = [
   { name: "Analytics", icon: "/sidebarIcon/Analytics.svg" },
   { name: "Customers", icon: "/sidebarIcon/customers.svg" },
   { name: "Wallet", icon: "/sidebarIcon/wallets.svg" },
+  { name: "Plans", icon: "/sidebarIcon/Rebate.svg" },
   { name: "Settings", icon: "/sidebarIcon/settings.svg" },
   { name: "Tag Generator", icon: "/sidebarIcon/tagGenerator.svg" },
 ];

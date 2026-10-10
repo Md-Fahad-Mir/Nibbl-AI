@@ -359,8 +359,8 @@ Earn $1 by reviewing products from a verified purchase (Master: review campaigns
 - `POST /reviews/sessions/{id}/regenerate/` → `{ "title": "…", "review": "…" }` (a new draft from the same answers).
 
 ### Submit (final approval)
-- `POST /reviews/sessions/{id}/submit/` `{ "rating": 1-5, "title": "…", "content": "…", "would_recommend": true, "confirm_accurate": true }` → `201` Review.
-- `content` / `title` = the shopper's edited text (omit to use the draft). `confirm_accurate` must be true ("This review accurately reflects my experience").
+- `POST /reviews/sessions/{id}/submit/` `{ "rating": 1-5, "title": "…", "content": "…", "would_recommend": true }` → `201` Review.
+- `content` / `title` = the shopper's edited text (omit to use the draft). Show a "This review accurately reflects my experience" checkbox in the app and enable Submit only when it's ticked (app-side only; not sent to the API).
 - **Errors `400`:** expired, not open, empty review (in `detail`).
 
 ### My Reviews (status)

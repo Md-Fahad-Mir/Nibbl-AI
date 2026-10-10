@@ -3,32 +3,27 @@
 import { useState } from "react";
 import { ArrowUpRight, ArrowDownLeft, Calendar, Download } from "lucide-react";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
-import { API_BASE_URL, tokenStorage } from "@/lib/api/backendApi";
+import { downloadCsv } from "./WeeklyStatements";
 import { formatDate, formatMoney, formatTime, titleCase, toNumber } from "../../utils/backendMappers";
 
 export default function WalletDetails() {
   const selectedBrandId = useBrandApiStore((state) => state.selectedBrandId);
   const [exporting, setExporting] = useState(false);
 
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
+
   const handleExportLedger = async () => {
     if (!selectedBrandId || exporting) return;
     setExporting(true);
+    const query = new URLSearchParams(
+      Object.entries({ from: exportFrom, to: exportTo }).filter(([, value]) => value)
+    ).toString();
     try {
-      const token = tokenStorage.getAccess();
-      const response = await fetch(
-        `${API_BASE_URL}/brands/${selectedBrandId}/wallet/transactions/export/`,
-        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      await downloadCsv(
+        `/brands/${selectedBrandId}/wallet/transactions/export/${query ? `?${query}` : ""}`,
+        "wallet-ledger.csv"
       );
-      if (!response.ok) throw new Error("Export failed.");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "wallet-ledger.csv";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
     } catch {
       // Non-fatal: the ledger stays on screen if the export can't be fetched.
     } finally {
@@ -92,9 +87,14 @@ export default function WalletDetails() {
           <option>Status</option>
           <option>Succeeded</option>
         </select>
-        <div className="bg-white px-4 py-2 rounded-full flex items-center gap-2 shadow-sm text-xs font-bold text-[#131B2E]">
+        <div className="bg-white px-4 py-1.5 rounded-full flex items-center gap-2 shadow-sm text-xs font-bold text-[#131B2E]">
           <Calendar className="w-3.5 h-3.5 text-[#001BD2]" />
-          <span>All Time</span>
+          <span>Export</span>
+          <input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)}
+            aria-label="Export from" className="bg-transparent outline-none text-xs" />
+          <span>–</span>
+          <input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)}
+            aria-label="Export to" className="bg-transparent outline-none text-xs" />
         </div>
         <button
           type="button"

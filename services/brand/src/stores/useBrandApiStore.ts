@@ -223,6 +223,16 @@ export interface ReviewSelection {
   save_alias?: boolean;
 }
 
+export interface ReviewCampaignInput {
+  name: string;
+  product_ids: string[];
+  start_at: string | null;
+  end_at: string | null;
+  daily_opportunities: number;
+  product_cooldown_days: number;
+  one_time_only: boolean;
+}
+
 export interface DealCampaignInput {
   name: string;
   start_at: string | null;
@@ -319,14 +329,16 @@ interface BrandApiState {
   loadRetailers: () => Promise<RetailerOption[]>;
   /** Add a retailer missing from the directory (returns the existing one on a name match). */
   addRetailer: (name: string) => Promise<RetailerOption>;
-  createReviewCampaign: (body: {
-    name: string;
-    description?: string;
-    productIds: string[];
-    dailyBudget: string | number;
-    rewardAmount?: string | number;
-    isActive?: boolean;
-  }) => Promise<void>;
+  /** Create (id null) or update a review campaign; returns it. */
+  saveReviewCampaign: (campaignId: string | null, body: ReviewCampaignInput) => Promise<ApiRecord>;
+  reviewCampaignAction: (campaignId: string, action: "activate" | "pause" | "archive") => Promise<void>;
+  addReviewPrompt: (campaignId: string, text: string) => Promise<void>;
+  deleteReviewPrompt: (campaignId: string, promptId: string) => Promise<void>;
+  suggestReviewPrompts: (campaignId: string, count?: number) => Promise<string[]>;
+  refreshReviewCampaigns: () => Promise<void>;
+  /** Review Management: summary + reviews (filters: status, rating, product, from, to). */
+  loadBrandReviews: (filters?: Record<string, string>) => Promise<ApiRecord>;
+  brandReviewAction: (reviewId: string, action: "respond" | "flag", body: ApiRecord) => Promise<ApiRecord>;
   /** Approve with Nibbl's calculated reward; `selection` = chosen receipt
    *  lines (+ corrections), confirmed product, optional alias. */
   approveReviewQueueItem: (itemId: string, selection?: ReviewSelection) => Promise<void>;
@@ -761,42 +773,66 @@ export const useBrandApiStore = create<BrandApiState>()(
           analyticsCampaigns: listResults(analyticsCampaigns),
         });
       },
-      createReviewCampaign: async ({
-        name,
-        description = "",
-        productIds,
-        dailyBudget,
-        rewardAmount,
-        isActive = true,
-      }) => {
+      saveReviewCampaign: async (campaignId, body) => {
         const brandId = get().selectedBrandId;
-        if (!brandId) throw new Error("Select a brand before creating review campaigns.");
-        const campaign = await apiClient.request<ApiRecord>(
-          backendApi.brand.createReviewCampaign(brandId),
-          {
-            body: {
-              name,
-              daily_budget: String(dailyBudget),
-              reward_amount: rewardAmount ? String(rewardAmount) : undefined,
-              product_context: description,
-              product_ids: productIds,
-            },
-          }
+        if (!brandId) throw new Error("Select a brand first.");
+        const saved = await apiClient.request<ApiRecord>(
+          campaignId
+            ? backendApi.brand.updateReviewCampaign(brandId, campaignId)
+            : backendApi.brand.createReviewCampaign(brandId),
+          { body: body as unknown as ApiRecord }
         );
-        const campaignId = String(campaign.id);
-        await apiClient.request(
+        await get().refreshReviewCampaigns();
+        return saved;
+      },
+      reviewCampaignAction: async (campaignId, action) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        const endpoint =
+          action === "activate"
+            ? backendApi.brand.activateReviewCampaign(brandId, campaignId)
+            : action === "pause"
+              ? backendApi.brand.pauseReviewCampaign(brandId, campaignId)
+              : backendApi.brand.deleteReviewCampaign(brandId, campaignId);
+        await apiClient.request(endpoint);
+        await get().refreshReviewCampaigns();
+      },
+      addReviewPrompt: async (campaignId, text) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        await apiClient.request(backendApi.brand.addReviewCampaignPrompt(brandId, campaignId), { body: { text } });
+        await get().refreshReviewCampaigns();
+      },
+      deleteReviewPrompt: async (campaignId, promptId) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        await apiClient.request(backendApi.brand.deleteReviewCampaignPrompt(brandId, campaignId, promptId));
+        await get().refreshReviewCampaigns();
+      },
+      suggestReviewPrompts: async (campaignId, count = 4) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        const result = await apiClient.request<ApiRecord>(
           backendApi.brand.generateReviewCampaignPrompts(brandId, campaignId),
-          { body: { count: 4 } }
+          { body: { count } }
         );
-        if (isActive) {
-          await apiClient.request(
-            backendApi.brand.activateReviewCampaign(brandId, campaignId)
-          );
-        }
-        const reviewCampaigns = await apiClient.request<unknown>(
-          backendApi.brand.reviewCampaigns(brandId)
-        );
+        return Array.isArray(result.suggestions) ? result.suggestions.map(String) : [];
+      },
+      refreshReviewCampaigns: async () => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) return;
+        const reviewCampaigns = await apiClient.request<unknown>(backendApi.brand.reviewCampaigns(brandId));
         set({ reviewCampaigns: listResults(reviewCampaigns) });
+      },
+      loadBrandReviews: async (filters = {}) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) return { summary: {}, reviews: [] };
+        return apiClient.request<ApiRecord>(backendApi.brand.brandReviews(brandId), { query: filters });
+      },
+      brandReviewAction: async (reviewId, action, body) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        return apiClient.request<ApiRecord>(backendApi.brand.brandReviewAction(brandId, reviewId, action), { body });
       },
       approveReviewQueueItem: async (itemId, selection) => {
         const brandId = get().selectedBrandId;

@@ -160,6 +160,16 @@ export const backendApi = {
       path: `/reviews/sessions/${sessionId}/submit/`,
       auth: true,
     }),
+    regenerateReview: (sessionId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/reviews/sessions/${sessionId}/regenerate/`,
+      auth: true,
+    }),
+    markReviewHelpful: (reviewId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/reviews/${reviewId}/helpful/`,
+      auth: true,
+    }),
     myReviews: { method: "GET", path: "/reviews/", auth: true },
     productReviews: (productId: string): ApiEndpoint => ({
       method: "GET",
@@ -871,17 +881,26 @@ export const nibblApi = {
   },
   reviewOpportunities: () =>
     requestEndpoint<ApiRecord[]>(backendApi.consumer.reviewOpportunities),
-  submitReview: (sessionId: string, body: { rating: number; content?: string }) =>
-    requestEndpoint<ApiRecord>(backendApi.consumer.submitReview(sessionId), body),
-  createReview: (body: {
-    product: string;
-    answers: { question: string; answer: string }[];
-    rating?: number;
-  }) =>
-    apiClient.request<ApiRecord>(backendApi.consumer.myReviews, {
-      method: "POST",
-      body,
-    }),
+  reviewSession: (sessionId: string) =>
+    requestEndpoint<ApiRecord>(backendApi.consumer.reviewSession(sessionId)),
+  answerReview: (sessionId: string, text: string) =>
+    requestEndpoint<ApiRecord>(backendApi.consumer.answerReview(sessionId), { text }),
+  regenerateReview: (sessionId: string) =>
+    requestEndpoint<ApiRecord>(backendApi.consumer.regenerateReview(sessionId)),
+  submitReview: (
+    sessionId: string,
+    body: { rating: number; title?: string; content?: string; would_recommend?: boolean | null }
+  ) => requestEndpoint<ApiRecord>(backendApi.consumer.submitReview(sessionId), body),
+  productReviews: (productId: string, sort = "newest") =>
+    requestEndpoint<PaginatedResponse<ApiRecord>>(
+      backendApi.consumer.productReviews(productId),
+      undefined,
+      { sort }
+    ),
+  productReviewSummary: (productId: string) =>
+    requestEndpoint<ApiRecord>(backendApi.consumer.productReviewSummary(productId)),
+  markReviewHelpful: (reviewId: string) =>
+    requestEndpoint<ApiRecord>(backendApi.consumer.markReviewHelpful(reviewId)),
   myReviews: () =>
     requestEndpoint<ApiRecord[] | PaginatedResponse<ApiRecord>>(
       backendApi.consumer.myReviews

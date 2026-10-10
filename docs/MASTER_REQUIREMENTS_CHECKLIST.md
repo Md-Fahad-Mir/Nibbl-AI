@@ -41,11 +41,11 @@
 - [x] ✅ **22. Seven-day automatic approval** — at max reward, labelled "Automatically Approved — Review Deadline Passed", no alias; countdown + warning in the brand queue; claims under review no longer expire
 
 ## Review Campaigns & Product Reviews
-- [ ] ⬜ **23. Dedicated review campaign**
-- [ ] ⬜ **24. AI chat review flow** — 5 adaptive Qs + rotating brand Q *(AI = Sakibur; backend scaffolding ours)*
-- [ ] ⬜ **25. Review rules engine** — $1 / 30-day / 90-day cooldown / max 5 per receipt
-- [ ] ⬜ **26. Review moderation** — 4–5★ auto-publish / 1–3★ held 7 days
-- [ ] 🟡 **27. Product reviews display & ratings** — numeric avg + count only; star distribution / AI summary / brand responses missing
+- [x] ✅ **23. Dedicated review campaign** — separate from rebates: name, dates, eligible products, daily review opportunities, product cooldown (0/30/60/90 days or one time), brand question pool with "Suggest questions"; locked rules ($1, 30 days, cost = $1 + plan review fee); draft → activate / pause / archive. Brand dashboard builder + campaign page. *Campaign image upload not built (field exists)*
+- [x] ✅ **24. AI chat review flow** — conversation from the verified receipt: 4 AI product questions + rotated brand question + "buy again / recommend"; AI-written draft the shopper edits, regenerates, rates and confirms; first name + last initial shown. Website chat built. *Adaptive follow-up questions wait on Sakibur's endpoint (docs/AI_REVIEW_ENDPOINTS_SPEC.md); fixed questions until then*
+- [x] ✅ **25. Review rules engine** — $1 paid on submit for every rating; opportunity only from an already-verified rebate receipt, max 5 per receipt, quantity never duplicates; 30-day expiry releases the reserve; product cooldown; daily cap; $1 + fee reserved per opportunity
+- [x] ✅ **26. Review moderation** — 4–5★ publish immediately; 1–3★ held 7 days for a public brand response or a flag (reason required); flagged reviews wait in the admin "Flagged Reviews" queue (remove / keep); Review Management with filters, Q&A, receipt, customer email and CSV export (disclosure on every row)
+- [x] ✅ **27. Product reviews display & ratings** — published-only ratings; star distribution, recommendation rate, sort (newest / highest / lowest / helpful), helpful votes, verified-purchase + reward disclosure, brand responses; shown on the website offer page. *AI summary waits on Sakibur's endpoint (null until then)*
 
 ## Brand Analytics
 - [x] ✅ **28. Analytics to the specified definitions** — Cost & Results from actual wallet debits (rewards + fees, no subscriptions); Customer & Conversion (rebate views → claims, new vs returning); Campaign Performance from completed 25-hour cycles: Exhausted Early (<12 h, raise limit 25%) / On Pace / Behind / Building Data (<7 cycles)
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (35):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #28, #29, #30, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46, #50.
+**Done to spec (40):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #25, #26, #27, #28, #29, #30, #31, #33, #34, #37, #39, #41, #43, #44, #45, #46, #50.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

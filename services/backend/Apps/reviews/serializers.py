@@ -239,6 +239,7 @@ class BrandReviewSerializer(serializers.ModelSerializer):
     shopper_name = serializers.CharField(source="user.full_name", read_only=True)
     customer_email = serializers.EmailField(source="user.email", read_only=True)
     campaign_name = serializers.CharField(source="review_campaign.name", read_only=True, default=None)
+    brand_name = serializers.CharField(source="brand.name", read_only=True)
     verified_purchase = serializers.SerializerMethodField()
     reward = serializers.SerializerMethodField()
     receipt = serializers.SerializerMethodField()
@@ -246,7 +247,7 @@ class BrandReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
         fields = [
-            "id", "product", "product_name", "campaign_name", "shopper_name", "customer_email",
+            "id", "product", "product_name", "campaign_name", "brand_name", "shopper_name", "customer_email",
             "verified_purchase", "rating", "title", "content", "status", "published_at", "held_until",
             "would_recommend", "questions_and_answers", "brand_response", "brand_response_at",
             "flag_reason", "flag_note", "flagged_at", "disclosure", "reward", "receipt", "created_at",

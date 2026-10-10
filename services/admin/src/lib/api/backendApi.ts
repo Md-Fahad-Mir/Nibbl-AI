@@ -558,10 +558,10 @@ export const backendApi = {
       path: "/admin/transactions/",
       auth: true,
     },
-    heldReviews: { method: "GET", path: "/admin/reviews/held/", auth: true },
-    removeReview: (reviewId: string): ApiEndpoint => ({
+    flaggedReviews: { method: "GET", path: "/admin/reviews/flagged/", auth: true },
+    flaggedReviewDecision: (reviewId: string, action: "remove" | "keep"): ApiEndpoint => ({
       method: "POST",
-      path: `/admin/reviews/${reviewId}/remove/`,
+      path: `/admin/reviews/${reviewId}/${action}/`,
       auth: true,
     }),
     auditLogs: { method: "GET", path: "/admin/audit-logs/", auth: true },
@@ -853,6 +853,10 @@ export const nibblApi = {
     requestEndpoint<ApiRecord>(backendApi.admin.campaignApprovalDecision(reviewId, action), {
       comment,
     }),
+  adminFlaggedReviews: () =>
+    requestEndpoint<ApiRecord[]>(backendApi.admin.flaggedReviews),
+  decideFlaggedReview: (reviewId: string, action: "remove" | "keep", note: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.flaggedReviewDecision(reviewId, action), { note }),
   adminPromoCodes: () =>
     requestEndpoint<ApiRecord[]>(backendApi.admin.promoCodes),
   createAdminPromoCode: (body: ApiRecord) =>

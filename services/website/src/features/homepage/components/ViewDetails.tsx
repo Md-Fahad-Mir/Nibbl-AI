@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import UserAvatar from "@/components/UserAvatar";
 import Header from "./Header";
 import Footer from "./Footer";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
-import { displayOffer, displayReviews } from "../lib/offerMappers";
+import { displayOffer } from "../lib/offerMappers";
+import ProductReviews from "./ProductReviews";
 
 interface ViewDetailsProps {
   campaignId?: string;
@@ -34,7 +34,6 @@ export default function ViewDetails({ campaignId, onBack, onTabChange }: ViewDet
   const fallbackOffer = offers.find((offer) => String(offer.campaign_id ?? offer.id) === campaignId);
   const offer = selectedOffer || fallbackOffer;
   const details = offer ? displayOffer(offer) : null;
-  const reviews = displayReviews(offer);
   // Steps come from the backend, worded for this offer's receipt rule.
   const howItWorks = Array.isArray(offer?.how_it_works)
     ? offer.how_it_works.map((step) => String((step as { text?: unknown }).text ?? "")).filter(Boolean)
@@ -138,50 +137,13 @@ export default function ViewDetails({ campaignId, onBack, onTabChange }: ViewDet
               Top Reviews
             </h3>
 
-            <div className="w-full flex flex-col gap-6">
-              {reviews.length ? reviews.map((review) => (
-                <div key={review.id} className="w-full flex flex-col gap-2 relative">
-                  <div className="w-full flex justify-between items-start">
-                    <div className="flex gap-3 items-center">
-                      <UserAvatar
-                        src={review.avatar}
-                        alt={review.author}
-                        className="h-10 w-10 border border-gray-200"
-                        iconClassName="h-5 w-5"
-                      />
-                      <div className="flex flex-col">
-                        <span className="text-[16px] font-medium leading-[24px] text-[#1F1D1D]">
-                          {review.author}
-                        </span>
-                        <div className="flex gap-[5px] items-center">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <svg
-                              key={i}
-                              className={`w-[16px] h-[16px] fill-current ${i < Math.round(review.rating) ? "text-[#FFB701]" : "text-[#C0C0C0]"}`}
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                            </svg>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <span className="text-[14px] font-normal leading-[17px] text-[#4D4D4D] flex-shrink-0">
-                      {review.date}
-                    </span>
-                  </div>
-
-                  <p className="text-[16px] font-normal leading-[19px] text-[#4D4D4D] pl-1.5 mt-1.5">
-                    {review.body}
-                  </p>
-                </div>
-              )) : (
-                <div className="w-full rounded-lg border border-gray-100 bg-white p-4 text-sm text-[#575757]">
-                  No reviews returned by the backend for this offer.
-                </div>
-              )}
-            </div>
+            {accessToken && offer?.product_id ? (
+              <ProductReviews productId={String(offer.product_id)} />
+            ) : (
+              <div className="w-full rounded-lg border border-gray-100 bg-white p-4 text-sm text-[#575757]">
+                Sign in to see verified reviews for this product.
+              </div>
+            )}
 
             <div className="w-[502px] max-w-full h-[45px] bg-[#FEFEFE] border border-[#E0E0E0] rounded-[4px] flex items-center px-[6px] py-[11px] gap-2.5 mt-2">
               <input

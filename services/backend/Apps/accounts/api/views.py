@@ -45,6 +45,8 @@ class RegisterView(APIView):
             password=data["password"],
             role=data["role"],
             referral_code=data.get("referral_code") or None,
+            verify_via=data.get("verify_via", "code"),
+            brand_application=data.get("brand_application") or {},
         )
         return Response(
             {
@@ -129,7 +131,10 @@ class ResendEmailVerificationView(APIView):
     def post(self, request):
         serializer = s.ResendEmailVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        services.resend_email_verification(email=serializer.validated_data["email"])
+        services.resend_email_verification(
+            email=serializer.validated_data["email"],
+            verify_via=serializer.validated_data["verify_via"],
+        )
         # Always 202 to avoid leaking which emails exist.
         return Response(status=status.HTTP_202_ACCEPTED)
 

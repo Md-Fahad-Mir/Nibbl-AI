@@ -207,7 +207,13 @@ def create_wallet_topup_intent(*, brand, amount) -> dict:
 def handle_stripe_event(event) -> str:
     """Route a verified Stripe webhook event. Returns a short outcome string."""
     if event["type"] == "payment_intent.succeeded":
-        return _credit_wallet_from_payment(event["data"]["object"])
+        intent = event["data"]["object"]
+        metadata = (intent.to_dict() if hasattr(intent, "to_dict") else intent).get("metadata") or {}
+        if metadata.get("purpose") == "brand_activation":
+            from Apps.brands.checkout import activate_from_intent
+
+            return activate_from_intent(intent)
+        return _credit_wallet_from_payment(intent)
     return "ignored"
 
 

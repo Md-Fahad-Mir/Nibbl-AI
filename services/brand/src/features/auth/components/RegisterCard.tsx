@@ -1,14 +1,15 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import StrengthBar, { getPasswordStrength } from "./StrengthBar";
 import CategoryGrid, { categories } from "./CategoryGrid";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
+import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 
 const officeLocations = [
   "North America (Global HQ)",
@@ -19,7 +20,10 @@ const officeLocations = [
 
 export default function RegisterCard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { registerAndApply, error, status } = useBrandApiStore();
+  const [plans, setPlans] = useState<ApiRecord[]>([]);
+  const [plan, setPlan] = useState(searchParams.get("plan") || "pro");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [brandName, setBrandName] = useState("");
@@ -34,6 +38,17 @@ export default function RegisterCard() {
   const passwordStrength = getPasswordStrength(password);
   const selectedCategory = categories.find((category) => category.id === categoryId);
   const isPasswordStrongEnough = passwordStrength.score >= 3;
+
+  useEffect(() => {
+    let live = true;
+    apiClient
+      .request<ApiRecord[] | { results: ApiRecord[] }>(backendApi.billing.plans)
+      .then((list) => live && setPlans(Array.isArray(list) ? list : list.results))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -56,6 +71,7 @@ export default function RegisterCard() {
         phone,
         officeLocation,
         category: selectedCategory?.name || categoryId,
+        plan,
       });
       router.push(`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`);
     } catch {
@@ -205,6 +221,34 @@ export default function RegisterCard() {
 
           {/* Business Category Grid */}
           <CategoryGrid selected={categoryId} onSelect={setCategoryId} />
+
+          {/* Plan selection (Master: Plan & Account Setup) */}
+          {plans.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-[#454656]">Choose your plan</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {plans.map((option) => {
+                  const slug = String(option.slug);
+                  return (
+                    <button key={slug} type="button" onClick={() => setPlan(slug)}
+                      className={`text-left rounded-2xl border p-3 font-manrope transition-all cursor-pointer ${
+                        plan === slug ? "border-[#001BD2] bg-[#F2F3FF]" : "border-slate-200 bg-white"
+                      }`}>
+                      <div className="text-sm font-extrabold text-[#131B2E]">{String(option.name)}</div>
+                      <div className="text-xs text-[#454656]">${Number(option.monthly_price)} every 30 days</div>
+                      <div className="text-[11px] text-[#757688] mt-1">
+                        {String(option.max_active_campaigns)} active rebate campaign{Number(option.max_active_campaigns) === 1 ? "" : "s"} ·{" "}
+                        {Number(option.rebate_fee_percent)}% rebate fee
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-[#757688] font-manrope">
+                You&apos;ll pay for your plan at checkout after verifying your email. Promo codes can be applied there.
+              </p>
+            </div>
+          )}
 
           {/* Acceptance Checkbox */}
           <div className="flex items-center gap-3 py-1 font-manrope">

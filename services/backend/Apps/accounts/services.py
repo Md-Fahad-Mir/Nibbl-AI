@@ -8,6 +8,9 @@ so they can be unit-tested and reused independent of HTTP.
 from __future__ import annotations
 
 import datetime as dt
+import hmac
+import secrets
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth import authenticate
@@ -31,6 +34,8 @@ from Apps.accounts.selectors import (
 from Apps.common.models import AuditLog
 
 CODE_TTL = dt.timedelta(minutes=15)
+LINK_TTL = dt.timedelta(hours=24)
+VERIFY_VIA_LINK = "link"
 
 _PURPOSE_LABEL = {
     VerificationCode.Purpose.EMAIL_VERIFY: "email verification",
@@ -100,6 +105,8 @@ def register_user(
     password: str,
     role: str = User.Role.CONSUMER,
     referral_code: str | None = None,
+    verify_via: str = "code",
+    brand_application: dict | None = None,
 ) -> PendingUser:
     # Self-registration can never grant platform-admin access.
     if role == User.Role.ADMIN:
@@ -120,15 +127,27 @@ def register_user(
         referral_code=referral_code,
         verification_code=code,
         expires_at=expires_at,
+        brand_application=brand_application or {},
     )
 
+    _send_verification(pending, verify_via)
+    return pending
+
+
+def _send_verification(pending: PendingUser, verify_via: str) -> None:
+    """Email the 6-digit code, or (brand signup) a secure one-time link."""
+    if verify_via == VERIFY_VIA_LINK:
+        pending.verification_token = secrets.token_urlsafe(32)
+        pending.expires_at = timezone.now() + LINK_TTL
+        pending.save(update_fields=["verification_token", "expires_at", "updated_at"])
+        query = urlencode({"email": pending.email, "token": pending.verification_token})
+        emails.send_email_link(to_email=pending.email, url=f"{settings.BRAND_APP_URL}/verify-email?{query}")
+        return
     emails.send_email_code(
         to_email=pending.email,
         code=pending.verification_code,
         purpose_label="email verification",
     )
-
-    return pending
 
 
 # ---------------------------------------------------------------------------
@@ -143,22 +162,18 @@ def start_email_verification(user: User) -> None:
     )
 
 
-def resend_email_verification(*, email: str) -> None:
+def resend_email_verification(*, email: str, verify_via: str = "code") -> None:
     pending = PendingUser.objects.filter(email__iexact=email).first()
     if pending:
         pending.verification_code = generate_numeric_code()
+        pending.verification_token = ""
         pending.expires_at = timezone.now() + CODE_TTL
-        pending.save(update_fields=["verification_code", "expires_at", "updated_at"])
-
-        emails.send_email_code(
-            to_email=pending.email,
-            code=pending.verification_code,
-            purpose_label="email verification",
-        )
+        pending.save(update_fields=["verification_code", "verification_token", "expires_at", "updated_at"])
+        _send_verification(pending, verify_via)
 
 
 @transaction.atomic
-def verify_email(*, email: str, code: str) -> User:
+def verify_email(*, email: str, code: str = "", token: str = "") -> User:
     pending = PendingUser.objects.filter(email__iexact=email).first()
     if pending is None:
         user = get_active_user_by_email(email)
@@ -166,7 +181,15 @@ def verify_email(*, email: str, code: str) -> User:
             return user
         raise AccountError("Invalid or expired code.")
 
-    if pending.verification_code != code or pending.is_expired:
+    if token:
+        # Secure link: constant-time compare, single use (the PendingUser is
+        # removed once verified).
+        valid = bool(pending.verification_token) and hmac.compare_digest(pending.verification_token, token)
+        if not valid or pending.is_expired:
+            raise AccountError("This verification link is invalid or has expired. Request a new one.")
+    elif pending.verification_token:
+        raise AccountError("Open the verification link we emailed you.")
+    elif pending.verification_code != code or pending.is_expired:
         raise AccountError("Invalid or expired code.")
 
     referred_by = None
@@ -187,6 +210,8 @@ def verify_email(*, email: str, code: str) -> User:
         accepted_terms_at=timezone.now(),
     )
     user.save()
+    if pending.brand_application:
+        _file_brand_application(user, pending.brand_application)
 
     pending.delete()
 
@@ -201,6 +226,17 @@ def verify_email(*, email: str, code: str) -> User:
 
     email_verified.send(sender=User, user=user)
     return user
+
+
+def _file_brand_application(user: User, data: dict) -> None:
+    from Apps.billing.models import Plan
+    from Apps.brands import services as brand_services
+
+    plan = Plan.objects.filter(slug=data.get("requested_plan") or "", is_active=True).first()
+    brand_services.submit_application(
+        applicant=user, brand_name=data["brand_name"], contact_email=data["contact_email"],
+        website=data.get("website", ""), message=data.get("message", ""), requested_plan=plan,
+    )
 
 
 # ---------------------------------------------------------------------------

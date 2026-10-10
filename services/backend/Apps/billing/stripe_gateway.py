@@ -52,6 +52,19 @@ def create_payment_intent(*, brand, amount_cents: int, purpose: str):
     )
 
 
+def create_checkout_intent(*, application, amount_cents: int, purpose: str):
+    """PaymentIntent for a brand's activation checkout. The brand (and its
+    Stripe customer) doesn't exist until payment succeeds, so it's tagged with
+    the application instead."""
+    return _client().PaymentIntent.create(
+        amount=amount_cents,
+        currency="usd",
+        receipt_email=application.contact_email,
+        metadata={"application_id": str(application.id), "purpose": purpose},
+        automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
+    )
+
+
 def create_setup_intent(*, brand):
     """Create a SetupIntent so the brand can save a card for future charges."""
     customer_id = ensure_customer(brand)

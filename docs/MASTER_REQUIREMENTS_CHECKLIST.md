@@ -68,7 +68,7 @@
 - [x] ✅ **37. Tag Generator** — "Coming Soon" static page in brand dashboard (per spec; no backend)
 
 ## Brand Onboarding
-- [ ] 🟡 **38. Guided onboarding** — application + approval ✓; guided plan→checkout→wallet-funding missing
+- [x] ✅ **38. Guided onboarding** — self-serve (no admin approval): register with plan choice + company info → verify work email → checkout (plan, promo code, card payment of the first 30 days) activates the brand immediately via the Stripe webhook ($0 due activates without a card) → dashboard "Get ready to launch": first growth goal (new customers / verified reviews), add products, create campaign, fund wallet, go live. Admin approval stays as a manual override. *Email verification is a code, not a link; Stripe webhook must be configured for card checkout*
 
 ## Shopper Wallet, Withdrawals & Referrals
 - [x] ✅ **39. Wallet & withdrawals** — wallet + withdrawals ✓; **SMS-verified withdrawals live on prod** (Twilio Verify): phone add/verify (Profile + inline at withdrawal, any country, 48h pause on phone change, admin phone reset)
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (42):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #25, #26, #27, #28, #29, #30, #31, #32, #33, #34, #35, #37, #39, #41, #43, #44, #45, #46, #50.
+**Done to spec (43):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #25, #26, #27, #28, #29, #30, #31, #32, #33, #34, #35, #37, #38, #39, #41, #43, #44, #45, #46, #50.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

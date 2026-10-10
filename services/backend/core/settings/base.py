@@ -111,6 +111,12 @@ REPEATED_SUSPENSION_ALERT = env.int("REPEATED_SUSPENSION_ALERT", default=3)
 
 # Reviews module: flat reward per AI-generated review (Apps.reviews).
 REVIEW_REWARD_AMOUNT = env("REVIEW_REWARD_AMOUNT", default="1.00")
+# Review campaigns (Master): 30 days to complete, max 5 opportunities per
+# receipt, 1–3★ reviews held 7 days for the brand to respond.
+REVIEW_SESSION_DAYS = env.int("REVIEW_SESSION_DAYS", default=30)
+REVIEW_MAX_PER_RECEIPT = env.int("REVIEW_MAX_PER_RECEIPT", default=5)
+REVIEW_HOLD_DAYS = env.int("REVIEW_HOLD_DAYS", default=7)
+REVIEW_PRODUCT_QUESTIONS = env.int("REVIEW_PRODUCT_QUESTIONS", default=4)
 
 # Legacy name for the receipt-OCR microservice base URL. Superseded by
 # RECEIPT_OCR_API_URL below, which falls back to this so existing deployments
@@ -143,6 +149,11 @@ REVIEW_AI_GENERATE_PATH = env(
 )
 REVIEW_AI_API_KEY = env("REVIEW_AI_API_KEY", default=RECEIPT_OCR_API_KEY)
 REVIEW_AI_TIMEOUT = env.float("REVIEW_AI_TIMEOUT", default=AI_OCR_TIMEOUT)
+REVIEW_AI_QUESTIONS_PATH = env("REVIEW_AI_QUESTIONS_PATH", default="/api/v1/reviews/questions")
+# Adaptive next question + review summary (AI service, pending): when unset
+# the conversation uses the fixed question list and summaries are empty.
+REVIEW_AI_NEXT_QUESTION_PATH = env("REVIEW_AI_NEXT_QUESTION_PATH", default="")
+REVIEW_AI_SUMMARY_PATH = env("REVIEW_AI_SUMMARY_PATH", default="")
 
 # Not currently read by the fingerprint logic: the receipt fingerprint now
 # hashes the complete normalized OCR payload (Apps.receipts.ocr), so it no

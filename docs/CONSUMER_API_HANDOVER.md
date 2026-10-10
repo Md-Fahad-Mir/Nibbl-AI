@@ -336,35 +336,41 @@ A **reservation** = a claimed offer, held for the user while they upload a recei
 
 ## 7. Review APIs
 
-Earn extra cash by reviewing purchased products. **Lifecycle:** an opportunity (review session) is created after a verified receipt → user answers/submits → review is `published` (or `held` for low ratings, or `removed`).
+Earn $1 by reviewing products from a verified purchase (Master: review campaigns, rebuilt Oct 2026). **Lifecycle:** a rebate receipt is verified → each eligible product on it that's in a brand's live review campaign creates a **review opportunity** (one per product, max 5 per receipt, $1, **30 days** to complete) → the shopper chats with the AI (6 questions) → reviews/edits the AI-written draft → submits → **$1 is paid immediately** (any rating). 4–5★ publish now; 1–3★ are held 7 days for the brand to respond, then publish.
 
-### Review Opportunities
-- `GET /reviews/opportunities/` · **Auth:** required · **Paginated: no** (plain array)
-- Returns open **review sessions**:
+### Review Opportunities (My Offers)
+- `GET /reviews/opportunities/` · **Auth:** required · **Paginated: no** (plain array) — open opportunities only:
   ```json
-  [{ "id":"…","product":"…","product_name":"Lacroix Grapefruit 12pk","brand_name":"…",
-     "reward_amount":"1.00","status":"active","expires_at":"…","messages":[…],
-     "prompts":["What did you think of…?","…"],"created_at":"…" }]
+  [{ "id":"…","product":"…","product_name":"Sea Salt Chips","product_image":"https://…","brand_name":"…",
+     "campaign_image":"https://…","reward_amount":"1.00","status":"active","expires_at":"…",
+     "messages":[],"prompts":[],"ai_review_title":"","ai_review_content":"","created_at":"…" }]
   ```
+  Card: campaign image, $1 reward, days left until `expires_at`, **Claim $1** → open the session.
 
-### Review Session Detail
-- `GET /reviews/sessions/{session_id}/` · **Auth:** required → session object (with `prompts` + `messages`).
+### Open the conversation
+- `GET /reviews/sessions/{id}/` → the session. The first open plans the questions: `prompts` (6: product questions with one brand question in the middle, then "Would you buy it again or recommend it to a friend?") and `messages` (starts with the first question as `{"role":"assistant"}`).
 
-### Answer a prompt (chat-style, optional)
-- `POST /reviews/sessions/{session_id}/answer/` `{ "text": "Loved it" }` → `200`.
+### Answer (chat)
+- `POST /reviews/sessions/{id}/answer/` `{ "text": "…" }` → `{ "next_prompt": "…", "done": false, "review": null, "title": null }`.
+- After the last answer: `{ "next_prompt": null, "done": true, "title": "…", "review": "…" }` — the AI-written draft. Show it for editing.
+- Questions may adapt to previous answers once the AI service supports it — always show `next_prompt` as returned.
 
-### Submit Review
-- `POST /reviews/sessions/{session_id}/submit/` `{ "rating": 5, "content": "Great product!" }` → `201` Review.
-- **Validation:** `rating` 1–5 (required); `content` optional.
-- **Errors `400`:** session expired / not eligible (in `detail`).
+### Regenerate the draft
+- `POST /reviews/sessions/{id}/regenerate/` → `{ "title": "…", "review": "…" }` (a new draft from the same answers).
+
+### Submit (final approval)
+- `POST /reviews/sessions/{id}/submit/` `{ "rating": 1-5, "title": "…", "content": "…", "would_recommend": true, "confirm_accurate": true }` → `201` Review.
+- `content` / `title` = the shopper's edited text (omit to use the draft). `confirm_accurate` must be true ("This review accurately reflects my experience").
+- **Errors `400`:** expired, not open, empty review (in `detail`).
 
 ### My Reviews (status)
-- `GET /reviews/` · **Auth:** required · **Paginated: no** (plain array)
-- Items: `{ id, product, product_name, user_email, rating, content, status, published_at, created_at }`. `status` ∈ `published | held | removed`.
+- `GET /reviews/` · **Paginated: no** — items include `status` ∈ `published | held | flagged | removed` and `published_at`.
 
-### Public Product Reviews (for offer/product pages)
-- `GET /products/{product_id}/reviews/` · **Auth:** required · **Paginated: yes** — published reviews, **no email** exposed: `{ id, author_name, author_avatar, rating, content, published_at, created_at }`.
-- `GET /products/{product_id}/review-summary/` → `{ "rating": 4.0, "review_count": 100 }`.
+### Public Product Reviews
+- `GET /products/{product_id}/reviews/?sort=newest|highest|lowest|helpful` · **Paginated: yes** — published only: `{ id, author_name, author_avatar, display_name, title, rating, content, verified_purchase, disclosure, would_recommend, helpful_count, brand_response, brand_response_at, published_at, created_at }`.
+  - Show `display_name` (first name + last initial), **not** `author_name`. Show the `disclosure` and a verified-purchase badge on each review, and the brand response when present.
+- `POST /reviews/{review_id}/helpful/` → `{ "helpful_count": 12 }` (once per shopper).
+- `GET /products/{product_id}/review-summary/` → `{ "rating": 4.3, "review_count": 120, "star_distribution": {"1":2,"2":3,"3":10,"4":35,"5":70}, "recommendation_rate": 91.5, "ai_summary": null }` — `ai_summary` (`{summary, positives[], negatives[]}`) is `null` until the AI service supports it.
 
 ---
 
@@ -619,3 +625,4 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 7. **Receipt review (Oct 2026)** — see §6: receipts under review are decided within 7 days of upload (auto-approved otherwise); show `decision_reason` on rejected receipts; a reservation with a pending receipt stays `active`.
 8. **Discovery location (Oct 2026)** — see §4 "Discovery location": ask for location/ZIP before showing discovery; `PUT /me/location/`; header `X-Discovery-Location: required` means none is saved.
 9. **Marketing consent (Oct 2026)** — see §2 "Marketing consent": list consents and let shoppers opt out per brand / NibblAI.
+10. **Review campaigns (Oct 2026)** — see §7: opportunities → 6-question chat → editable AI draft (regenerate) → submit with `confirm_accurate`; show `display_name` + disclosure; review summary has star distribution / recommendation rate.

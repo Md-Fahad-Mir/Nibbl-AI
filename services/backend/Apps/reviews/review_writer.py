@@ -134,3 +134,75 @@ def write_review(
         raise ReviewWriterUnavailable("The review-writing service returned no review text.")
 
     return {"data": data, "raw": body}
+
+
+# ---------------------------------------------------------------------------
+# Questions, adaptive next question, review summary (Master #24, #27)
+# ---------------------------------------------------------------------------
+def _post(path: str, payload: dict) -> dict:
+    """POST to the AI service and return its ``data`` object."""
+    base = _base_url()
+    if not base or not path:
+        raise ReviewWriterUnavailable("The review AI service is not configured.")
+    import httpx
+
+    headers = {}
+    api_key = (getattr(settings, "REVIEW_AI_API_KEY", "") or "").strip()
+    if api_key:
+        headers["X-API-Key"] = api_key
+    try:
+        resp = httpx.post(
+            f"{base}/{path.lstrip('/')}", json=payload, headers=headers,
+            timeout=getattr(settings, "REVIEW_AI_TIMEOUT", 30.0),
+        )
+        body = resp.json() if resp.status_code < 400 else None
+    except Exception as exc:  # noqa: BLE001 - network/timeout/JSON => unavailable
+        logger.warning("Review AI request to %s failed: %s", path, exc)
+        raise ReviewWriterUnavailable("The review AI service is unavailable.") from exc
+    data = body.get("data") if isinstance(body, dict) else None
+    if not isinstance(data, dict):
+        raise ReviewWriterUnavailable("The review AI service returned an unusable response.")
+    return data
+
+
+def suggest_questions(*, product_name: str, category: str | None = None, count: int = 4) -> list[str]:
+    """Product questions from the AI service's existing /reviews/questions."""
+    payload = {"product_name": product_name[:200], "count": max(1, min(int(count), 10))}
+    if (category or "").strip():
+        payload["category"] = category.strip()[:100]
+    data = _post(getattr(settings, "REVIEW_AI_QUESTIONS_PATH", "/api/v1/reviews/questions"), payload)
+    questions = [str(q).strip() for q in data.get("questions") or [] if str(q).strip()]
+    if not questions:
+        raise ReviewWriterUnavailable("The review AI service returned no questions.")
+    return questions
+
+
+def adaptive_available() -> bool:
+    return bool(_base_url() and getattr(settings, "REVIEW_AI_NEXT_QUESTION_PATH", ""))
+
+
+def next_question(*, product: dict, conversation: list[dict], brand_question: str = "",
+                  questions_asked: int, total_questions: int) -> str | None:
+    """Adaptive next question (pending AI endpoint — see
+    docs/AI_REVIEW_ENDPOINTS_SPEC.md). Returns None when the AI says done."""
+    data = _post(getattr(settings, "REVIEW_AI_NEXT_QUESTION_PATH", ""), {
+        "product": product, "conversation": conversation, "brand_question": brand_question or None,
+        "questions_asked": questions_asked, "total_questions": total_questions,
+    })
+    question = str(data.get("question") or "").strip()
+    return None if data.get("done") or not question else question
+
+
+def summarize_reviews(*, product_name: str, reviews: list[dict]) -> dict | None:
+    """AI summary of published reviews (pending AI endpoint). None when the
+    endpoint isn't configured or fails — the summary is optional."""
+    if not (_base_url() and getattr(settings, "REVIEW_AI_SUMMARY_PATH", "")):
+        return None
+    try:
+        data = _post(getattr(settings, "REVIEW_AI_SUMMARY_PATH", ""), {
+            "product_name": product_name[:200], "reviews": reviews[:200],
+        })
+    except ReviewWriterUnavailable:
+        return None
+    return {"summary": str(data.get("summary") or ""), "positives": list(data.get("positives") or []),
+            "negatives": list(data.get("negatives") or [])}

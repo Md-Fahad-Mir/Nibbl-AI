@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from Apps.reviews.models import Review
+from Apps.reviews.models import Review, ReviewCampaign, ReviewPrompt, ReviewSession
 
 
 class ReviewAnswerSerializer(serializers.Serializer):
@@ -45,6 +45,9 @@ class ReviewSerializer(serializers.ModelSerializer):
             "disclosure",
             "questions_and_answers",
             "created_at",
+            # Moderation (additive)
+            "status",
+            "published_at",
         ]
         read_only_fields = fields
 
@@ -64,10 +67,219 @@ class PublicReviewSerializer(serializers.ModelSerializer):
             "rating",
             "content",
             "created_at",
+            # Master review display (additive)
+            "title",
+            "display_name",
+            "verified_purchase",
+            "disclosure",
+            "would_recommend",
+            "helpful_count",
+            "brand_response",
+            "brand_response_at",
+            "published_at",
         ]
         read_only_fields = fields
+
+    display_name = serializers.SerializerMethodField()
+    verified_purchase = serializers.SerializerMethodField()
+
+    def get_display_name(self, obj) -> str:
+        from Apps.reviews.campaigns import _display_name
+
+        return _display_name(obj.user)
+
+    def get_verified_purchase(self, obj) -> bool:
+        return obj.session_id is not None
 
 
 class ProductReviewSummarySerializer(serializers.Serializer):
     rating = serializers.FloatField(allow_null=True)
     review_count = serializers.IntegerField()
+
+    # Master: overview + AI summary (additive)
+    star_distribution = serializers.DictField(child=serializers.IntegerField(), required=False)
+    recommendation_rate = serializers.FloatField(allow_null=True, required=False)
+    ai_summary = serializers.DictField(allow_null=True, required=False)
+
+
+# ---------------------------------------------------------------------------
+# Review campaigns (brand)
+# ---------------------------------------------------------------------------
+class ReviewPromptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReviewPrompt
+        fields = ["id", "text", "source", "times_used"]
+        read_only_fields = fields
+
+
+class ReviewCampaignSerializer(serializers.ModelSerializer):
+    products = serializers.SerializerMethodField()
+    prompts = ReviewPromptSerializer(many=True, read_only=True)
+    reward_amount = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+    opportunities_today = serializers.SerializerMethodField()
+    display_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReviewCampaign
+        fields = [
+            "id", "name", "status", "display_status", "image_url", "products", "prompts",
+            "product_context", "start_at", "end_at", "daily_opportunities",
+            "product_cooldown_days", "one_time_only", "auto_paused", "reward_amount",
+            "opportunities_today", "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_products(self, obj) -> list[dict]:
+        return [{"id": str(p.id), "name": p.name} for p in obj.products.all()]
+
+    def get_reward_amount(self, obj) -> str:
+        from Apps.reviews.campaigns import reward_amount
+
+        return str(reward_amount())
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+
+    def get_opportunities_today(self, obj) -> int:
+        from django.utils import timezone
+
+        return obj.sessions.filter(created_at__date=timezone.localdate()).count()
+
+    def get_display_status(self, obj) -> str:
+        if obj.status == ReviewCampaign.Status.ACTIVE and not obj.is_live:
+            return "scheduled" if obj.start_at else "ended"
+        return obj.status
+
+
+class ReviewCampaignWriteSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255, required=False)
+    product_ids = serializers.ListField(child=serializers.UUIDField(), required=False)
+    product_context = serializers.CharField(required=False, allow_blank=True)
+    start_at = serializers.DateTimeField(required=False, allow_null=True)
+    end_at = serializers.DateTimeField(required=False, allow_null=True)
+    daily_opportunities = serializers.IntegerField(min_value=1, required=False)
+    product_cooldown_days = serializers.IntegerField(min_value=0, required=False)
+    one_time_only = serializers.BooleanField(required=False)
+
+
+class SetProductsSerializer(serializers.Serializer):
+    product_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
+
+
+class AddPromptSerializer(serializers.Serializer):
+    text = serializers.CharField(max_length=500)
+
+
+class SuggestPromptsSerializer(serializers.Serializer):
+    count = serializers.IntegerField(min_value=1, max_value=10, default=4)
+
+
+# ---------------------------------------------------------------------------
+# Review opportunities / sessions (shopper)
+# ---------------------------------------------------------------------------
+class ReviewSessionSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    brand_name = serializers.CharField(source="review_campaign.brand.name", read_only=True)
+    campaign_image = serializers.SerializerMethodField()
+    product_image = serializers.SerializerMethodField()
+    prompts = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReviewSession
+        fields = [
+            "id", "product", "product_name", "product_image", "brand_name", "campaign_image",
+            "reward_amount", "status", "expires_at", "messages", "prompts",
+            "ai_review_title", "ai_review_content", "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_prompts(self, obj) -> list[str]:
+        return list(obj.questions or [])
+
+    def _url(self, field):
+        if not field:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(field.url) if request else field.url
+
+    def get_campaign_image(self, obj):
+        return self._url(obj.review_campaign.image)
+
+    def get_product_image(self, obj):
+        return self._url(obj.product.image_url)
+
+
+class AnswerSerializer(serializers.Serializer):
+    text = serializers.CharField(max_length=2000)
+
+
+class SubmitSessionSerializer(serializers.Serializer):
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+    content = serializers.CharField(required=False, allow_blank=True, default="")
+    title = serializers.CharField(required=False, allow_blank=True, default="", max_length=255)
+    would_recommend = serializers.BooleanField(required=False, allow_null=True, default=None)
+    # Shopper confirms the review accurately reflects their experience.
+    confirm_accurate = serializers.BooleanField(required=False, default=True)
+
+    def validate_confirm_accurate(self, value):
+        if not value:
+            raise serializers.ValidationError("Confirm the review reflects your experience.")
+        return value
+
+
+# ---------------------------------------------------------------------------
+# Review management (brand) + moderation
+# ---------------------------------------------------------------------------
+class BrandReviewSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    shopper_name = serializers.CharField(source="user.full_name", read_only=True)
+    customer_email = serializers.EmailField(source="user.email", read_only=True)
+    campaign_name = serializers.CharField(source="review_campaign.name", read_only=True, default=None)
+    verified_purchase = serializers.SerializerMethodField()
+    reward = serializers.SerializerMethodField()
+    receipt = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Review
+        fields = [
+            "id", "product", "product_name", "campaign_name", "shopper_name", "customer_email",
+            "verified_purchase", "rating", "title", "content", "status", "published_at", "held_until",
+            "would_recommend", "questions_and_answers", "brand_response", "brand_response_at",
+            "flag_reason", "flag_note", "flagged_at", "disclosure", "reward", "receipt", "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_verified_purchase(self, obj) -> bool:
+        return obj.session_id is not None
+
+    def get_reward(self, obj) -> str | None:
+        return str(obj.session.reward_amount) if obj.session_id else None
+
+    def get_receipt(self, obj):
+        receipt = obj.session.receipt if obj.session_id else None
+        if receipt is None:
+            return None
+        request = self.context.get("request")
+        image = receipt.image
+        return {
+            "id": str(receipt.id), "merchant": receipt.merchant, "purchased_at": receipt.purchased_at,
+            "status": receipt.status,
+            "image_url": (request.build_absolute_uri(image.url) if request else image.url) if image else None,
+        }
+
+
+class RespondSerializer(serializers.Serializer):
+    text = serializers.CharField(max_length=2000)
+
+
+class FlagSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=100)
+    note = serializers.CharField(required=False, allow_blank=True, default="", max_length=2000)
+
+
+class FlagDecisionSerializer(serializers.Serializer):
+    note = serializers.CharField(required=False, allow_blank=True, default="")

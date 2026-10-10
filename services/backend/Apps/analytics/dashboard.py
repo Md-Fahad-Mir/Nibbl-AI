@@ -10,9 +10,8 @@
   Exhausted Early (< 12 h average to fill), On Pace (12–25 h), Behind (usually
   doesn't fill), Building Data (< 7 completed cycles).
 
-Tracking limitations: review "invitations" are each verified purchase that
-makes a shopper eligible to review that product (dedicated review campaigns
-arrive with #23); the view→claim rate counts views, which may be anonymous.
+Tracking limitations: the view→claim rate counts views, which may be
+anonymous. Review invitations are the review opportunities created.
 """
 
 from __future__ import annotations
@@ -28,7 +27,6 @@ from Apps.campaigns.models import Campaign
 from Apps.common.money import ZERO
 from Apps.offers.models import OfferView
 from Apps.rebates.models import Redemption
-from Apps.receipts.models import Receipt
 from Apps.reservations.models import Reservation
 from Apps.reviews.models import Review
 from Apps.wallets.models import LedgerEntry, Wallet
@@ -109,10 +107,12 @@ def brand_dashboard(brand, days: int = 30, now=None) -> dict:
     redemptions = Redemption.objects.filter(brand=brand, created_at__gte=start, created_at__lt=now)
     rebate_cost = _cost(brand, start, now, [C.REBATE_REWARD, C.REBATE_FEE])
 
-    verified = Receipt.objects.filter(
-        brand=brand, status=Receipt.Status.VERIFIED, reviewed_at__gte=start, reviewed_at__lt=now
-    )
-    invitations = len({(u, p) for u, p in verified.values_list("user_id", "matched_product_id") if p})
+    # Review invitations = review opportunities created (each counted once).
+    from Apps.reviews.models import ReviewSession
+
+    invitations = ReviewSession.objects.filter(
+        review_campaign__brand=brand, created_at__gte=start, created_at__lt=now
+    ).count()
     reviews = Review.objects.filter(brand=brand, created_at__gte=start, created_at__lt=now).count()
     review_cost = _cost(brand, start, now, [C.REVIEW_REWARD, C.REVIEW_FEE])
 

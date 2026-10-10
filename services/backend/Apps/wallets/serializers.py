@@ -57,9 +57,15 @@ class WalletSerializer(serializers.ModelSerializer):
         return self._reserved(obj, Reservation.Kind.REBATE)
 
     def get_reserved_reviews(self, obj) -> Decimal:
-        from Apps.reservations.models import Reservation
+        from django.db.models import Sum
 
-        return self._reserved(obj, Reservation.Kind.REVIEW)
+        from Apps.reservations.models import Reservation
+        from Apps.wallets.models import Hold
+
+        # Review opportunities reserve $1 + fee (Apps.reviews.campaigns).
+        sessions = obj.holds.filter(status=Hold.Status.ACTIVE, reference_type="review_session").aggregate(
+            s=Sum("amount"))["s"] or Decimal("0.00")
+        return self._reserved(obj, Reservation.Kind.REVIEW) + sessions
 
     def get_reward_available(self, obj) -> Decimal:
         return obj.reward_available()

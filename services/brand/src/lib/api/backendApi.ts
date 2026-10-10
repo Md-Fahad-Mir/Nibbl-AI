@@ -70,6 +70,8 @@ export const backendApi = {
     social: { method: "POST", path: "/auth/social/", auth: false },
   },
   users: {
+    sessions: { method: "GET", path: "/users/me/sessions/", auth: true },
+    signOutOtherSessions: { method: "POST", path: "/users/me/sessions/sign-out-others/", auth: true },
     me: { method: "GET", path: "/users/me/", auth: true },
     updateMe: { method: "PATCH", path: "/users/me/", auth: true },
     deleteMe: { method: "DELETE", path: "/users/me/", auth: true },
@@ -553,6 +555,31 @@ export const backendApi = {
     deleteReviewCampaignPrompt: (brandId: string, campaignId: string, promptId: string): ApiEndpoint => ({
       method: "DELETE",
       path: `/brands/${brandId}/review-campaigns/${campaignId}/prompts/${promptId}/`,
+      auth: true,
+    }),
+    notificationPreferences: (brandId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/notification-preferences/`,
+      auth: true,
+    }),
+    updateNotificationPreferences: (brandId: string): ApiEndpoint => ({
+      method: "PUT",
+      path: `/brands/${brandId}/notification-preferences/`,
+      auth: true,
+    }),
+    brandTracking: (brandId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/tracking/`,
+      auth: true,
+    }),
+    updateBrandTracking: (brandId: string): ApiEndpoint => ({
+      method: "PUT",
+      path: `/brands/${brandId}/tracking/`,
+      auth: true,
+    }),
+    campaignTracking: (brandId: string, campaignId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/campaigns/${campaignId}/tracking/`,
       auth: true,
     }),
     checkoutQuote: (applicationId: string): ApiEndpoint => ({

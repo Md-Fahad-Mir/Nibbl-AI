@@ -279,7 +279,7 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "Apps.accounts.authentication.SessionJWTAuthentication",
     ],
     # Secure by default: endpoints require auth unless they opt out via AllowAny.
     "DEFAULT_PERMISSION_CLASSES": [
@@ -315,6 +315,7 @@ import datetime as _dt  # noqa: E402
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": _dt.timedelta(days=30),
+    "TOKEN_REFRESH_SERIALIZER": "Apps.accounts.authentication.SessionTokenRefreshSerializer",
     "REFRESH_TOKEN_LIFETIME": _dt.timedelta(days=365),
     # "Remember me" issues a longer-lived refresh token (see accounts.services).
     "REFRESH_TOKEN_REMEMBER_LIFETIME": _dt.timedelta(days=365),

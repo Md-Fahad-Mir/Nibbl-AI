@@ -5,6 +5,7 @@ import { ApiRecord } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import NibblReviewComment from "../NibblReviewComment";
 import OfferPreview from "./OfferPreview";
+import MetaPixelToggle from "./MetaPixelToggle";
 import { geographyText } from "./GeographyPicker";
 import { DealType, cooldownText, dealLabel, money, receiptWording } from "./dealRules";
 
@@ -242,6 +243,8 @@ export default function CampaignDetail({ campaignId, onBack, onEdit }: CampaignD
               </p>
             </div>
           </Card>
+
+          <MetaPixelToggle campaign={campaign} />
 
           {/* ② Summary */}
           <Card title="Campaign summary">

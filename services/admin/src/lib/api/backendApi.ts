@@ -611,6 +611,18 @@ export const backendApi = {
       path: "/admin/analytics/overview/",
       auth: true,
     },
+    revenueDashboard: { method: "GET", path: "/admin/analytics/revenue/", auth: true },
+    brandDiscovery: { method: "GET", path: "/admin/brand-discovery/", auth: true },
+    brandDiscoveryInsight: (brand: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/admin/brand-discovery/${encodeURIComponent(brand)}/`,
+      auth: true,
+    }),
+    brandDiscoveryRule: (token: string): ApiEndpoint => ({
+      method: "PUT",
+      path: `/admin/brand-discovery/${encodeURIComponent(token)}/`,
+      auth: true,
+    }),
     analyticsSnapshots: {
       method: "GET",
       path: "/admin/analytics/snapshots/",
@@ -853,6 +865,14 @@ export const nibblApi = {
     requestEndpoint<ApiRecord>(backendApi.admin.campaignApprovalDecision(reviewId, action), {
       comment,
     }),
+  adminRevenueDashboard: (query: RequestOptions["query"]) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.revenueDashboard, undefined, query),
+  adminBrandDiscovery: (query: RequestOptions["query"]) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.brandDiscovery, undefined, query),
+  adminBrandDiscoveryInsight: (brand: string, query: RequestOptions["query"]) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.brandDiscoveryInsight(brand), undefined, query),
+  setBrandDiscoveryRule: (token: string, body: { display_name?: string; ignored?: boolean }) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.brandDiscoveryRule(token), body),
   adminFlaggedReviews: () =>
     requestEndpoint<ApiRecord[]>(backendApi.admin.flaggedReviews),
   decideFlaggedReview: (reviewId: string, action: "remove" | "keep", note: string) =>

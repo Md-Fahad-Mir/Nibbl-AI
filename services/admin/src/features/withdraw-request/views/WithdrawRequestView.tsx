@@ -52,6 +52,12 @@ export const WithdrawRequestView = () => {
       case "campaign-approvals":
         router.push("/campaign-approvals");
         break;
+      case "review-flags":
+        router.push("/review-flags");
+        break;
+      case "brand-discovery":
+        router.push("/brand-discovery");
+        break;
       case "payout-reviews":
         router.push("/payout-reviews");
         break;

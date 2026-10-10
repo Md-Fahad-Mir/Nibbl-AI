@@ -51,15 +51,49 @@ class AccountError(Exception):
 # ---------------------------------------------------------------------------
 # Tokens
 # ---------------------------------------------------------------------------
-def issue_tokens(user: User, *, remember_me: bool = False) -> dict:
-    """Return an access/refresh token pair, honoring the remember-me window."""
+def issue_tokens(user: User, *, remember_me: bool = False, client: dict | None = None) -> dict:
+    """Return an access/refresh token pair, honoring the remember-me window.
+
+    Each sign-in is a ``UserSession``; its id (``sid``) is carried by both
+    tokens and kept through refresh rotation."""
+    from Apps.accounts.models import UserSession
+
     refresh = RefreshToken.for_user(user)
+    lifetime = settings.SIMPLE_JWT.get("REFRESH_TOKEN_LIFETIME", dt.timedelta(days=365))
     if remember_me:
         lifetime = settings.SIMPLE_JWT.get(
             "REFRESH_TOKEN_REMEMBER_LIFETIME", dt.timedelta(days=30)
         )
         refresh.set_exp(lifetime=lifetime)
+    client = client or {}
+    now = timezone.now()
+    session = UserSession.objects.create(
+        user=user, ip_address=client.get("ip") or None, user_agent=(client.get("user_agent") or "")[:255],
+        last_used_at=now, expires_at=now + lifetime,
+    )
+    refresh["sid"] = str(session.id)
+    user.last_login = now
+    user.save(update_fields=["last_login"])
     return {"access": str(refresh.access_token), "refresh": str(refresh)}
+
+
+def active_sessions(user):
+    from Apps.accounts.models import UserSession
+
+    return UserSession.objects.filter(user=user, revoked_at__isnull=True, expires_at__gt=timezone.now())
+
+
+def sign_out_other_sessions(user, *, current_sid: str | None) -> int:
+    sessions = active_sessions(user)
+    if current_sid:
+        sessions = sessions.exclude(id=current_sid)
+    count = sessions.update(revoked_at=timezone.now())
+    AuditLog.objects.create(
+        action=AuditLog.Action.UPDATE, actor_type="user", actor_id=str(user.id),
+        target_type="user", target_id=str(user.id),
+        metadata={"event": "signed_out_other_sessions", "count": count},
+    )
+    return count
 
 
 # ---------------------------------------------------------------------------
@@ -352,7 +386,7 @@ def reset_phone(*, user: User, admin: User, reason: str = "") -> User:
 # ---------------------------------------------------------------------------
 # Login
 # ---------------------------------------------------------------------------
-def login(*, email: str, password: str, remember_me: bool = False) -> dict:
+def login(*, email: str, password: str, remember_me: bool = False, client: dict | None = None) -> dict:
     user = authenticate(username=email, password=password)
     if user is None or not user.is_active or user.is_deleted:
         raise AccountError("Invalid email or password.")
@@ -371,7 +405,7 @@ def login(*, email: str, password: str, remember_me: bool = False) -> dict:
         target_type="user",
         target_id=str(user.id),
     )
-    tokens = issue_tokens(user, remember_me=remember_me)
+    tokens = issue_tokens(user, remember_me=remember_me, client=client)
     return {"user": user, "tokens": tokens}
 
 

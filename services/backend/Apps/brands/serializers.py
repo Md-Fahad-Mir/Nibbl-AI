@@ -25,8 +25,16 @@ class BrandSerializer(serializers.ModelSerializer):
             "status",
             "plan",
             "created_at",
+            "timezone",
         ]
         read_only_fields = ["id", "slug", "status", "plan", "created_at"]
+
+    def validate_timezone(self, value):
+        from zoneinfo import available_timezones
+
+        if value not in available_timezones():
+            raise serializers.ValidationError("Choose a valid time zone.")
+        return value
 
     def get_logo(self, obj):
         """Relative media path of the uploaded logo, or None."""
@@ -115,7 +123,7 @@ class AddMemberSerializer(serializers.Serializer):
     role = serializers.ChoiceField(
         choices=[
             (BrandMembership.Role.ADMIN, "Admin"),
-            (BrandMembership.Role.MEMBER, "Member"),
+            (BrandMembership.Role.MEMBER, "Viewer (read-only)"),
         ],
         default=BrandMembership.Role.MEMBER,
     )

@@ -10,33 +10,24 @@ interface InviteUserModalProps {
 
 export default function InviteUserModal({ onClose, onSend }: InviteUserModalProps) {
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("Manager");
+  const [role, setRole] = useState("Admin");
 
-  const getPermissions = () => {
-    switch (role) {
-      case "Admin":
-        return [
-          { text: "Can manage active campaigns and adjust budgets.", check: true },
-          { text: "Can view team performance metrics and analytics.", check: true },
-          { text: "Can edit campaign assets and creative details.", check: true },
-          { text: "Can delete team members and adjust core settings.", check: true }
+  // Master: Team & Permissions. Owner-only areas (billing, team, account
+  // closure) are never granted by invitation.
+  const getPermissions = () =>
+    role === "Admin"
+      ? [
+          { text: "Can manage campaigns, customers, tracking and reports.", check: true },
+          { text: "Can respond to and flag reviews.", check: true },
+          { text: "Cannot manage billing, plans or the wallet.", check: false },
+          { text: "Cannot invite or remove team members.", check: false },
+        ]
+      : [
+          { text: "Read-only access to campaigns, customers and reports.", check: true },
+          { text: "Cannot create or change campaigns.", check: false },
+          { text: "Cannot manage billing, plans or the wallet.", check: false },
+          { text: "Cannot invite or remove team members.", check: false },
         ];
-      case "Reviewer":
-        return [
-          { text: "Cannot manage campaigns or adjust budgets.", check: false },
-          { text: "Can view team performance metrics and analytics.", check: true },
-          { text: "Cannot edit campaign assets and creative details.", check: false },
-          { text: "Cannot delete team members or adjust settings.", check: false }
-        ];
-      default: // Manager
-        return [
-          { text: "Can manage active campaigns and adjust budgets.", check: true },
-          { text: "Can view team performance metrics and analytics.", check: true },
-          { text: "Can edit campaign assets and creative details.", check: true },
-          { text: "Cannot delete team members or adjust core settings.", check: false }
-        ];
-    }
-  };
 
   return (
     <>
@@ -63,11 +54,10 @@ export default function InviteUserModal({ onClose, onSend }: InviteUserModalProp
             <div className="flex flex-col gap-2">
               <label className="text-xs font-bold text-[#454656] uppercase tracking-wider pl-1">Select Role</label>
               <select value={role} onChange={(e) => setRole(e.target.value)} className="bg-[#F2F3FF] border-none rounded-2xl px-5 py-3.5 text-sm font-semibold text-[#131B2E] outline-none cursor-pointer">
-                <option>Manager</option>
                 <option>Admin</option>
-                <option>Reviewer</option>
+                <option>Viewer</option>
               </select>
-              <span className="text-[10px] text-[#454656]/60 font-bold uppercase tracking-wider pl-1 mt-1">Selected: {role} Tier</span>
+              <span className="text-[10px] text-[#454656]/60 font-bold uppercase tracking-wider pl-1 mt-1">Selected: {role}</span>
             </div>
           </div>
 

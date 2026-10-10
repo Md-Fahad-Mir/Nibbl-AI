@@ -210,6 +210,31 @@ class CampaignPauseView(APIView):
 
 
 @extend_schema(tags=["campaigns"])
+class CampaignTrackingView(APIView):
+    """POST {meta_pixel_enabled}: turn Meta Pixel tracking on/off for the
+    campaign (applies immediately; not a campaign revision)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses={200: s.CampaignSerializer})
+    def post(self, request, brand_id, campaign_id):
+        from rest_framework.exceptions import ValidationError
+
+        from Apps.brands import tracking
+
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True, active=True)
+        campaign = _get_campaign(brand, campaign_id)
+        try:
+            tracking.set_campaign_tracking(
+                campaign, enabled=bool(request.data.get("meta_pixel_enabled")), actor=request.user
+            )
+        except tracking.TrackingError as exc:
+            raise ValidationError({"detail": str(exc)})
+        return Response(s.CampaignSerializer(campaign, context={"request": request}).data)
+
+
+@extend_schema(tags=["campaigns"])
 class CampaignAccessView(APIView):
     permission_classes = [IsAuthenticated]
 

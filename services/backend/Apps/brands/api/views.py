@@ -2,7 +2,7 @@
 
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, serializers, status
-from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from Apps.brands import serializers as s
 from Apps.brands import services
 from Apps.brands.models import Brand, BrandApplication, BrandMembership
-from Apps.brands.selectors import brands_for_user, get_active_membership
+from Apps.brands.selectors import brands_for_user
 from Apps.brands.services import BrandError
 from Apps.common.permissions import IsPlatformAdmin
 
@@ -22,19 +22,11 @@ def _run(func, *args, **kwargs):
         raise ValidationError({"detail": str(exc)})
 
 
-def _require_membership(user, brand, *, manager=False, active=False) -> BrandMembership:
-    """Enforce brand tenancy — platform admins bypass all checks."""
-    if getattr(user, "is_platform_admin", False):
-        return get_active_membership(user, brand)
+def _require_membership(user, brand, *, manager=False, owner=False, active=False) -> BrandMembership:
+    """Enforce brand tenancy — see ``Apps.brands.access.require_membership``."""
+    from Apps.brands.access import require_membership
 
-    membership = get_active_membership(user, brand)
-    if membership is None:
-        raise PermissionDenied("You are not a member of this brand.")
-    if manager and not membership.is_manager:
-        raise PermissionDenied("Brand owner/admin role required.")
-    if active and not brand.is_operational:
-        raise PermissionDenied("This brand is suspended.")
-    return membership
+    return require_membership(user, brand, manager=manager, owner=owner, active=active)
 
 
 def _get_brand_or_404(brand_id) -> Brand:
@@ -179,7 +171,7 @@ class BrandMembershipListCreateView(APIView):
     @extend_schema(request=s.AddMemberSerializer, responses={201: s.BrandMembershipSerializer})
     def post(self, request, brand_id):
         brand = _get_brand_or_404(brand_id)
-        _require_membership(request.user, brand, manager=True, active=True)
+        _require_membership(request.user, brand, owner=True, active=True)
         serializer = s.AddMemberSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         membership = _run(
@@ -201,7 +193,7 @@ class BrandMembershipDeleteView(APIView):
     @extend_schema(responses={204: None})
     def delete(self, request, brand_id, membership_id):
         brand = _get_brand_or_404(brand_id)
-        _require_membership(request.user, brand, manager=True, active=True)
+        _require_membership(request.user, brand, owner=True, active=True)
         membership = brand.memberships.filter(id=membership_id).first()
         if membership is None:
             raise NotFound("Membership not found.")
@@ -408,3 +400,65 @@ class BrandCustomerExportView(APIView):
             f'attachment; filename="{brand.slug}-customers.csv"'
         )
         return response
+
+
+@extend_schema(tags=["brands"])
+class BrandTrackingView(APIView):
+    """Meta Pixel ID (Settings → Tracking & Attribution). PUT {meta_pixel_id}
+    validates and saves it ("" removes it and turns tracking off)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id):
+        from Apps.brands import tracking
+
+        brand = Brand.objects.filter(id=brand_id).first()
+        if brand is None:
+            raise NotFound("Brand not found.")
+        _require_membership(request.user, brand)
+        return Response(tracking.overview(brand))
+
+    @extend_schema(request=None, responses={200: None})
+    def put(self, request, brand_id):
+        from Apps.brands import tracking
+
+        brand = Brand.objects.filter(id=brand_id).first()
+        if brand is None:
+            raise NotFound("Brand not found.")
+        _require_membership(request.user, brand, manager=True)
+        try:
+            tracking.set_pixel(brand, pixel_id=str(request.data.get("meta_pixel_id", "")), actor=request.user)
+        except tracking.TrackingError as exc:
+            raise ValidationError({"meta_pixel_id": str(exc)})
+        return Response(tracking.overview(brand))
+
+
+@extend_schema(tags=["brands"])
+class BrandNotificationPreferencesView(APIView):
+    """The signed-in member's own notification preferences for this brand.
+    PUT {"preferences": [{"type", "email", "sms"}, ...]}."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _brand(self, request, brand_id):
+        brand = Brand.objects.filter(id=brand_id).first()
+        if brand is None:
+            raise NotFound("Brand not found.")
+        _require_membership(request.user, brand)
+        return brand
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id):
+        from Apps.notifications.brand import preferences
+
+        return Response(preferences(request.user, self._brand(request, brand_id)))
+
+    @extend_schema(request=None, responses={200: None})
+    def put(self, request, brand_id):
+        from Apps.notifications.brand import set_preferences
+
+        rows = request.data.get("preferences")
+        if not isinstance(rows, list):
+            raise ValidationError({"preferences": "Send a list of preferences."})
+        return Response(set_preferences(request.user, self._brand(request, brand_id), rows))

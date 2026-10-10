@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Sidebar } from "../components/Sidebar";
 import { Header } from "../components/Header";
-import { StatsCards } from "../components/StatsCards";
+import { AdminOverview } from "../components/AdminOverview";
 import { EarningsChart } from "../components/EarningsChart";
 import { RecentTransactions } from "../components/RecentTransactions";
 import { TransactionDetailsModal } from "@/features/earnings/components/TransactionDetailsModal";
@@ -19,7 +19,7 @@ export const DashboardView = () => {
   const [selectedTransaction, setSelectedTransaction] =
     useState<TransactionDetail | null>(null);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-  const { profile, stats, transactions, monthlyEarnings, loadDashboard, logout } = useAdminApiStore();
+  const { profile, transactions, monthlyEarnings, loadDashboard, logout } = useAdminApiStore();
 
   useEffect(() => {
     void loadDashboard();
@@ -45,6 +45,12 @@ export const DashboardView = () => {
         break;
       case "campaign-approvals":
         router.push("/campaign-approvals");
+        break;
+      case "review-flags":
+        router.push("/review-flags");
+        break;
+      case "brand-discovery":
+        router.push("/brand-discovery");
         break;
       case "payout-reviews":
         router.push("/payout-reviews");
@@ -90,8 +96,8 @@ export const DashboardView = () => {
           onProfileClick={() => router.push("/settings")}
         />
 
-        {/* Stats Summary Cards */}
-        <StatsCards stats={stats} />
+        {/* Master: revenue summary, needs attention, brand revenue, rewards */}
+        <AdminOverview />
 
         {/* Earnings Bar Chart */}
         <EarningsChart data={monthlyEarnings} />

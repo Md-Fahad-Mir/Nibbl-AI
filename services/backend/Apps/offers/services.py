@@ -8,6 +8,7 @@ import math
 from django.conf import settings
 from django.utils import timezone
 
+from Apps.brands.tracking import campaign_pixel_id
 from Apps.brands.models import Brand
 from Apps.campaigns.models import Campaign
 from Apps.offers.models import Bookmark, CooldownRecord, OfferView
@@ -150,6 +151,8 @@ def resolve_offer(campaign: Campaign, user=None) -> dict:
         "one_time_only": campaign.one_time_only,
         "where_to_buy": where_to_buy,
         "featured_retailers": list(campaign.featured_retailers.values_list("name", flat=True)),
+        # Brand's Meta Pixel when tracking is on for this campaign (additive).
+        "meta_pixel_id": campaign_pixel_id(campaign),
     }
 
 

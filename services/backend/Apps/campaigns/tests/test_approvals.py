@@ -97,7 +97,8 @@ class ApprovalWorkflowTests(_ApprovalBase):
         self.assertEqual(queue.data[0]["brand_name"], "Acme")
 
         review = CampaignReview.objects.get()
-        resp = self._decide(review, "approve")
+        with self.captureOnCommitCallbacks(execute=True):  # delivery runs after commit
+            resp = self._decide(review, "approve")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["detail"], "Approved and now live.")
 

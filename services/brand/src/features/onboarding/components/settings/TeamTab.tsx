@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { UserPlus, MoreVertical, ShieldAlert, Award } from "lucide-react";
+import { UserPlus, MoreVertical, ShieldAlert, Award, Eye } from "lucide-react";
 import { ApiRecord } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
@@ -20,6 +20,9 @@ interface TeamTabProps {
   onInviteClick: () => void;
 }
 
+// Master: Owner / Admin / Viewer (Viewer is stored as "member").
+const ROLE_LABEL: Record<string, string> = { owner: "Owner", admin: "Admin", member: "Viewer" };
+
 const mapMember = (member: ApiRecord): Member => ({
   id: String(member.id),
   name: String(member.user_full_name ?? member.user_email ?? "Team member"),
@@ -32,12 +35,16 @@ const mapMember = (member: ApiRecord): Member => ({
         })}`
       : "Joined",
   email: String(member.user_email ?? ""),
-  role: String(member.role ?? "member"),
+  role: ROLE_LABEL[String(member.role ?? "member")] ?? String(member.role ?? ""),
   lastActive: member.is_active === false ? "Inactive" : "Active",
 });
 
 export default function TeamTab({ onInviteClick }: TeamTabProps) {
-  const members = useBrandApiStore((state) => state.members).map(mapMember);
+  const rawMembers = useBrandApiStore((state) => state.members);
+  const profileId = useBrandApiStore((state) => String(state.profile?.id ?? ""));
+  const members = rawMembers.map(mapMember);
+  // Only the Owner manages the team (Master: Team & Permissions).
+  const isOwner = rawMembers.some((m) => String(m.user) === profileId && m.role === "owner");
   const removeMember = useBrandApiStore((state) => state.removeMember);
   const [removeError, setRemoveError] = useState("");
 
@@ -64,9 +71,9 @@ export default function TeamTab({ onInviteClick }: TeamTabProps) {
           <h2 className="font-jakarta font-extrabold text-2xl text-[#131B2E]">Team & Permissions</h2>
           <p className="text-xs text-[#454656] font-medium">Manage your organization&apos;s members and their access levels.</p>
         </div>
-        <button onClick={onInviteClick} className="bg-gradient-to-r from-[#001BD2] to-[#2D3FEA] hover:opacity-95 text-white font-extrabold text-sm px-6 py-2.5 rounded-full flex items-center gap-2 border-none cursor-pointer shadow-md shadow-blue-500/10">
+        {isOwner && <button onClick={onInviteClick} className="bg-gradient-to-r from-[#001BD2] to-[#2D3FEA] hover:opacity-95 text-white font-extrabold text-sm px-6 py-2.5 rounded-full flex items-center gap-2 border-none cursor-pointer shadow-md shadow-blue-500/10">
           <UserPlus className="w-4 h-4" /> Invite User
-        </button>
+        </button>}
       </div>
 
       {/* Stats Bento Card */}
@@ -115,8 +122,8 @@ export default function TeamTab({ onInviteClick }: TeamTabProps) {
                   </td>
                   <td className="p-5 text-left font-medium">{m.lastActive}</td>
                   <td className="p-5 text-right">
-                    {m.role.toLowerCase() === "owner" ? (
-                      <span className="text-xs font-semibold text-slate-300">Owner</span>
+                    {m.role.toLowerCase() === "owner" || !isOwner ? (
+                      <span className="text-xs font-semibold text-slate-300">{m.role}</span>
                     ) : (
                       <button onClick={() => void handleRemoveMember(m)} className="bg-transparent border-none cursor-pointer text-slate-400 hover:text-[#131B2E]" title="Remove member"><MoreVertical className="w-4 h-4" /></button>
                     )}
@@ -138,10 +145,11 @@ export default function TeamTab({ onInviteClick }: TeamTabProps) {
       {/* Role Blueprints Section */}
       <div className="flex flex-col gap-4 mt-4 w-full">
         <h3 className="font-jakarta font-bold text-lg text-[#131B2E]">Role Blueprint</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
           {[
-            { title: "Administrative Access", sub: "Full control over billing, team management, and global campaign settings.", icon: <ShieldAlert className="w-4 h-4 text-[#001BD2]" />, bg: "bg-[#001BD2]/10" },
-            { title: "Campaign Manager", sub: "Create and edit campaigns, view analytics, but cannot modify team settings.", icon: <Award className="w-4 h-4 text-[#004956]" />, bg: "bg-[#004956]/10" }
+            { title: "Owner", sub: "Full access, including billing, team management and account closure.", icon: <ShieldAlert className="w-4 h-4 text-[#001BD2]" />, bg: "bg-[#001BD2]/10" },
+            { title: "Admin", sub: "Can manage campaigns, customers, tracking and reports.", icon: <Award className="w-4 h-4 text-[#004956]" />, bg: "bg-[#004956]/10" },
+            { title: "Viewer", sub: "Read-only access.", icon: <Eye className="w-4 h-4 text-[#505F76]" />, bg: "bg-[#505F76]/10" }
           ].map((r, i) => (
             <div key={i} className="bg-white border border-[#C5C5D9]/10 shadow-[0px_1px_2px_rgba(0,0,0,0.05)] rounded-[20px] p-6 flex flex-col gap-4 text-left">
               <div className="flex items-center gap-3">

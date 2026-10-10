@@ -138,6 +138,8 @@ class Campaign(BaseModel):
     # True when paused automatically due to insufficient wallet funds, so the
     # funding sync can safely resume it (vs a manual pause).
     auto_paused = models.BooleanField(default=False)
+    # Master: Meta Pixel Tracking — the brand turns tracking on per campaign.
+    meta_pixel_enabled = models.BooleanField(default=False)
 
     # --- Nibbl approval (Master: Submission and revision rules) ---------------
     # Separate from `status` (draft/active/...): a campaign can only be

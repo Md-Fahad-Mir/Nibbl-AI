@@ -17,5 +17,8 @@ urlpatterns = [
     path(f"{_ba}/campaigns/", views.BrandCampaignAnalyticsView.as_view(), name="brand-campaigns"),
     path(f"{_ba}/products/", views.BrandProductAnalyticsView.as_view(), name="brand-products"),
     path("admin/analytics/overview/", views.PlatformOverviewView.as_view(), name="platform-overview"),
+    path("admin/analytics/revenue/", views.AdminRevenueDashboardView.as_view(), name="admin-revenue"),
+    path("admin/brand-discovery/", views.BrandDiscoveryView.as_view(), name="brand-discovery"),
+    path("admin/brand-discovery/<str:brand>/", views.BrandDiscoveryInsightView.as_view(), name="brand-discovery-insight"),
     path("admin/analytics/snapshots/", views.PlatformSnapshotListView.as_view(), name="platform-snapshots"),
 ]

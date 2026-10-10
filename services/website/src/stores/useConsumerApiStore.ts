@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { trackApprovedRedemptions, trackPixel } from "@/lib/metaPixel";
 import {
   ApiError,
   ApiRecord,
@@ -397,10 +398,12 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
         try {
           const details = await nibblApi.offerDetails(campaignId);
           set({ selectedOffer: details, status: "success" });
+          trackPixel(details.meta_pixel_id, "CampaignView", { campaign_id: campaignId });
         } catch {
           try {
             const detail = await nibblApi.offerDetail(campaignId);
             set({ selectedOffer: detail, status: "success" });
+            trackPixel(detail.meta_pixel_id, "CampaignView", { campaign_id: campaignId });
           } catch (fallbackError) {
             set({ status: "error", error: readError(fallbackError) });
           }
@@ -507,6 +510,7 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
             payoutMethods: listResults(payoutMethods),
             status: "success",
           });
+          trackApprovedRedemptions(listResults(redemptions));
         } catch (error) {
           set({ status: "error", error: readError(error) });
         }
@@ -515,6 +519,10 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
         set({ status: "loading", error: null });
         try {
           const reservation = await nibblApi.createReservation(campaignId, consents);
+          const offer = [get().selectedOffer, ...get().offers].find(
+            (item) => item && String(item.campaign_id ?? item.id) === campaignId
+          );
+          trackPixel(offer?.meta_pixel_id, "Claim", { campaign_id: campaignId });
           await get().loadRewardsHub();
           set({ status: "success", error: null });
           return reservation;

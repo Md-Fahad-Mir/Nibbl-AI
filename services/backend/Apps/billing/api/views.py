@@ -39,7 +39,7 @@ class AddFundsView(APIView):
 
     def post(self, request, brand_id):
         brand = get_brand_or_404(brand_id)
-        require_membership(request.user, brand, manager=True, active=True)
+        require_membership(request.user, brand, owner=True, active=True)
 
         payload = s.AddFundsSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
@@ -64,7 +64,7 @@ class SetupCardView(APIView):
 
     def post(self, request, brand_id):
         brand = get_brand_or_404(brand_id)
-        require_membership(request.user, brand, manager=True, active=True)
+        require_membership(request.user, brand, owner=True, active=True)
         try:
             result = services.create_card_setup_intent(brand=brand)
         except StripeNotConfigured:
@@ -107,7 +107,7 @@ class AutoRefillView(APIView):
 
     def put(self, request, brand_id):
         brand = get_brand_or_404(brand_id)
-        require_membership(request.user, brand, manager=True, active=True)
+        require_membership(request.user, brand, owner=True, active=True)
         payload = s.AutoRefillInputSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         try:
@@ -134,7 +134,7 @@ class RedeemPromoCodeView(APIView):
 
     def post(self, request, brand_id):
         brand = get_brand_or_404(brand_id)
-        require_membership(request.user, brand, manager=True, active=True)
+        require_membership(request.user, brand, owner=True, active=True)
         payload = s.RedeemPromoCodeSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         try:
@@ -181,7 +181,7 @@ class BrandPlanChangeView(APIView):
     @extend_schema(request=s.PlanChangeSerializer, responses={200: None})
     def post(self, request, brand_id):
         brand = get_brand_or_404(brand_id)
-        require_membership(request.user, brand, manager=True, active=True)
+        require_membership(request.user, brand, owner=True, active=True)
         payload = s.PlanChangeSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         try:
@@ -196,7 +196,7 @@ class BrandPlanChangeView(APIView):
     @extend_schema(request=None, responses={200: None})
     def delete(self, request, brand_id):
         brand = get_brand_or_404(brand_id)
-        require_membership(request.user, brand, manager=True)
+        require_membership(request.user, brand, owner=True)
         try:
             plans.cancel_change(brand=brand, actor=request.user)
         except plans.PlanChangeError as exc:

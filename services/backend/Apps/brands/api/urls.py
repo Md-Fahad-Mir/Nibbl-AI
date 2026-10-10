@@ -30,6 +30,12 @@ application_patterns = [
 brand_patterns = [
     path("", views.MyBrandListView.as_view(), name="brand-list"),
     path("<uuid:brand_id>/", views.BrandDetailView.as_view(), name="brand-detail"),
+    path("<uuid:brand_id>/tracking/", views.BrandTrackingView.as_view(), name="brand-tracking"),
+    path(
+        "<uuid:brand_id>/notification-preferences/",
+        views.BrandNotificationPreferencesView.as_view(),
+        name="brand-notification-preferences",
+    ),
     path(
         "<uuid:brand_id>/members/",
         views.BrandMembershipListCreateView.as_view(),

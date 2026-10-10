@@ -269,3 +269,20 @@ class MarketingConsent(BaseModel):
     def __str__(self):
         scope = f"brand {self.brand_id}" if self.brand_id else "Nibbl"
         return f"{self.user_id} → {scope}: {'in' if self.opted_in else 'out'}"
+
+
+class UserSession(BaseModel):
+    """One sign-in (device/browser). Its id rides in the JWTs as ``sid`` and
+    survives refresh rotation, so revoking it signs that device out
+    (Master: Security — active sessions, sign out other sessions)."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sessions")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "revoked_at"])]

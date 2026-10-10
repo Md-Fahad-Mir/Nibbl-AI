@@ -17,8 +17,12 @@ def get_brand_or_404(brand_id) -> Brand:
     return brand
 
 
-def require_membership(user, brand, *, manager=False, active=False):
-    """Enforce brand tenancy — platform admins bypass all checks."""
+def require_membership(user, brand, *, manager=False, owner=False, active=False):
+    """Enforce brand tenancy — platform admins bypass all checks.
+
+    Roles (Master: Team & Permissions): Owner — everything incl. billing and
+    team; Admin (``manager``) — campaigns, customers, tracking, reports;
+    Viewer (role ``member``) — read-only."""
     # Platform admins have unrestricted access to every brand-scoped endpoint.
     if getattr(user, "is_platform_admin", False):
         # Return the real membership if one exists, otherwise None.
@@ -29,6 +33,8 @@ def require_membership(user, brand, *, manager=False, active=False):
         raise PermissionDenied("You are not a member of this brand.")
     if manager and not membership.is_manager:
         raise PermissionDenied("Brand owner/admin role required.")
+    if owner and membership.role != membership.Role.OWNER:
+        raise PermissionDenied("Only the brand Owner can do this.")
     if active and not brand.is_operational:
         raise PermissionDenied("This brand is suspended.")
     return membership

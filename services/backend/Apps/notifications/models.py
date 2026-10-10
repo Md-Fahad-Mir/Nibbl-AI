@@ -16,6 +16,8 @@ class NotificationType(models.TextChoices):
     # Brand-facing billing alerts (not preference-gated — critical).
     AUTO_REFILL_FAILED = "auto_refill_failed", "Automatic refill failed"
     CAMPAIGN_REVIEW = "campaign_review", "Campaign review update"
+    RECEIPT_REVIEW_NEEDED = "receipt_review_needed", "Receipt waiting for your review"
+    LOW_RATING_REVIEW = "low_rating_review", "Low-rating review to respond to"
 
 
 # Maps a notification type to the preference flag that gates it.
@@ -79,6 +81,24 @@ class NotificationPreference(BaseModel):
             return False
         field = TYPE_TO_PREFERENCE.get(notification_type)
         return bool(getattr(self, field, True)) if field else True
+
+
+class BrandNotificationPreference(BaseModel):
+    """One team member's Email / SMS choice for one brand notification
+    (Master: each member manages their own; no row = email on, SMS off)."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="brand_notification_preferences"
+    )
+    brand = models.ForeignKey("brands.Brand", on_delete=models.CASCADE, related_name="notification_preferences")
+    notification_type = models.CharField(max_length=30, choices=NotificationType.choices)
+    email = models.BooleanField(default=True)
+    sms = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "brand", "notification_type"], name="uniq_brand_notif_pref"),
+        ]
 
 
 class Notification(BaseModel):

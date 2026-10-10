@@ -21,6 +21,16 @@ urlpatterns = [
         views.BrandWalletLedgerExportView.as_view(),
         name="brand-wallet-ledger-export",
     ),
+    path(
+        "brands/<uuid:brand_id>/wallet/statements/",
+        views.BrandWeeklyStatementsView.as_view(),
+        name="brand-weekly-statements",
+    ),
+    path(
+        "brands/<uuid:brand_id>/wallet/statements/<str:week_start>/export/",
+        views.BrandWeeklyStatementExportView.as_view(),
+        name="brand-weekly-statement-export",
+    ),
     # Customer wallet
     path("wallet/", views.CustomerWalletView.as_view(), name="customer-wallet"),
     path(

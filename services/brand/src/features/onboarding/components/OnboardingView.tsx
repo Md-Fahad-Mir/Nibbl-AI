@@ -17,6 +17,7 @@ import WalletView from "./wallet/WalletView";
 import AnalyticsView from "./analytics/AnalyticsView";
 import CustomersView from "./customers/CustomersView";
 import TagGeneratorView from "./tag-generator/TagGeneratorView";
+import PlansView from "./plans/PlansView";
 import { Product } from "../utils/mockData";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
@@ -46,6 +47,7 @@ const tabs = [
   "Analytics",
   "Customers",
   "Wallet",
+  "Plans",
   "Settings",
   "Tag Generator",
 ];
@@ -338,6 +340,8 @@ export default function OnboardingView() {
               {visibleTab === "Settings" && <SettingsView />}
 
               {visibleTab === "Wallet" && <WalletView />}
+
+              {visibleTab === "Plans" && <PlansView />}
 
               {visibleTab === "Analytics" && <AnalyticsView />}
 

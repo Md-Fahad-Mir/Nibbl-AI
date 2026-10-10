@@ -92,6 +92,15 @@ class Subscription(BaseModel):
     # Cumulative amount successfully charged (for quick reporting).
     total_charged = models.DecimalField(default=ZERO, **MONEY_FIELD)
 
+    # Self-serve plan change (Master: Plan Changes) — applied at the next
+    # renewal (``next_charge_at``); current pricing and access stay until then.
+    scheduled_plan = models.ForeignKey(
+        Plan, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+    # Downgrade: the rebate campaigns the brand chose to keep running.
+    scheduled_keep_campaign_ids = models.JSONField(default=list, blank=True)
+
     class Meta:
         ordering = ["-created_at"]
 

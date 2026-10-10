@@ -3,6 +3,7 @@
 import { useState } from "react";
 import WalletOverview from "./WalletOverview";
 import WalletDetails from "./WalletDetails";
+import WeeklyStatements from "./WeeklyStatements";
 
 export default function WalletView() {
   const [viewModeSetting, setViewModeSetting] = useState<"overview" | "details">("overview");
@@ -49,7 +50,10 @@ export default function WalletView() {
       {/* Render subcomponents */}
       <div className="w-full mt-2 relative">
         {viewModeSetting === "overview" ? (
-          <WalletOverview onViewAll={() => setViewModeSetting("details")} />
+          <div className="flex flex-col gap-8">
+            <WalletOverview onViewAll={() => setViewModeSetting("details")} />
+            <WeeklyStatements />
+          </div>
         ) : (
           <WalletDetails />
         )}

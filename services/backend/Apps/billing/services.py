@@ -24,7 +24,6 @@ from Apps.billing.models import (
     Subscription,
 )
 from Apps.brands.models import Brand
-from Apps.common.dates import add_months
 from Apps.common.money import ZERO, to_money
 from Apps.wallets import services as wallet_services
 from Apps.wallets.models import LedgerEntry
@@ -40,6 +39,8 @@ _SPEND_CATEGORIES = [
     LedgerEntry.Category.REVIEW_FEE,
     LedgerEntry.Category.SUBSCRIPTION,
 ]
+# Master: plan charges occur every 30 days from the original subscription date.
+BILLING_PERIOD = timedelta(days=30)
 # Master spec: refill when Available Funds reaches 25% of the 7-day estimate.
 AUTO_REFILL_TRIGGER_FRACTION = Decimal("0.25")
 
@@ -74,7 +75,7 @@ def ensure_subscription(brand) -> Subscription | None:
             "plan": brand.plan,
             "status": Subscription.Status.ACTIVE,
             "current_period_start": now,
-            "current_period_end": add_months(now, 1),
+            "current_period_end": now + BILLING_PERIOD,
             "next_charge_at": now,  # charge on the next run
         },
     )
@@ -95,6 +96,11 @@ def ensure_all_subscriptions() -> int:
 
 @transaction.atomic
 def _charge_one(subscription: Subscription, now) -> str:
+    from Apps.billing.plans import apply_scheduled_change
+
+    # A scheduled plan change begins at this renewal, so the renewal is
+    # charged at the new plan's price.
+    apply_scheduled_change(subscription)
     plan = subscription.plan
     amount = to_money(plan.monthly_price)
 
@@ -104,7 +110,10 @@ def _charge_one(subscription: Subscription, now) -> str:
         return "free"
 
     wallet = wallet_services.get_or_create_brand_wallet(subscription.brand)
-    period_key = subscription.current_period_start.date().isoformat()
+    # One key per renewal, from the charge's due date. (The period start
+    # can't be used: the first period starts on the same day the second
+    # charge's period does, which skipped the second charge.)
+    period_key = subscription.next_charge_at.date().isoformat()
     try:
         # Subscription is an eligible charge: spend promotional credit first.
         wallet_services.charge_eligible(
@@ -130,8 +139,8 @@ def _advance_period(subscription: Subscription, now, *, charged) -> None:
     subscription.last_charged_at = now
     subscription.total_charged = to_money(subscription.total_charged + charged)
     subscription.current_period_start = subscription.next_charge_at
-    subscription.current_period_end = add_months(subscription.next_charge_at, 1)
-    subscription.next_charge_at = add_months(subscription.next_charge_at, 1)
+    subscription.current_period_end = subscription.next_charge_at + BILLING_PERIOD
+    subscription.next_charge_at = subscription.next_charge_at + BILLING_PERIOD
     subscription.save(
         update_fields=[
             "status",

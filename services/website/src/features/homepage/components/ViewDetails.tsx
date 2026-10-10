@@ -5,6 +5,7 @@ import Header from "./Header";
 import Footer from "./Footer";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
 import { displayOffer } from "../lib/offerMappers";
+import { referralLink } from "@/lib/referral";
 import ProductReviews from "./ProductReviews";
 
 interface ViewDetailsProps {
@@ -18,6 +19,7 @@ export default function ViewDetails({ campaignId, onBack, onTabChange }: ViewDet
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const {
     accessToken,
+    user,
     selectedOffer,
     offers,
     unreadCount,
@@ -42,6 +44,16 @@ export default function ViewDetails({ campaignId, onBack, onTabChange }: ViewDet
         "Upload your receipt in NibblAI within 7 days of claiming.",
         "Get your reward in your Nibbl wallet once your receipt is approved.",
       ];
+
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  // Master: share a specific product deal with your referral link.
+  const handleShareDeal = async () => {
+    const code = typeof user?.referral_code === "string" ? user.referral_code : "";
+    const id = campaignId || details?.id;
+    if (!code || !id) return;
+    await navigator.clipboard.writeText(referralLink(code, String(id)));
+    setShareMessage("Deal link copied — friends who join with it count as your referral.");
+  };
 
   const handleSaveReward = async () => {
     const id = campaignId || details?.id;
@@ -161,6 +173,16 @@ export default function ViewDetails({ campaignId, onBack, onTabChange }: ViewDet
             >
               Save My Reward
             </button>
+
+            {accessToken && Boolean(user?.referral_code) && (
+              <button
+                onClick={() => void handleShareDeal()}
+                className="w-full h-[48px] bg-white border border-gray-200 hover:bg-gray-50 text-[#3E3EDF] text-[16px] font-medium rounded-lg transition-all flex items-center justify-center cursor-pointer mt-2"
+              >
+                Share this deal with a friend
+              </button>
+            )}
+            {shareMessage && <p className="text-sm text-[#00A671] mt-1">{shareMessage}</p>}
             {savedMessage && (
               <p className={`text-center text-[13px] font-medium ${status === "error" ? "text-[#E65353]" : "text-[#00A671]"}`}>
                 {savedMessage}

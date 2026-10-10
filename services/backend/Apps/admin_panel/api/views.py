@@ -356,3 +356,91 @@ class RoleStatisticsView(APIView):
     def get(self, request):
         return Response(selectors.role_statistics())
 
+
+
+@extend_schema(tags=["admin"])
+class UserLinkedAccountsView(APIView):
+    """Other accounts seen on this user's devices or networks, plus any
+    current device / network risk (Master #51)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, user_id):
+        from Apps.accounts import risk
+
+        user = User.objects.filter(id=user_id).first()
+        if user is None:
+            raise NotFound("User not found.")
+        return Response({"risk": risk.risk_reasons(user), "linked_accounts": risk.linked_accounts(user)})
+
+
+def _referral_row(referral):
+    from Apps.accounts.referrals import steps
+
+    def person(user):
+        return {"id": str(user.id), "full_name": user.full_name, "email": user.email, "is_active": user.is_active}
+
+    return {
+        "id": str(referral.id), "status": referral.status, "referrer": person(referral.referrer),
+        "referred": person(referral.referred), "campaign": referral.campaign.name if referral.campaign_id else None,
+        "steps": steps(referral), "qualified_at": referral.qualified_at, "flag_reason": referral.flag_reason,
+        "reward_amount": str(referral.reward_amount) if referral.reward_amount is not None else None,
+        "paid_at": referral.paid_at, "decision_reason": referral.decision_reason, "created_at": referral.created_at,
+    }
+
+
+@extend_schema(tags=["admin"])
+class AdminReferralListView(APIView):
+    """Referral Management: summary + list. ?status=in_progress|qualified|
+    flagged|paid|rejected (qualified = all steps done)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        from Apps.accounts.models import Referral
+
+        qs = Referral.objects.select_related("referrer", "referred", "campaign")
+        summary = {
+            "in_progress": qs.filter(status=Referral.Status.IN_PROGRESS).count(),
+            "qualified": qs.filter(qualified_at__isnull=False).count(),
+            "flagged": qs.filter(status=Referral.Status.FLAGGED).count(),
+            "paid": qs.filter(status=Referral.Status.PAID).count(),
+            "rejected": qs.filter(status=Referral.Status.REJECTED).count(),
+        }
+        status_filter = request.query_params.get("status", "")
+        if status_filter == "qualified":
+            qs = qs.filter(qualified_at__isnull=False)
+        elif status_filter:
+            qs = qs.filter(status=status_filter)
+        return Response({"summary": summary, "results": [_referral_row(r) for r in qs[:500]]})
+
+
+@extend_schema(tags=["admin"])
+class AdminReferralActionView(APIView):
+    """POST …/approve/, …/reject/ {reason}, …/suspend/ {target: referred|referrer, reason}."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request, referral_id, action):
+        from Apps.accounts import referrals
+        from Apps.accounts.models import Referral
+
+        referral = Referral.objects.select_related("referrer", "referred", "campaign").filter(id=referral_id).first()
+        if referral is None or action not in ("approve", "reject", "suspend"):
+            raise NotFound("Referral not found.")
+        reason = str(request.data.get("reason", ""))
+        try:
+            if action == "approve":
+                referrals.approve(referral, admin=request.user)
+            elif action == "reject":
+                referrals.reject(referral, admin=request.user, reason=reason)
+            else:
+                referrals.suspend(referral, admin=request.user, target=str(request.data.get("target", "")),
+                                  reason=reason)
+        except referrals.ReferralError as exc:
+            raise ValidationError({"detail": str(exc)})
+        referral.refresh_from_db()
+        return Response(_referral_row(referral))

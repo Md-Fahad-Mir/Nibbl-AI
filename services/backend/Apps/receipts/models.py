@@ -240,6 +240,7 @@ class FraudFlag(BaseModel):
         NO_MATCH = "no_match", "Product not matched"
         VELOCITY = "velocity", "Too many active claims"
         MANUAL = "manual", "Manually flagged"
+        DEVICE = "device", "Shared device or network"
 
     receipt = models.ForeignKey(
         Receipt,

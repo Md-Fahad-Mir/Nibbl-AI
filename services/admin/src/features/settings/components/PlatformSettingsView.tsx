@@ -42,6 +42,12 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
         store_match_multiplier: text("store_match_multiplier"),
         brand_interest_multiplier: text("brand_interest_multiplier"),
         going_fast_percent: Number(text("going_fast_percent")),
+        device_checks_enabled: bool("device_checks_enabled"),
+        max_accounts_per_device: Number(text("max_accounts_per_device")),
+        max_accounts_per_ip_daily: Number(text("max_accounts_per_ip_daily")),
+        referral_flag_shared_device: bool("referral_flag_shared_device"),
+        referral_flag_shared_network: bool("referral_flag_shared_network"),
+        referral_flag_fraud_signals: bool("referral_flag_fraud_signals"),
       });
       setDraft({});
       setMessage("Settings saved.");
@@ -121,6 +127,44 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
             />
             Referral bonuses enabled
           </label>
+          <p className="text-sm font-semibold text-[#454656] mt-3">Referral Flag Rules</p>
+          <p className="text-xs text-[#6B6B80]">A qualified referral matching an enabled rule goes to Referrals for review instead of paying.</p>
+          {[
+            { field: "referral_flag_shared_device", label: "Flag when the new shopper and the referrer used the same device" },
+            { field: "referral_flag_shared_network", label: "Flag when they used the same network" },
+            { field: "referral_flag_fraud_signals", label: "Flag when either account has fraud signals" },
+          ].map((f) => (
+            <label key={f.field} className="flex items-center gap-2 text-sm font-medium text-[#454656] mt-2">
+              <input type="checkbox" checked={bool(f.field)}
+                onChange={(e) => setDraft({ ...draft, [f.field]: e.target.checked })} />
+              {f.label}
+            </label>
+          ))}
+        </div>
+
+        <div className="border-t border-[#F0F0F7] pt-4 flex flex-col gap-3">
+          <div>
+            <h3 className="text-base font-bold text-[#1A1A2E]">Device &amp; network checks</h3>
+            <p className="text-sm text-[#6B6B80] mt-1">
+              Receipts and withdrawals from accounts over these limits go to manual review. Shoppers aren&apos;t told
+              which rule applied.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-sm font-medium text-[#454656]">
+            <input type="checkbox" checked={bool("device_checks_enabled")}
+              onChange={(e) => setDraft({ ...draft, device_checks_enabled: e.target.checked })} />
+            Device and network checks enabled
+          </label>
+          {[
+            { field: "max_accounts_per_device", label: "Max accounts per device (90 days)" },
+            { field: "max_accounts_per_ip_daily", label: "Max accounts per network in 24 hours" },
+          ].map((f) => (
+            <label key={f.field} className="flex flex-col gap-1 text-sm font-semibold text-[#454656]">
+              {f.label}
+              <input className={inputClass} type="number" min="1" step="1" value={text(f.field)}
+                onChange={(e) => setDraft({ ...draft, [f.field]: e.target.value })} />
+            </label>
+          ))}
         </div>
 
         <div className="border-t border-[#F0F0F7] pt-4 flex flex-col gap-4">

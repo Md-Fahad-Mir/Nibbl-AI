@@ -465,8 +465,11 @@ def _decide(receipt: Receipt, *, matched_units: int, review_note: str) -> None:
         user=receipt.user, status=Reservation.Status.ACTIVE
     ).count()
     velocity = active_claims > settings.MAX_ACTIVE_CLAIMS
+    from Apps.accounts.risk import risk_reasons
 
-    if matched_units >= required and not velocity and not review_note:
+    device_risk = risk_reasons(receipt.user)
+
+    if matched_units >= required and not velocity and not review_note and not device_risk:
         _verify(receipt, reviewer=None, reason="Auto-verified.")
         return
 
@@ -481,6 +484,11 @@ def _decide(receipt: Receipt, *, matched_units: int, review_note: str) -> None:
             receipt=receipt, user=receipt.user, brand=receipt.brand,
             reason=FraudFlag.Reason.VELOCITY,
             detail=f"{active_claims} active claims.",
+        )
+    if device_risk:
+        FraudFlag.objects.create(
+            receipt=receipt, user=receipt.user, brand=receipt.brand,
+            reason=FraudFlag.Reason.DEVICE, detail=" ".join(device_risk),
         )
     if review_note:
         receipt.decision_reason = review_note

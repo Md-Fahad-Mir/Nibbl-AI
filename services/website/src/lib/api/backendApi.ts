@@ -1,3 +1,5 @@
+import { deviceId } from "@/lib/referral";
+
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export interface ApiEndpoint {
@@ -712,6 +714,8 @@ export const apiClient = {
       headers.set("Content-Type", "application/json");
     }
 
+    const device = deviceId();
+    if (device && !headers.has("X-Device-Id")) headers.set("X-Device-Id", device);
     if ((options.auth ?? endpoint.auth) && !headers.has("Authorization")) {
       const access = tokenStorage.getAccess();
       if (access) headers.set("Authorization", `Bearer ${access}`);
@@ -779,6 +783,7 @@ export const nibblApi = {
     password: string;
     accept_terms: boolean;
     referral_code?: string;
+    referral_campaign?: string;
   }) => requestEndpoint<ApiRecord>(backendApi.auth.register, body),
   verifyEmail: (body: { email: string; code: string }) =>
     requestEndpoint<ApiRecord>(backendApi.auth.verifyEmail, body),

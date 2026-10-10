@@ -131,6 +131,10 @@ def _verify_code(user: User, purpose: str, code: str) -> VerificationCode:
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+def referred_code_ok(code) -> bool:
+    return bool(code) and get_user_by_referral_code(code) is not None
+
+
 @transaction.atomic
 def register_user(
     *,
@@ -141,6 +145,7 @@ def register_user(
     referral_code: str | None = None,
     verify_via: str = "code",
     brand_application: dict | None = None,
+    referral_campaign=None,
 ) -> PendingUser:
     # Self-registration can never grant platform-admin access.
     if role == User.Role.ADMIN:
@@ -162,6 +167,7 @@ def register_user(
         verification_code=code,
         expires_at=expires_at,
         brand_application=brand_application or {},
+        referral_campaign_id=referral_campaign if referred_code_ok(referral_code) else None,
     )
 
     _send_verification(pending, verify_via)
@@ -246,6 +252,10 @@ def verify_email(*, email: str, code: str = "", token: str = "") -> User:
     user.save()
     if pending.brand_application:
         _file_brand_application(user, pending.brand_application)
+    if referred_by is not None:
+        from Apps.accounts import referrals
+
+        referrals.start(user, campaign_id=pending.referral_campaign_id)
 
     pending.delete()
 

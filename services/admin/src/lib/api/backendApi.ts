@@ -612,6 +612,17 @@ export const backendApi = {
       auth: true,
     },
     revenueDashboard: { method: "GET", path: "/admin/analytics/revenue/", auth: true },
+    linkedAccounts: (userId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/admin/users/${userId}/linked-accounts/`,
+      auth: true,
+    }),
+    referrals: { method: "GET", path: "/admin/referrals/", auth: true },
+    referralAction: (referralId: string, action: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/referrals/${referralId}/${action}/`,
+      auth: true,
+    }),
     brandDiscovery: { method: "GET", path: "/admin/brand-discovery/", auth: true },
     brandDiscoveryInsight: (brand: string): ApiEndpoint => ({
       method: "GET",
@@ -873,6 +884,12 @@ export const nibblApi = {
     requestEndpoint<ApiRecord>(backendApi.admin.brandDiscoveryInsight(brand), undefined, query),
   setBrandDiscoveryRule: (token: string, body: { display_name?: string; ignored?: boolean }) =>
     requestEndpoint<ApiRecord>(backendApi.admin.brandDiscoveryRule(token), body),
+  adminLinkedAccounts: (userId: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.linkedAccounts(userId)),
+  adminReferrals: (status: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.referrals, undefined, status ? { status } : undefined),
+  adminReferralAction: (referralId: string, action: "approve" | "reject" | "suspend", body: ApiRecord = {}) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.referralAction(referralId, action), body),
   adminFlaggedReviews: () =>
     requestEndpoint<ApiRecord[]>(backendApi.admin.flaggedReviews),
   decideFlaggedReview: (reviewId: string, action: "remove" | "keep", note: string) =>

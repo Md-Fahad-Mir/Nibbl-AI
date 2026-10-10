@@ -52,6 +52,9 @@ export const DashboardView = () => {
       case "brand-discovery":
         router.push("/brand-discovery");
         break;
+      case "referrals":
+        router.push("/referrals");
+        break;
       case "payout-reviews":
         router.push("/payout-reviews");
         break;

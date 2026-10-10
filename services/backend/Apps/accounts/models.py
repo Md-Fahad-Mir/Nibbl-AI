@@ -170,6 +170,8 @@ class PendingUser(BaseModel):
         default=User.Role.CONSUMER,
     )
     referral_code = models.CharField(max_length=12, null=True, blank=True)
+    # Product deal the referral link pointed to (Master: share a specific deal).
+    referral_campaign_id = models.UUIDField(null=True, blank=True)
     verification_code = models.CharField(max_length=6)
     # Brand signup verifies through a secure one-time link instead of the
     # code (Master: Plan & Account Setup). Empty for code-based signups.
@@ -286,3 +288,62 @@ class UserSession(BaseModel):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["user", "revoked_at"])]
+
+
+class DeviceRecord(BaseModel):
+    """Device / network / browser seen for an account at a key action
+    (Master #51). ``device_id`` is a SHA-256 of the client's stable device
+    identifier (website: per-browser id; app: device id)."""
+
+    class Event(models.TextChoices):
+        SIGNUP = "signup", "Signup"
+        LOGIN = "login", "Login"
+        CLAIM = "claim", "Claim"
+        RECEIPT = "receipt", "Receipt upload"
+        PAYOUT_METHOD = "payout_method", "Payout method"
+        WITHDRAWAL = "withdrawal", "Withdrawal"
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="device_records")
+    device_id = models.CharField(max_length=64, blank=True, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True, db_index=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+    event = models.CharField(max_length=20, choices=Event.choices)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class Referral(BaseModel):
+    """A shopper invited by another (Master: Refer a Friend). The reward is
+    earned only after the new shopper joins through the link, claims an
+    offer, completes an approved redemption, connects a payout method and
+    completes any successful withdrawal. Then the referral protection checks
+    run: clean → paid; otherwise flagged for Admin review."""
+
+    class Status(models.TextChoices):
+        IN_PROGRESS = "in_progress", "In progress"
+        FLAGGED = "flagged", "Flagged"
+        PAID = "paid", "Paid"
+        REJECTED = "rejected", "Rejected"
+
+    referrer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="referrals_made")
+    referred = models.OneToOneField(User, on_delete=models.CASCADE, related_name="referral_received")
+    # Set when the friend joined through a shared product deal.
+    campaign = models.ForeignKey("campaigns.Campaign", null=True, blank=True, on_delete=models.SET_NULL,
+                                 related_name="+")
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.IN_PROGRESS, db_index=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    redeemed_at = models.DateTimeField(null=True, blank=True)
+    payout_connected_at = models.DateTimeField(null=True, blank=True)
+    withdrawn_at = models.DateTimeField(null=True, blank=True)
+    qualified_at = models.DateTimeField(null=True, blank=True)
+    flag_reason = models.TextField(blank=True)
+    reward_amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    # Customer-facing explanation when Admin rejects the reward.
+    decision_reason = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]

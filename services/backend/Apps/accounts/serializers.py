@@ -105,6 +105,8 @@ class RegisterSerializer(serializers.Serializer):
         default=User.Role.CONSUMER,
     )
     referral_code = serializers.CharField(required=False, allow_blank=True)
+    # A shared product deal the referral link pointed to (optional).
+    referral_campaign = serializers.UUIDField(required=False, allow_null=True)
     accept_terms = serializers.BooleanField()
     # "link" emails a secure one-time verification link (brand signup).
     verify_via = serializers.ChoiceField(choices=["code", "link"], required=False, default="code")
@@ -220,10 +222,40 @@ class SocialLoginSerializer(serializers.Serializer):
 
 
 class ReferralUserSerializer(serializers.ModelSerializer):
+    # Qualification progress (Master: track each referral's progress) — additive.
+    status = serializers.SerializerMethodField()
+    steps = serializers.SerializerMethodField()
+    reward_amount = serializers.SerializerMethodField()
+    decision_reason = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ["id", "full_name", "created_at"]
+        fields = ["id", "full_name", "created_at", "status", "steps", "reward_amount", "decision_reason"]
         read_only_fields = fields
+
+    def _referral(self, obj):
+        return getattr(obj, "referral_received", None) if hasattr(obj, "referral_received") else None
+
+    def get_status(self, obj):
+        referral = self._referral(obj)
+        if referral is None:
+            return None
+        # Shoppers never see that a referral was flagged — it's "in review".
+        return "in_review" if referral.status == referral.Status.FLAGGED else referral.status
+
+    def get_steps(self, obj):
+        from Apps.accounts.referrals import steps
+
+        referral = self._referral(obj)
+        return [{k: v for k, v in s.items() if k != "at"} for s in steps(referral)] if referral else []
+
+    def get_reward_amount(self, obj):
+        referral = self._referral(obj)
+        return str(referral.reward_amount) if referral and referral.reward_amount is not None else None
+
+    def get_decision_reason(self, obj):
+        referral = self._referral(obj)
+        return referral.decision_reason if referral and referral.status == referral.Status.REJECTED else ""
 
 
 class ReferralOverviewSerializer(serializers.Serializer):

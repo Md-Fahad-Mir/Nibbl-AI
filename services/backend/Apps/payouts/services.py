@@ -204,10 +204,16 @@ def request_withdrawal(*, user, payout_method_id, amount, code="") -> Withdrawal
         if not code or not twilio_verify.check_verification(phone, code):
             raise PayoutError("Invalid or missing verification code.")
 
+    from Apps.accounts.risk import risk_reasons
+
+    # Device / network risk (Master #51) also routes to Manual Review; the
+    # reason is admin-only.
+    device_risk = risk_reasons(user)
     withdrawal = WithdrawalRequest.objects.create(
         user=user, payout_method=method, provider=method.provider,
         handle=method.handle, amount=amount, status=S.PENDING,
-        needs_review=_withdrawal_needs_review(user, amount),
+        needs_review=_withdrawal_needs_review(user, amount) or bool(device_risk),
+        admin_note=" ".join(device_risk),
     )
     hold = wallet_services.place_hold(
         wallet=wallet, amount=amount,

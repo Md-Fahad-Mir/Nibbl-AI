@@ -165,6 +165,15 @@ class PlatformSettings(models.Model):
     withdrawal_rolling_days = models.PositiveIntegerField(default=30)
     referrals_enabled = models.BooleanField(default=True)
 
+    # --- Fraud & abuse (Master #51): device / network checks ----------------
+    device_checks_enabled = models.BooleanField(default=True)
+    max_accounts_per_device = models.PositiveSmallIntegerField(default=2)
+    max_accounts_per_ip_daily = models.PositiveSmallIntegerField(default=5)
+    # --- Referral Flag Rules (Master: Admin Settings) -------------------------
+    referral_flag_shared_device = models.BooleanField(default=True)
+    referral_flag_shared_network = models.BooleanField(default=True)
+    referral_flag_fraud_signals = models.BooleanField(default=True)
+
     # --- Discovery ranking (Master: Base CVR × Store Match × Brand Interest) ---
     # Base CVR = (redemptions + prior redemptions) ÷ (views + prior views) over
     # the last 30 days; the "pseudo-data" prior keeps new campaigns ranked fairly.

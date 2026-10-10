@@ -425,12 +425,11 @@ CORS_PREFLIGHT_MAX_AGE = env.int("CORS_PREFLIGHT_MAX_AGE", default=86400)
 # The package's defaults already cover the methods and headers the frontend
 # needs — methods: GET/POST/PUT/PATCH/DELETE/OPTIONS; headers: accept,
 # authorization, content-type, origin, x-csrftoken, x-requested-with, etc.
-# Extend CORS_ALLOW_HEADERS via the env list only if the frontend sends a
-# custom header beyond those defaults.
-_extra_cors_headers = env.list("CORS_EXTRA_ALLOW_HEADERS", default=[])
-if _extra_cors_headers:
-    from corsheaders.defaults import default_headers
+# Shopper apps also send X-Device-Id for fraud checks (Master #51). Extend
+# further via the env list if the frontend sends another custom header.
+from corsheaders.defaults import default_headers  # noqa: E402
 
-    CORS_ALLOW_HEADERS = (*default_headers, *_extra_cors_headers)
+_extra_cors_headers = env.list("CORS_EXTRA_ALLOW_HEADERS", default=[])
+CORS_ALLOW_HEADERS = (*default_headers, "x-device-id", *_extra_cors_headers)
 
 

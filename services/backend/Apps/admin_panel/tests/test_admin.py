@@ -250,9 +250,9 @@ class PlatformSettingsTests(APITestCase):
         resp = self.client.get(reverse("v1:admin_panel:settings"))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_referral_toggle_disables_bonus(self):
+    def test_referral_toggle_disables_referrals(self):
+        from Apps.accounts import referrals
         from Apps.common.models import PlatformSettings
-        from Apps.wallets import services as ws
 
         inviter = User.objects.create_user(email="inv@example.com", password="x", full_name="Inv")
         invited = User.objects.create_user(
@@ -261,7 +261,7 @@ class PlatformSettingsTests(APITestCase):
         settings_obj = PlatformSettings.load()
         settings_obj.referrals_enabled = False
         settings_obj.save()
-        self.assertIsNone(ws.maybe_credit_referral_bonus(invited))
+        self.assertIsNone(referrals.start(invited))
 
 
 class PhoneResetTests(APITestCase):

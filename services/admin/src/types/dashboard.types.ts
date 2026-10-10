@@ -29,6 +29,7 @@ export type SidebarNavItem =
   | "campaign-approvals"
   | "review-flags"
   | "brand-discovery"
+  | "referrals"
   | "withdraw-request"
   | "payout-reviews"
   | "settings"

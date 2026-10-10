@@ -72,7 +72,7 @@
 
 ## Shopper Wallet, Withdrawals & Referrals
 - [x] ✅ **39. Wallet & withdrawals** — wallet + withdrawals ✓; **SMS-verified withdrawals live on prod** (Twilio Verify): phone add/verify (Profile + inline at withdrawal, any country, 48h pause on phone change, admin phone reset)
-- [ ] 🟡 **40. Referrals** — invite/code ✓; full qualification flow (join→claim→redeem→payout→withdraw) missing
+- [x] ✅ **40. Referrals** — reward earned only after join (referral link) → claim → approved redemption → payout method connected → successful withdrawal (no more pay-at-signup); general link `?ref=` and specific deal link `&deal=`; shopper progress tracker (5 steps, "being reviewed" without internal reasons, rejection reason shown); paid to the referrer's wallet, then normal withdrawal rules. Website: copy link, per-friend progress, "Share this deal". *Mobile app: progress + deal links per the API doc*
 - [x] ✅ **41. Payout-account safeguards** — one PayPal/Venmo per user ✓; first method auto-approved, later changes held for admin review (withdrawals blocked until approved); duplicate across users raises a fraud flag; admin review queue UI (approve/reject)
 
 ## Admin — Dashboard, Withdrawals, Brands, Approvals, Promo
@@ -81,18 +81,18 @@
 - [x] ✅ **44. Campaign approval queue** — admin Campaign Approvals page: new campaigns and revisions kept separate, essential terms + proposed changes, approve / request changes / reject with comment
 - [x] ✅ **45. Promo codes** — reusable admin-created codes (amount, validity dates, usage limits, once-per-brand) redeemed by brands for *promotional* credit; promo money covers fees/subscription (promo-first) but never shopper rewards (wallet real/promo split enforced); admin create/list UI + brand redeem UI
 - [x] ✅ **46. Shopper management & suspensions** — global suspend ✓; **per-brand suspension** (brand Customers → Suspend/Reactivate, blocks claims on that brand only; anonymized plans act by `cust_` ref); **repeated-suspension fraud alert** (`REPEATED_SUSPENSION_ALERT`, default 3); shopper wallet adjustments now **require a reason** + ledger entry
-- [ ] ⬜ **47. Referral management / flag review**
+- [x] ✅ **47. Referral management / flag review** — admin Referrals: summary (in progress, qualified, flagged, paid), flagged kept separate, referrer + new shopper + steps + reward status, clear flag reason; approve (pays), reject (customer-facing reason required), suspend the new shopper or the referrer. Referral Flag Rules in Admin Settings (same device / same network / fraud signals — each switchable)
 - [x] ✅ **48. Receipt brand discovery** — admin "Brand Discovery": unpartnered brands found on verified receipts (lines not matched to a partner product; existing partners excluded). Summary (unpartnered brands, verified receipts, participating retailers); filters (date, brand, category, retailer, state); leads with brand, product text, retailer, state, unique shoppers, receipt volume, repeat purchasers — no shopper identities; selected-brand insight with outreach message; CSV export. *OCR returns no brand, so the brand is detected from the product text's leading word; admin can rename/merge or hide (e.g. store brands). State = the shopper's saved discovery location*
 - [x] ✅ **49. Revenue analytics** — `GET /admin/analytics/revenue/`: subscription revenue, rebate fees, review fees (from brand wallet debits), promo credits applied + cash revenue; shopper rewards excluded from revenue and reported as brand-funded rewards; per-brand breakdown; monthly Revenue Trend by source. *Refunds and payment-processing costs (Stripe fees) aren't recorded in the ledger yet, so net revenue shows credits only*
 - [x] ✅ **50. Admin settings** — withdrawal-review thresholds + referral toggle; Discovery Ranking (pseudo-data views/redemptions, Store Match ×, Brand Interest ×) and the configurable "Going fast" threshold
 
 ## Cross-cutting
-- [ ] 🟡 **51. Fraud & abuse controls** — duplicate / velocity / manual ✓; device / IP / browser checks missing
+- [x] ✅ **51. Fraud & abuse controls** — duplicate / velocity / manual ✓; device / IP / browser recorded at signup, login, claim, receipt upload, payout method and withdrawal (device id hashed); admin rules: max accounts per device (90 days) and per network (24 h), switchable; matches send receipts to manual review (fraud flag "Shared device or network") and withdrawals to Manual Review with the admin-only reason; admin user detail shows linked accounts + risk. *Mobile app must send `X-Device-Id`*
 
 ---
 
 ## Progress
-**Done to spec (48):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #25, #26, #27, #28, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #41, #42, #43, #44, #45, #46, #48, #49, #50.
+**Done to spec (51):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #25, #26, #27, #28, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, #41, #42, #43, #44, #45, #46, #47, #48, #49, #50, #51.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)

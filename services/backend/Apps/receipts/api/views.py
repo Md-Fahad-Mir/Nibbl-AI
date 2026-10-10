@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from Apps.accounts import risk
 from Apps.accounts.models import User
 from Apps.brands.access import get_brand_or_404, require_membership
 from Apps.common.exceptions import DomainError
@@ -88,6 +89,7 @@ class ReceiptListCreateView(APIView):
         serializer = s.UploadReceiptSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        risk.record(request, request.user, "receipt")
         receipt = _run(
             services.upload_receipt,
             user=request.user,

@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from Apps.accounts import risk
 from Apps.accounts import serializers as s
 from Apps.accounts import services
 from Apps.accounts.models import User
@@ -47,6 +48,7 @@ class RegisterView(APIView):
             referral_code=data.get("referral_code") or None,
             verify_via=data.get("verify_via", "code"),
             brand_application=data.get("brand_application") or {},
+            referral_campaign=data.get("referral_campaign"),
         )
         return Response(
             {
@@ -88,6 +90,7 @@ class LoginView(APIView):
                 "user_agent": request.META.get("HTTP_USER_AGENT", ""),
             },
         )
+        risk.record(request, result["user"], "login")
         user_data = s.UserSerializer(result["user"], context={"request": request}).data
         return Response(
             {**result["tokens"], "user": user_data},
@@ -122,6 +125,7 @@ class VerifyEmailView(APIView):
         serializer = s.VerifyEmailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = _run(services.verify_email, **serializer.validated_data)
+        risk.record(request, user, "signup")
         return Response(s.UserSerializer(user).data)
 
 
@@ -260,7 +264,7 @@ class ReferralView(APIView):
 
     @extend_schema(responses={200: s.ReferralOverviewSerializer})
     def get(self, request):
-        referrals = request.user.referrals.filter(is_deleted=False)
+        referrals = request.user.referrals.filter(is_deleted=False).select_related("referral_received")
         payload = {
             "referral_code": request.user.referral_code,
             "total_referrals": referrals.count(),

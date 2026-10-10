@@ -1,8 +1,39 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { UserDetail } from "@/types/users.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
+import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
+
+/** Master #51: other accounts seen on this user's devices / networks. */
+const LinkedAccounts = ({ userId }: { userId: string }) => {
+  const [data, setData] = useState<ApiRecord | null>(null);
+  useEffect(() => {
+    let live = true;
+    nibblApi.adminLinkedAccounts(userId).then((d) => live && setData(d)).catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [userId]);
+  if (!data) return null;
+  const linked = (Array.isArray(data.linked_accounts) ? data.linked_accounts : []) as ApiRecord[];
+  const risk = (Array.isArray(data.risk) ? data.risk : []) as string[];
+  return (
+    <div className="py-3.5 border-b border-[#3E3EDF] flex flex-col gap-1 text-sm">
+      <span className="font-medium text-[#1F1D1D]">Device &amp; network :</span>
+      {risk.map((r) => <span key={r} className="text-[#E65353] text-xs">{r}</span>)}
+      {linked.length === 0 ? (
+        <span className="text-xs text-[#6B6B80]">No other accounts on this user&apos;s devices or networks.</span>
+      ) : (
+        linked.map((a) => (
+          <span key={String(a.id)} className="text-xs text-[#1F1D1D]">
+            {String(a.email)} — shared {(a.shared as string[]).join(" & ")}{a.is_active ? "" : " (suspended)"}
+          </span>
+        ))
+      )}
+    </div>
+  );
+};
 
 interface UserDetailsModalProps {
   isOpen: boolean;
@@ -121,6 +152,8 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
               {data.joiningDate}
             </span>
           </div>
+
+          <LinkedAccounts userId={data.id} />
         </div>
 
         {/* Bottom Spacing */}

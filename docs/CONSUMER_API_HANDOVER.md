@@ -424,10 +424,16 @@ Earn $1 by reviewing products from a verified purchase (Master: review campaigns
 
 ## 10. Referral APIs
 
-**Reward condition:** the inviter earns the referral bonus (see `referral_bonus_amount` in `/config/`, default `$5`) when the invited friend signs up with the inviter's code and completes their first receipt + review.
+**Reward condition (Oct 2026, Master):** the inviter earns the referral bonus (see `referral_bonus_amount` in `/config/`, default `$5`) only after the friend (1) joins through the referral link, (2) claims an offer, (3) completes an approved redemption, (4) connects a payout method and (5) completes any successful withdrawal. Nothing is paid at signup any more. Some qualified referrals are reviewed by Nibbl before paying.
+
+### Referral links
+- General link: `https://www.joinnibbl.com/?ref=<referral_code>`; a specific product deal: `…/?ref=<referral_code>&deal=<campaign_id>`.
+- `POST /auth/register/` accepts `referral_code` and (optional) `referral_campaign` (the deal's campaign id).
 
 ### Referral Summary
-- `GET /users/me/referrals/` · **Auth:** required → `{ "referral_code":"AB12CD34", "total_referrals":2, "referrals":[{ "id","full_name","created_at" }] }`
+- `GET /users/me/referrals/` · **Auth:** required → `{ "referral_code":"AB12CD34", "total_referrals":2, "referrals":[{ "id","full_name","created_at","status","steps","reward_amount","decision_reason" }] }`
+  - `status`: `in_progress | in_review | paid | rejected` (`null` for very old sign-ups). Show `decision_reason` when `rejected`.
+  - `steps`: 5 items `{ "key", "label", "done" }` in order (joined, claimed, redeemed, payout_connected, withdrawn) — show them as a progress tracker. Never show internal review reasons.
 
 ### Invite Friend
 - `POST /users/me/referrals/invite/` · **Auth:** required · **Rate-limited** (20/hr)
@@ -627,3 +633,5 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 9. **Marketing consent (Oct 2026)** — see §2 "Marketing consent": list consents and let shoppers opt out per brand / NibblAI.
 10. **Review campaigns (Oct 2026)** — see §7: opportunities → 6-question chat → editable AI draft (regenerate) → honesty checkbox in the app, then submit `{rating, title, content, would_recommend}`; show `display_name` + disclosure; review summary has star distribution / recommendation rate.
 11. **Meta Pixel (Oct 2026)** — offer detail and redemption responses include `meta_pixel_id` (the brand's validated pixel, or `null` when tracking is off). The website fires Campaign View / Claim / Approved Redemption to it in the browser. The app may ignore it (no Meta SDK work is required at launch); if the app adds Meta later, use only this ID — never brand-supplied scripts.
+12. **Device id for fraud checks (Oct 2026)** — send a stable, app-generated device identifier on **every** request as header `X-Device-Id` (8–128 chars, letters/digits/`-_.:`; e.g. a UUID created on first launch and kept in secure storage). It's hashed server-side and used for device/network fraud rules. Without it, device checks fall back to network checks only.
+13. **Referrals (Oct 2026)** — see §10: link format with `?ref=` / `&deal=`, `referral_campaign` on register, and the 5-step progress in `GET /users/me/referrals/`.

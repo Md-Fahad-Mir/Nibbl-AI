@@ -22,6 +22,13 @@ class PlatformSettingsSerializer(serializers.ModelSerializer):
             "store_match_multiplier",
             "brand_interest_multiplier",
             "going_fast_percent",
+            # Fraud & abuse (Master #51) + Referral Flag Rules
+            "device_checks_enabled",
+            "max_accounts_per_device",
+            "max_accounts_per_ip_daily",
+            "referral_flag_shared_device",
+            "referral_flag_shared_network",
+            "referral_flag_fraud_signals",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
@@ -30,6 +37,8 @@ class PlatformSettingsSerializer(serializers.ModelSerializer):
             "brand_interest_multiplier": {"min_value": Decimal("1.00"), "max_value": Decimal("5.00")},
             "going_fast_percent": {"min_value": 1, "max_value": 100},
             "ranking_prior_views": {"min_value": 1},
+            "max_accounts_per_device": {"min_value": 1},
+            "max_accounts_per_ip_daily": {"min_value": 1},
         }
 
 

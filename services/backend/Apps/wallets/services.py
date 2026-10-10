@@ -9,7 +9,6 @@ Every mutating operation:
 
 from __future__ import annotations
 
-from django.conf import settings
 from django.db import connection, transaction
 from django.utils import timezone
 
@@ -282,30 +281,3 @@ def release_hold(*, hold) -> Hold:
     hold.released_at = timezone.now()
     hold.save(update_fields=["status", "released_at", "updated_at"])
     return hold
-
-
-# ---------------------------------------------------------------------------
-# Referral bonus (M1 "Invite Friends, Earn $5")
-# ---------------------------------------------------------------------------
-def maybe_credit_referral_bonus(referred_user) -> LedgerEntry | None:
-    """Pay the inviter once, the first time a referred user is activated."""
-    from Apps.common.models import get_platform_settings
-
-    if not get_platform_settings().referrals_enabled:
-        return None
-    referrer = referred_user.referred_by
-    if referrer is None:
-        return None
-    amount = to_money(settings.REFERRAL_BONUS_AMOUNT)
-    if amount <= ZERO:
-        return None
-    wallet = get_or_create_customer_wallet(referrer)
-    return credit(
-        wallet=wallet,
-        amount=amount,
-        category=LedgerEntry.Category.REFERRAL_BONUS,
-        reference_type="user",
-        reference_id=referred_user.id,
-        description="Referral bonus",
-        idempotency_key=f"referral-bonus:{referred_user.id}",
-    )

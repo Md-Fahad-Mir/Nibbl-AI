@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from Apps.accounts import risk
 from Apps.accounts.twilio_verify import TwilioNotConfigured
 from Apps.common.exceptions import DomainError
 from Apps.common.pagination import paginate, paginated_response_serializer
@@ -54,6 +55,7 @@ class PayoutMethodListCreateView(APIView):
     def post(self, request):
         serializer = s.AddPayoutMethodSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        risk.record(request, request.user, "payout_method")
         method = _run(services.add_payout_method, user=request.user, **serializer.validated_data)
         return Response(s.PayoutMethodSerializer(method).data, status=status.HTTP_201_CREATED)
 
@@ -91,6 +93,7 @@ class WithdrawalListCreateView(APIView):
     def post(self, request):
         serializer = s.RequestWithdrawalSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        risk.record(request, request.user, "withdrawal")
         withdrawal = _run(
             services.request_withdrawal,
             user=request.user,

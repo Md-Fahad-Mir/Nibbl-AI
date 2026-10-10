@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { trackApprovedRedemptions, trackPixel } from "@/lib/metaPixel";
+import { captureReferral, clearReferral, storedReferral } from "@/lib/referral";
 import {
   ApiError,
   ApiRecord,
@@ -242,12 +243,16 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
       register: async (fullName, email, password) => {
         set({ status: "loading", error: null });
         try {
+          const referral = storedReferral();
           await nibblApi.register({
             full_name: fullName,
             email,
             password,
             accept_terms: true,
+            ...(referral ? { referral_code: referral.code } : {}),
+            ...(referral?.deal ? { referral_campaign: referral.deal } : {}),
           });
+          clearReferral();
           set({ pendingEmail: email, status: "success" });
         } catch (error) {
           set({ status: "error", error: readError(error) });
@@ -596,3 +601,6 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
     }
   )
 );
+
+// Remember a referral link (?ref=…&deal=…) the shopper arrived with.
+captureReferral();

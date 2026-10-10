@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from Apps.accounts import risk
 from Apps.common.pagination import paginate, paginated_response_serializer
 from Apps.reservations import serializers as s
 from Apps.reservations import services
@@ -45,6 +46,7 @@ class ReservationListCreateView(APIView):
             )
         except ReservationError as exc:
             raise ValidationError({"detail": str(exc)})
+        risk.record(request, request.user, "claim")
         return Response(
             s.ReservationSerializer(reservation, context={"request": request}).data,
             status=status.HTTP_201_CREATED,

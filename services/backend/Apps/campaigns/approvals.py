@@ -180,22 +180,14 @@ def _audit(review: CampaignReview, action, *, admin, note="") -> None:
 
 
 def _notify_brand(review: CampaignReview, message: str) -> None:
-    from Apps.brands.models import BrandMembership
-    from Apps.notifications import services as notification_services
+    from Apps.notifications.brand import notify_brand
     from Apps.notifications.models import NotificationType
 
-    managers = BrandMembership.objects.filter(
-        brand=review.campaign.brand,
-        role__in=(BrandMembership.Role.OWNER, BrandMembership.Role.ADMIN),
-    ).select_related("user")
-    for membership in managers:
-        notification_services.notify(
-            user=membership.user,
-            notification_type=NotificationType.CAMPAIGN_REVIEW,
-            context={"campaign": review.campaign.name, "decision": review.status,
-                     "comment": review.comment, "message": message},
-            reference_type="campaign", reference_id=review.campaign_id,
-        )
+    notify_brand(
+        review.campaign.brand, NotificationType.CAMPAIGN_REVIEW, message=message,
+        context={"campaign": review.campaign.name, "decision": review.status, "comment": review.comment},
+        reference_type="campaign", reference_id=review.campaign_id,
+    )
 
 
 def _require_pending(review: CampaignReview) -> None:

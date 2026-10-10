@@ -51,6 +51,11 @@ urlpatterns = [
         name="campaign-pause",
     ),
     path(
+        f"{_base}/<uuid:campaign_id>/tracking/",
+        views.CampaignTrackingView.as_view(),
+        name="campaign-tracking",
+    ),
+    path(
         f"{_base}/<uuid:campaign_id>/access/",
         views.CampaignAccessView.as_view(),
         name="campaign-access",

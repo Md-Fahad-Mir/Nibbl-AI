@@ -16,6 +16,9 @@ class RedemptionSerializer(serializers.ModelSerializer):
     # alias_approved (+ a display label).
     approval_type = serializers.SerializerMethodField()
     approval_label = serializers.SerializerMethodField()
+    # Brand's Meta Pixel when tracking is on for the campaign (additive): the
+    # shopper website fires "Approved Redemption" with it.
+    meta_pixel_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Redemption
@@ -36,8 +39,14 @@ class RedemptionSerializer(serializers.ModelSerializer):
             "status",
             "issued_at",
             "created_at",
+            "meta_pixel_id",
         ]
         read_only_fields = fields
+
+    def get_meta_pixel_id(self, obj):
+        from Apps.brands.tracking import campaign_pixel_id
+
+        return campaign_pixel_id(obj.campaign) if obj.campaign_id else None
 
     def _review_item(self, obj):
         from Apps.receipts.models import ManualReviewItem

@@ -392,6 +392,17 @@ def submit(session: ReviewSession, *, rating, content="", title="", would_recomm
     )
     session.status = ReviewSession.Status.COMPLETED
     session.save(update_fields=["status", "updated_at"])
+    if not publish:
+        from Apps.notifications.brand import notify_brand
+
+        notify_brand(
+            review.brand, "low_rating_review",
+            message=(
+                f"A {rating}★ review of {review.product.name} is held until {review.held_until:%b %d, %Y}. "
+                "Respond publicly or flag it for Nibbl in Review Management."
+            ),
+            reference_type="review", reference_id=review.id,
+        )
     return review
 
 

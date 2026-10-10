@@ -4,12 +4,14 @@ import { useState } from "react";
 import BrandProfileTab from "./BrandProfileTab";
 import TeamTab from "./TeamTab";
 import SecurityTab from "./SecurityTab";
+import TrackingTab from "./TrackingTab";
+import NotificationsTab from "./NotificationsTab";
 import InviteUserModal from "./InviteUserModal";
 import { Search } from "lucide-react";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
 export default function SettingsView() {
-  const [activeTabSetting, setActiveTabSetting] = useState<"Brand Profile" | "Team" | "Security">("Brand Profile");
+  const [activeTabSetting, setActiveTabSetting] = useState<"Brand Profile" | "Team" | "Notifications" | "Tracking" | "Security">("Brand Profile");
   const [showInvite, setShowInvite] = useState(false);
   const [message, setMessage] = useState("");
   const inviteMember = useBrandApiStore((state) => state.inviteMember);
@@ -53,7 +55,7 @@ export default function SettingsView() {
 
       {/* Settings Navigation Tabs Switcher */}
       <div className="bg-[#F2F3FF] p-1.5 rounded-full flex items-center gap-1.5 w-fit border border-[#C5C5D9]/5 relative z-10">
-        {(["Brand Profile", "Team", "Security"] as const).map(tab => (
+        {(["Brand Profile", "Team", "Notifications", "Tracking", "Security"] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTabSetting(tab)}
@@ -72,6 +74,8 @@ export default function SettingsView() {
       <div className="w-full mt-2 relative">
         {activeTabSetting === "Brand Profile" && <BrandProfileTab />}
         {activeTabSetting === "Team" && <TeamTab onInviteClick={() => setShowInvite(true)} />}
+        {activeTabSetting === "Notifications" && <NotificationsTab />}
+        {activeTabSetting === "Tracking" && <TrackingTab />}
         {activeTabSetting === "Security" && <SecurityTab />}
       </div>
 

@@ -23,7 +23,7 @@
 - [x] ✅ **8. Reservation rule snapshot** — each claim stores its deal terms, products, merchants and cooldown; later edits apply to new claims only
 - [x] ✅ **9. Reserved reward funding** — claim reserves the max reward; approval pays the actual reward and returns the difference; cooldown starts at the approved redemption
 - [x] ✅ **10. Retailer availability, featured retailers, receipt eligibility** — Nibbl retailer directory (seeded; brands add missing ones, flagged for Nibbl to verify in Django admin), Where to Buy, up to 3 Featured Retailers, Any Retailer / Retailer Required (receipt check + claim snapshot); builder, detail page, admin approvals, shopper website + app guide
-- [ ] ⬜ **11. Meta Pixel tracking per campaign**
+- [x] ✅ **11. Meta Pixel tracking per campaign** — Settings → Tracking: one Meta Pixel ID per brand, validated (15–16 digits; scripts/custom code rejected), removable; Google Tag + TikTok Pixel shown as Coming Soon; per-campaign on/off switch on the campaign page (needs a validated pixel); shopper website fires Campaign View, Claim and Approved Redemption to the brand's pixel only (`trackSingleCustom`, no auto page/button tracking). *Tracking limitations: validation is a format check (confirming with Meta needs a Meta token, not in launch scope); browser-only, no CAPI — Approved Redemption fires when the shopper next opens their wallet (within 7 days, once per redemption); ad blockers can block events; mobile app sends none*
 - [x] ✅ **12. Minimum purchase in units + BOGO flag**
 
 ## Discovery & Campaign Lifecycle
@@ -64,7 +64,7 @@
 - [x] ✅ **35. Plan changes** — brand Plans page: current plan + price, next renewal, active campaigns used, 30-day Nibbl spend, billing history; recommendation (monthly spend + campaign capacity); plan options/comparison; self-serve change scheduled for the next renewal (current pricing/access until then), cancellable; downgrade over the limit makes the brand choose which campaigns stay active (others pause at renewal); renewal charged at the new price; admin change-plan stays immediate. Master pricing applied (Starter $39 / Pro $199 / Scale $999 every 30 days; review $5 / $4 / $3 incl. the $1 reward); renewals every 30 days from the subscription date
 
 ## Settings & Tag Generator
-- [ ] 🟡 **36. Settings** — roles (no Viewer), per-member notif prefs, Meta Pixel ID validation, session security
+- [x] ✅ **36. Settings** — Brand Profile: name, website, support email, **default time zone** (applied to dashboard dates). Team & Permissions: **Owner** (everything incl. billing, plans, wallet funding, team), **Admin** (campaigns, customers, tracking, reports), **Viewer** (read-only; stored as role `member`); only the Owner invites/removes members. Notifications: each member's own Email + SMS toggle per brand notification (campaign approval updates, receipts waiting for review, low-rating reviews, refill failed); in-app always on. Tracking: Meta Pixel ID validation (#11). Security: sign-in method, passwordless status (off), most recent sign-in, active sessions (device, IP, last active), **sign out other sessions** (revokes those tokens immediately). Owner-only account-closure note (contact Nibbl Support). *SMS toggles are stored; sending waits on Klaviyo. Sessions list devices signed in after this release*
 - [x] ✅ **37. Tag Generator** — "Coming Soon" static page in brand dashboard (per spec; no backend)
 
 ## Brand Onboarding
@@ -76,14 +76,14 @@
 - [x] ✅ **41. Payout-account safeguards** — one PayPal/Venmo per user ✓; first method auto-approved, later changes held for admin review (withdrawals blocked until approved); duplicate across users raises a fraud flag; admin review queue UI (approve/reject)
 
 ## Admin — Dashboard, Withdrawals, Brands, Approvals, Promo
-- [ ] 🟡 **42. Admin dashboard & revenue** — views exist; not to Master shape
+- [x] ✅ **42. Admin dashboard & revenue** — Dashboard Overview by date range (7 / 30 / 90 days / 12 months): Revenue Summary, Needs Attention (withdrawals needing review, campaign approvals, failed payouts, suspended shoppers, brand suspensions, flagged reviews — each links to its queue), Brand Revenue (per brand; filter by status / plan; lowest revenue first), Brand-Funded Rewards shown separately. *Failed payouts show "—" until PayPal payout results are imported; brands have no category field yet, so the filter is status / plan*
 - [x] ✅ **43. Withdrawal batch processing** — batches + approve/reject/mark-paid
 - [x] ✅ **44. Campaign approval queue** — admin Campaign Approvals page: new campaigns and revisions kept separate, essential terms + proposed changes, approve / request changes / reject with comment
 - [x] ✅ **45. Promo codes** — reusable admin-created codes (amount, validity dates, usage limits, once-per-brand) redeemed by brands for *promotional* credit; promo money covers fees/subscription (promo-first) but never shopper rewards (wallet real/promo split enforced); admin create/list UI + brand redeem UI
 - [x] ✅ **46. Shopper management & suspensions** — global suspend ✓; **per-brand suspension** (brand Customers → Suspend/Reactivate, blocks claims on that brand only; anonymized plans act by `cust_` ref); **repeated-suspension fraud alert** (`REPEATED_SUSPENSION_ALERT`, default 3); shopper wallet adjustments now **require a reason** + ledger entry
 - [ ] ⬜ **47. Referral management / flag review**
-- [ ] ⬜ **48. Receipt brand discovery** — unpartnered-brand leads
-- [ ] 🟡 **49. Revenue analytics** — partial; subscription/rebate/review-fee breakdowns missing
+- [x] ✅ **48. Receipt brand discovery** — admin "Brand Discovery": unpartnered brands found on verified receipts (lines not matched to a partner product; existing partners excluded). Summary (unpartnered brands, verified receipts, participating retailers); filters (date, brand, category, retailer, state); leads with brand, product text, retailer, state, unique shoppers, receipt volume, repeat purchasers — no shopper identities; selected-brand insight with outreach message; CSV export. *OCR returns no brand, so the brand is detected from the product text's leading word; admin can rename/merge or hide (e.g. store brands). State = the shopper's saved discovery location*
+- [x] ✅ **49. Revenue analytics** — `GET /admin/analytics/revenue/`: subscription revenue, rebate fees, review fees (from brand wallet debits), promo credits applied + cash revenue; shopper rewards excluded from revenue and reported as brand-funded rewards; per-brand breakdown; monthly Revenue Trend by source. *Refunds and payment-processing costs (Stripe fees) aren't recorded in the ledger yet, so net revenue shows credits only*
 - [x] ✅ **50. Admin settings** — withdrawal-review thresholds + referral toggle; Discovery Ranking (pseudo-data views/redemptions, Store Match ×, Brand Interest ×) and the configurable "Going fast" threshold
 
 ## Cross-cutting
@@ -92,7 +92,7 @@
 ---
 
 ## Progress
-**Done to spec (43):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #25, #26, #27, #28, #29, #30, #31, #32, #33, #34, #35, #37, #38, #39, #41, #43, #44, #45, #46, #50.
+**Done to spec (48):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #25, #26, #27, #28, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #41, #42, #43, #44, #45, #46, #48, #49, #50.
 **This engagement so far:** Stripe wallet funding + auto-refill to spec (#31), SMS-verified withdrawal backend + website (#39, pending Twilio activation).
 
 ## Foundational work (supports the above, not separate Master items)
@@ -103,5 +103,14 @@
 ## On hold (waiting on others)
 - **Twilio compliance profile** — Twilio is on in prod; sending is blocked (error 21608) until Alex completes the Primary Compliance Profile
 - **Mobile withdrawal verify UI** — app dev (API doc handed off)
-- **Stripe go-live keys** — Alex (webhook secret)
-- **Push/FCM** — Alex (Firebase service account)
+- **Stripe go-live keys** — Alex sent the live keys + webhook secret (10/7 doc); see below
+- **Push/FCM** — Alex can't issue a service-account key; needs Workload Identity Federation (see below)
+
+## Client integration items (credentials doc, received 2026-10-10) — to do when we pick them up
+Secrets are in the client's doc only; they go in the prod env file, never in the repo.
+- **Stripe → Live** — prod still on `sk_test_`. Swap `STRIPE_SECRET_KEY` (live restricted key), `STRIPE_WEBHOOK_SECRET` (live whsec), brand app `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. Live webhook already created at `/api/v1/billing/webhooks/stripe/`. Code: recreate Stripe customers / drop saved test cards that don't exist in live (StripeCustomer, AutoRefill.payment_method). We act on `payment_intent.succeeded`, safely ignore the other events. Product/Price IDs not needed (plans charged from the wallet). Test cards stop working after the switch — decide timing.
+- **AWS SES** — replace Gmail SMTP (`fahad1001mir@gmail.com`) with SES us-west-1, sender `@joinnibbl.com` (domain + DKIM verified), NibblDeployment IAM credentials. Must add bounce/complaint handling (SNS → suppression). SES still in sandbox (verified recipients only) until AWS approves.
+- **Twilio Verify** — prod already uses the client's service. New rules: a verified phone is locked (no self-service change in profile/wallet/settings); changes only via admin with re-verification; keep verification status + phone-change history.
+- **ZIP dataset** — client asks for Census ZCTA Gazetteer (+ periodic refresh). We use GeoNames (has city + state; state is needed for state geography). ZCTA has no city/state → would need a ZIP→state crosswalk. Recommend keeping GeoNames; confirm with client.
+- **Push (FCM/APNs)** — push is a stub today (`Apps/notifications/push.py`). Client will configure Google Workload Identity Federation; reply to client: backend runs on **EC2**, role `arn:aws:iam::205960220667:role/nibblai-production-ec2-role`. Then build FCM HTTP v1 sending. APNs `.p8` is already in Firebase — not needed on our server. `google-services.json` / `GoogleService-Info.plist` (package/bundle `com.joinnibbl.app`) go to the mobile app dev.
+- **Meta Pixel** — scope confirmed for #11 (brand Pixel ID + validate, per-campaign toggle, Campaign View / Claim / Approved Redemption, browser pixel only, no custom scripts, no CAPI / Advanced Matching).

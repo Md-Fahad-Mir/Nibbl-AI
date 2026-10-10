@@ -125,6 +125,7 @@ class CampaignSerializer(serializers.ModelSerializer):
             "geography_states",
             "geography_areas",
             "image_url",
+            "meta_pixel_enabled",
         ]
         read_only_fields = fields
 

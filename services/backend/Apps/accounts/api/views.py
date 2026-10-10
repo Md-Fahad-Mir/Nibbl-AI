@@ -82,6 +82,11 @@ class LoginView(APIView):
             email=data["email"],
             password=data["password"],
             remember_me=data["remember_me"],
+            client={
+                "ip": request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+                or request.META.get("REMOTE_ADDR"),
+                "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+            },
         )
         user_data = s.UserSerializer(result["user"], context={"request": request}).data
         return Response(
@@ -334,3 +339,39 @@ class MarketingConsentWithdrawView(APIView):
             consent.revoked_at = timezone.now()
             consent.save(update_fields=["opted_in", "revoked_at", "updated_at"])
         return Response({"brand": brand, "opted_in": False, "withdrawn_at": consent.revoked_at})
+
+
+def _current_sid(request):
+    token = getattr(request, "auth", None)
+    return token.get("sid") if token is not None and hasattr(token, "get") else None
+
+
+@extend_schema(tags=["users"])
+class SessionListView(APIView):
+    """Security overview: sign-in method, most recent sign-in and active
+    sessions (Master: Settings §5)."""
+
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        current = _current_sid(request)
+        sessions = services.active_sessions(request.user)
+        return Response({
+            "passwordless_enabled": False,
+            "sign_in_method": "Email and password",
+            "last_sign_in": request.user.last_login,
+            "sessions": [
+                {
+                    "id": str(x.id), "current": str(x.id) == str(current), "ip_address": x.ip_address,
+                    "user_agent": x.user_agent, "signed_in_at": x.created_at, "last_used_at": x.last_used_at,
+                }
+                for x in sessions
+            ],
+        })
+
+
+@extend_schema(tags=["users"])
+class SignOutOtherSessionsView(APIView):
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request):
+        count = services.sign_out_other_sessions(request.user, current_sid=_current_sid(request))
+        return Response({"signed_out": count})

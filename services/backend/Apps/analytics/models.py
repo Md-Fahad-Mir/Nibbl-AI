@@ -79,3 +79,16 @@ class PlatformStat(BaseModel):
 
     def __str__(self):
         return f"Platform stat {self.date}"
+
+
+class DiscoveryBrandRule(BaseModel):
+    """Admin correction for Receipt Brand Discovery: the brand detected from a
+    receipt's product text (its leading word, e.g. "KETTLE") can be renamed,
+    merged into another brand, or ignored (e.g. store brands)."""
+
+    token = models.CharField(max_length=40, unique=True)
+    display_name = models.CharField(max_length=120, blank=True)
+    ignored = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.display_name or self.token

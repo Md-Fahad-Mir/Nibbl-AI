@@ -32,6 +32,12 @@ export const formatSignedPercent = (value: unknown) => {
 export const formatMinutes = (value: unknown) =>
   `${formatInteger(value)}m`;
 
+// Master: the brand's default time zone controls dates across the dashboard.
+let brandTimeZone: string | undefined;
+export const setBrandTimeZone = (timeZone: unknown) => {
+  brandTimeZone = typeof timeZone === "string" && timeZone ? timeZone : undefined;
+};
+
 export const formatDate = (value: unknown) => {
   if (typeof value !== "string" || !value) return "";
   const date = new Date(value);
@@ -40,6 +46,7 @@ export const formatDate = (value: unknown) => {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: brandTimeZone,
   });
 };
 
@@ -50,6 +57,8 @@ export const formatTime = (value: unknown) => {
   return date.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: brandTimeZone,
+    timeZoneName: brandTimeZone ? "short" : undefined,
   });
 };
 

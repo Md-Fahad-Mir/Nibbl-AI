@@ -146,7 +146,8 @@ class RunAutoRefillTests(APITestCase):
         services.set_auto_refill(
             brand=brand, enabled=True, amount=Decimal("250"), payment_method_id="pm_1",
         )
-        summary = services.run_auto_refill()
+        with self.captureOnCommitCallbacks(execute=True):  # delivery runs after commit
+            summary = services.run_auto_refill()
         self.assertEqual(summary["failed"], 1)
         self.assertTrue(
             Notification.objects.filter(user=owner, type="auto_refill_failed").exists()

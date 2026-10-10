@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { setBrandTimeZone } from "@/features/onboarding/utils/backendMappers";
 import {
   ApiError,
   ApiRecord,
@@ -1038,3 +1039,7 @@ export const useBrandApiStore = create<BrandApiState>()(
     }
   )
 );
+
+// Dates in the dashboard follow the selected brand's time zone.
+setBrandTimeZone(useBrandApiStore.getState().brand?.timezone);
+useBrandApiStore.subscribe((state) => setBrandTimeZone(state.brand?.timezone));

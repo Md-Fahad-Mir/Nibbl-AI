@@ -12,6 +12,17 @@ const normalizeWebsite = (value: string) => {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 };
 
+// US zones first, then every other IANA zone the browser knows.
+const US_ZONES = [
+  "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+  "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu",
+];
+const TIME_ZONES = [
+  ...US_ZONES,
+  ...(typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : ["UTC"])
+    .filter((zone) => !US_ZONES.includes(zone)),
+];
+
 export default function BrandProfileTab() {
   const brand = useBrandApiStore((state) => state.brand);
   const updateBrandProfile = useBrandApiStore((state) => state.updateBrandProfile);
@@ -20,6 +31,7 @@ export default function BrandProfileTab() {
     description?: string;
     website?: string;
     email?: string;
+    timezone?: string;
   }>({});
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoObjectUrl, setLogoObjectUrl] = useState("");
@@ -32,6 +44,7 @@ export default function BrandProfileTab() {
   const description = draft.description ?? String(brand?.description ?? "");
   const website = draft.website ?? String(brand?.website ?? "");
   const email = draft.email ?? String(brand?.contact_email ?? "");
+  const timezone = draft.timezone ?? String(brand?.timezone ?? "America/New_York");
   const currentLogoUrl = backendAssetUrl(brand?.logo_url ?? brand?.logo, "");
   const logoPreview = logoObjectUrl || currentLogoUrl;
   const brandStatus =
@@ -66,6 +79,7 @@ export default function BrandProfileTab() {
       formData.append("description", description.trim());
       formData.append("website", normalizeWebsite(website));
       formData.append("contact_email", email.trim());
+      formData.append("timezone", timezone);
       if (logoFile) formData.append("logo", logoFile);
 
       await updateBrandProfile(formData);
@@ -148,6 +162,24 @@ export default function BrandProfileTab() {
                 }
                 className="bg-[#F2F3FF] border-none rounded-2xl px-5 py-3.5 text-sm font-semibold text-[#131B2E] outline-none"
               />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-[#454656] uppercase tracking-wider pl-1">
+                Default Time Zone
+              </label>
+              <select
+                value={timezone}
+                onChange={(event) => setDraft((prev) => ({ ...prev, timezone: event.target.value }))}
+                className="bg-[#F2F3FF] border-none rounded-2xl px-5 py-3.5 text-sm font-semibold text-[#131B2E] outline-none"
+              >
+                {TIME_ZONES.map((zone) => (
+                  <option key={zone} value={zone}>{zone.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+              <span className="text-[11px] text-[#454656]/70 pl-1">
+                Controls the dates shown across your dashboard.
+              </span>
             </div>
 
             <div className="flex items-center justify-end gap-3">

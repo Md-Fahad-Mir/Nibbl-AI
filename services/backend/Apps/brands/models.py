@@ -26,6 +26,13 @@ class Brand(BaseModel):
     logo = models.ImageField(upload_to="brand_logos/", null=True, blank=True)
     logo_url = models.URLField(blank=True)
     contact_email = models.EmailField(blank=True)
+    # Master: Tracking & Attribution — one Meta Pixel ID per brand, used only
+    # for campaigns with tracking turned on. Never a script or custom code.
+    meta_pixel_id = models.CharField(max_length=16, blank=True)
+    meta_pixel_validated_at = models.DateTimeField(null=True, blank=True)
+    # Master: Brand Profile — default time zone for dashboard dates and
+    # notification timing (IANA name).
+    timezone = models.CharField(max_length=64, default="America/New_York")
 
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.ACTIVE
@@ -63,7 +70,8 @@ class BrandMembership(BaseModel):
     class Role(models.TextChoices):
         OWNER = "owner", "Owner"
         ADMIN = "admin", "Admin"
-        MEMBER = "member", "Member"
+        # Shown as "Viewer" (Master: read-only); the stored value stays "member".
+        MEMBER = "member", "Viewer"
 
     brand = models.ForeignKey(
         Brand, on_delete=models.CASCADE, related_name="memberships"

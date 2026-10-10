@@ -337,23 +337,15 @@ def auto_refill_status(brand) -> dict:
 
 
 def _notify_refill_failed(brand, amount) -> None:
-    """Alert the brand's managers (in-app) that their auto-refill payment failed."""
-    from Apps.brands.models import BrandMembership
-    from Apps.notifications import services as notifications
+    """Alert the brand team that their auto-refill payment failed."""
+    from Apps.notifications.brand import notify_brand
 
-    managers = BrandMembership.objects.filter(
-        brand=brand,
-        is_active=True,
-        role__in=[BrandMembership.Role.OWNER, BrandMembership.Role.ADMIN],
-    ).select_related("user")
-    for membership in managers:
-        notifications.notify(
-            user=membership.user,
-            notification_type="auto_refill_failed",
-            context={"brand": brand.name, "amount": str(amount)},
-            reference_type="auto_refill",
-            reference_id=brand.id,
-        )
+    notify_brand(
+        brand, "auto_refill_failed",
+        message=f"Your automatic wallet refill of ${amount} failed. Update your payment method in Wallet "
+                "— campaigns keep running until Available Funds reach $0.",
+        context={"amount": str(amount)}, reference_type="auto_refill", reference_id=brand.id,
+    )
 
 
 def run_auto_refill(now=None) -> dict:

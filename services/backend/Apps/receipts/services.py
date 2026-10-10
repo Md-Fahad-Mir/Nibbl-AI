@@ -485,9 +485,19 @@ def _decide(receipt: Receipt, *, matched_units: int, review_note: str) -> None:
     if review_note:
         receipt.decision_reason = review_note
         receipt.save(update_fields=["decision_reason", "updated_at"])
-    ManualReviewItem.objects.create(
+    item = ManualReviewItem.objects.create(
         receipt=receipt, brand=receipt.brand,
         deadline_at=receipt.created_at + _review_window(),
+    )
+    from Apps.notifications.brand import notify_brand
+
+    notify_brand(
+        receipt.brand, "receipt_review_needed",
+        message=(
+            f"A receipt needs your review by {item.deadline_at:%b %d, %Y %H:%M} UTC. "
+            "If you don't approve or reject it by then, it's approved automatically."
+        ),
+        reference_type="receipt", reference_id=receipt.id,
     )
 
 

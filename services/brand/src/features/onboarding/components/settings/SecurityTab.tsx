@@ -1,37 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Lock, Laptop, Phone, Monitor } from "lucide-react";
+import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
+import { formatDate, formatTime } from "../../utils/backendMappers";
 
-interface Session {
-  id: string;
-  device: string;
-  browser: string;
-  location: string;
-  time: string;
-  ip: string;
-  isCurrent: boolean;
-}
-
-const mockSessions: Session[] = [
-  { id: "s1", device: "Current browser", browser: "Web", location: "Unknown", time: "ACTIVE NOW", ip: "Current IP", isCurrent: true },
-];
+const deviceLabel = (agent: unknown) => {
+  const ua = String(agent ?? "");
+  if (!ua) return "Unknown device";
+  const os = /iPhone|iPad/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android" : /Mac OS/.test(ua) ? "Mac"
+    : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "Device";
+  const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox"
+    : /Safari\//.test(ua) ? "Safari" : "Browser";
+  return `${browser} on ${os}`;
+};
 
 export default function SecurityTab() {
-  const [sessions, setSessions] = useState<Session[]>(mockSessions);
+  const [security, setSecurity] = useState<ApiRecord | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [sessionMessage, setSessionMessage] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
   const changePassword = useBrandApiStore((state) => state.changePassword);
+  const members = useBrandApiStore((state) => state.members);
+  const profileId = useBrandApiStore((state) => String(state.profile?.id ?? ""));
+  const isOwner = members.some((m) => String(m.user) === profileId && m.role === "owner");
 
-  const handleRevoke = (id: string) => {
-    setSessions(sessions.filter((session) => session.id !== id));
-  };
+  useEffect(() => {
+    let live = true;
+    apiClient
+      .request<ApiRecord>(backendApi.users.sessions)
+      .then((data) => live && setSecurity(data))
+      .catch((err) => live && setSessionMessage(err instanceof Error ? err.message : "Could not load sessions."));
+    return () => {
+      live = false;
+    };
+  }, []);
 
-  const handleLogoutAll = () => {
-    setSessions(sessions.filter((session) => session.isCurrent));
+  const sessions = (Array.isArray(security?.sessions) ? security.sessions : []) as ApiRecord[];
+
+  const handleSignOutOthers = async () => {
+    setSigningOut(true);
+    setSessionMessage("");
+    try {
+      const result = await apiClient.request<ApiRecord>(backendApi.users.signOutOtherSessions);
+      setSecurity(await apiClient.request<ApiRecord>(backendApi.users.sessions));
+      setSessionMessage(`Signed out ${String(result.signed_out ?? 0)} other session(s).`);
+    } catch (err) {
+      setSessionMessage(err instanceof Error ? err.message : "Could not sign out other sessions.");
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   const handlePasswordUpdate = async () => {
@@ -60,7 +82,7 @@ export default function SecurityTab() {
       <div className="flex flex-col gap-1 text-left w-full">
         <h2 className="font-jakarta font-extrabold text-2xl text-[#131B2E]">Protection</h2>
         <p className="text-xs text-[#454656] font-medium leading-relaxed max-w-[672px]">
-          Manage account credentials and local session visibility for this dashboard.
+          Manage your password and the devices signed in to your account.
         </p>
       </div>
 
@@ -97,36 +119,58 @@ export default function SecurityTab() {
         </div>
 
         <div className="flex flex-col gap-6 w-full">
+          <div className="bg-white border border-[#C5C5D9]/10 shadow-sm rounded-2xl p-6 flex flex-col gap-3 text-xs text-[#454656]">
+            <div className="flex justify-between"><span>Sign-in method</span><b className="text-[#131B2E]">{String(security?.sign_in_method ?? "Email and password")}</b></div>
+            <div className="flex justify-between"><span>Passwordless sign-in</span><b className="text-[#131B2E]">{security?.passwordless_enabled ? "On" : "Off"}</b></div>
+            <div className="flex justify-between"><span>Most recent sign-in</span><b className="text-[#131B2E]">{security?.last_sign_in ? `${formatDate(String(security.last_sign_in))} ${formatTime(String(security.last_sign_in))}` : "—"}</b></div>
+          </div>
+
           <div className="bg-white border border-[#C5C5D9]/10 shadow-sm rounded-2xl overflow-hidden flex flex-col">
             <div className="bg-[#F2F3FF] px-8 py-5 border-b border-[#C5C5D9]/5 flex justify-between items-center w-full">
               <h3 className="font-jakarta font-bold text-sm text-[#131B2E] flex items-center gap-2">Active Sessions</h3>
-              <span className="bg-[#001BD2]/10 text-[#001BD2] font-bold text-[9px] px-2 py-0.5 rounded tracking-wide">{sessions.length} LIVE</span>
+              <span className="bg-[#001BD2]/10 text-[#001BD2] font-bold text-[9px] px-2 py-0.5 rounded tracking-wide">{sessions.length} ACTIVE</span>
             </div>
             <div className="flex flex-col">
-              {sessions.map((session) => (
-                <div key={session.id} className="px-6 py-4 flex justify-between items-center border-b border-[#C5C5D9]/10 relative">
-                  <div className="flex gap-3 items-start">
+              {sessions.map((session) => {
+                const label = deviceLabel(session.user_agent);
+                return (
+                  <div key={String(session.id)} className="px-6 py-4 flex gap-3 items-start border-b border-[#C5C5D9]/10">
                     <div className="w-10 h-10 rounded-lg bg-[#E2E7FF] flex items-center justify-center flex-shrink-0 text-[#001BD2]">
-                      {session.device.includes("Phone") ? <Phone className="w-5 h-5" /> : session.device.includes("Mac") ? <Laptop className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
+                      {/iOS|Android/.test(label) ? <Phone className="w-5 h-5" /> : /Mac/.test(label) ? <Laptop className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
                     </div>
                     <div className="flex flex-col text-left">
-                      <span className="text-xs font-bold text-[#131B2E]">{session.device}</span>
-                      <span className="text-[10px] text-slate-400 font-semibold mt-0.5">{session.browser} - {session.location}</span>
-                      <span className="text-[9px] font-extrabold text-[#059669] uppercase tracking-wider mt-1">{session.time}</span>
+                      <span className="text-xs font-bold text-[#131B2E]">{label}</span>
+                      <span className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                        {String(session.ip_address ?? "Unknown IP")} · signed in {formatDate(String(session.signed_in_at ?? ""))}
+                      </span>
+                      <span className="text-[9px] font-extrabold text-[#059669] uppercase tracking-wider mt-1">
+                        {session.current ? "This device" : `Last active ${formatDate(String(session.last_used_at ?? ""))}`}
+                      </span>
                     </div>
                   </div>
-                  {!session.isCurrent && (
-                    <button onClick={() => handleRevoke(session.id)} className="bg-transparent border-none cursor-pointer text-xs font-bold text-[#BA1A1A] hover:underline">Revoke</button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
+              {security && sessions.length === 0 && (
+                <p className="px-6 py-4 text-xs text-slate-400">Sign in again to see this device listed.</p>
+              )}
             </div>
-            <div className="bg-[#F2F3FF] p-6 flex border-t border-[#C5C5D9]/10">
-              <button onClick={handleLogoutAll} className="w-full py-2.5 bg-white border border-[#BA1A1A]/20 hover:bg-red-50 text-[#BA1A1A] font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 cursor-pointer">
-                Logout all visible devices
+            <div className="bg-[#F2F3FF] p-6 flex flex-col gap-2 border-t border-[#C5C5D9]/10">
+              <button onClick={() => void handleSignOutOthers()} disabled={signingOut}
+                className="w-full py-2.5 bg-white border border-[#BA1A1A]/20 hover:bg-red-50 text-[#BA1A1A] font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50">
+                {signingOut ? "Signing out…" : "Sign out other sessions"}
               </button>
+              {sessionMessage && <span className="text-[11px] font-bold text-[#001BD2] text-center">{sessionMessage}</span>}
             </div>
           </div>
+
+          {isOwner && (
+            <div className="bg-white border border-[#C5C5D9]/10 shadow-sm rounded-2xl p-6 flex flex-col gap-2">
+              <h3 className="font-jakarta font-bold text-sm text-[#131B2E]">Close account</h3>
+              <p className="text-xs text-[#454656] leading-relaxed">
+                Only the brand Owner can request account closure. Contact Nibbl Support to close this brand account.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

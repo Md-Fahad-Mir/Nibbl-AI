@@ -61,7 +61,7 @@ class DashboardTests(APITestCase):
         # Total Brand Cost = actual wallet debits: $3 reward + the plan's fee (no plan → $0).
         self.assertEqual(rebates["total_brand_cost"], "3.00")
         self.assertEqual(rebates["cost_per_redemption"], "3.00")
-        self.assertEqual(data["reviews"]["invitations"], 1)  # a's verified purchase
+        self.assertEqual(data["reviews"]["invitations"], 0)  # no review campaign running
         self.assertEqual(data["reviews"]["completed"], 0)
         self.assertIsNone(data["reviews"]["cost_per_review"])  # shown as "—"
         conv = data["conversion"]

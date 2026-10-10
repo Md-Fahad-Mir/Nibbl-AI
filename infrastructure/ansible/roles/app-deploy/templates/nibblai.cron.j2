@@ -9,6 +9,8 @@ MAILTO=""
 */15 * * * * root docker exec {{ project_name }}-backend python manage.py expire_reservations >> {{ project_path }}/cron.log 2>&1
 # Auto-approve receipts left in manual review past their 7-day deadline
 */15 * * * * root docker exec {{ project_name }}-backend python manage.py auto_approve_reviews >> {{ project_path }}/cron.log 2>&1
+# Publish held reviews after 7 days; expire 30-day review opportunities
+15 * * * * root docker exec {{ project_name }}-backend python manage.py process_reviews >> {{ project_path }}/cron.log 2>&1
 # Auto-refill wallets below 25% of the estimated 7-day requirement
 */30 * * * * root docker exec {{ project_name }}-backend python manage.py run_auto_refill >> {{ project_path }}/cron.log 2>&1
 # Receipt/review reminders and re-engagement

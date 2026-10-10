@@ -6,3 +6,6 @@ class ReviewsConfig(AppConfig):
     name = "Apps.reviews"
     label = "reviews"
     verbose_name = "Reviews"
+
+    def ready(self):
+        from Apps.reviews import signals  # noqa: F401

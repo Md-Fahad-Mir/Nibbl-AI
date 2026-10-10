@@ -38,6 +38,27 @@ def send_email_code(*, to_email: str, code: str, purpose_label: str) -> None:
         )
 
 
+def send_email_link(*, to_email: str, url: str) -> None:
+    """Brand signup: verify the work email through a secure one-time link."""
+    subject = "NibblAI: verify your work email"
+    body = (
+        "Confirm your work email to finish setting up your brand account:\n\n"
+        f"{url}\n\n"
+        "This link works once and expires in 24 hours. "
+        "If you didn't sign up, you can ignore this email."
+    )
+    try:
+        send_mail(
+            subject,
+            body,
+            getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"),
+            [to_email],
+            fail_silently=False,
+        )
+    except Exception as exc:
+        logger.error("Failed to send verification link to %s: %s", to_email, exc, exc_info=True)
+
+
 def send_sms_code(*, to_phone: str, code: str, purpose_label: str) -> None:
     # TODO(integration): replace with Twilio Verify when SMS is wired up.
     logger.info("SMS %s code for %s: %s", purpose_label, to_phone, code)

@@ -171,6 +171,12 @@ class PendingUser(BaseModel):
     )
     referral_code = models.CharField(max_length=12, null=True, blank=True)
     verification_code = models.CharField(max_length=6)
+    # Brand signup verifies through a secure one-time link instead of the
+    # code (Master: Plan & Account Setup). Empty for code-based signups.
+    verification_token = models.CharField(max_length=64, blank=True, db_index=True)
+    # Brand signup: the brand application to file once the email is verified,
+    # so it doesn't depend on the browser the link is opened in.
+    brand_application = models.JSONField(default=dict, blank=True)
     expires_at = models.DateTimeField()
 
     class Meta:

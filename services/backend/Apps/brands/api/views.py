@@ -1,7 +1,7 @@
 """HTTP layer for brands: applications, brand profile, membership, admin ops."""
 
 from drf_spectacular.utils import extend_schema
-from rest_framework import generics, status
+from rest_framework import generics, serializers, status
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -81,6 +81,56 @@ class BrandApplicationDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return BrandApplication.objects.filter(applicant=self.request.user)
+
+
+class _CheckoutBody(serializers.Serializer):
+    plan = serializers.CharField(required=False, allow_blank=True, default="")
+    promo_code = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+def _checkout(request, application_id, func):
+    from Apps.billing.stripe_gateway import StripeNotConfigured
+    from Apps.brands import checkout
+
+    application = BrandApplication.objects.filter(id=application_id, applicant=request.user).first()
+    if application is None:
+        raise NotFound("Application not found.")
+    body = _CheckoutBody(data=request.data)
+    body.is_valid(raise_exception=True)
+    try:
+        result = func(application, plan_slug=body.validated_data["plan"] or None,
+                      promo_code=body.validated_data["promo_code"])
+    except checkout.CheckoutError as exc:
+        raise ValidationError({"detail": str(exc)})
+    except StripeNotConfigured:
+        return Response({"detail": "Card payments are not available right now."},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return Response(result)
+
+
+@extend_schema(tags=["brand-applications"], request=_CheckoutBody, responses={200: None})
+class BrandCheckoutQuoteView(APIView):
+    """Plan price, promo credit and the amount due today."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, application_id):
+        from Apps.brands import checkout
+
+        return _checkout(request, application_id, checkout.quote)
+
+
+@extend_schema(tags=["brand-applications"], request=_CheckoutBody, responses={200: None})
+class BrandCheckoutView(APIView):
+    """Start checkout: returns a Stripe client secret for the amount due, or
+    activates the brand at once when nothing is due."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, application_id):
+        from Apps.brands import checkout
+
+        return _checkout(request, application_id, checkout.start)
 
 
 # ---------------------------------------------------------------------------

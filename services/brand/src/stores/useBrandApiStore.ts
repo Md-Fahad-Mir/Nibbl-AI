@@ -79,11 +79,6 @@ const optionalRequest = async <T>(request: () => Promise<T>, fallback: T): Promi
   }
 };
 
-const saveApplicationDraft = (body: ApiRecord) => {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(applicationDraftKey, JSON.stringify(body));
-};
-
 const submitSavedApplicationDraft = async () => {
   if (typeof window === "undefined") return false;
   const raw = localStorage.getItem(applicationDraftKey);
@@ -304,8 +299,9 @@ interface BrandApiState {
     phone?: string;
     officeLocation?: string;
     category?: string;
+    plan?: string;
   }) => Promise<void>;
-  verifyEmail: (email: string, code: string) => Promise<void>;
+  verifyEmail: (email: string, code: string, token?: string) => Promise<void>;
   resendEmailVerification: (email: string) => Promise<void>;
   loadWorkspace: () => Promise<void>;
   selectBrand: (brandId: string) => Promise<void>;
@@ -444,6 +440,7 @@ export const useBrandApiStore = create<BrandApiState>()(
         phone,
         officeLocation,
         category,
+        plan,
       }) => {
         set({ status: "loading", error: null });
         try {
@@ -455,18 +452,22 @@ export const useBrandApiStore = create<BrandApiState>()(
             .filter(Boolean)
             .join("\n");
 
+          // Master: the work email is verified through a secure link; the
+          // brand application is filed on the server once it's verified.
           await nibblApi.register({
             full_name: fullName,
             email: email.trim().toLowerCase(),
             password,
             role: "consumer",
             accept_terms: true,
-          });
-          saveApplicationDraft({
-            brand_name: brandName,
-            contact_email: email.trim().toLowerCase(),
-            website,
-            message,
+            verify_via: "link",
+            brand_application: {
+              brand_name: brandName,
+              contact_email: email.trim().toLowerCase(),
+              website,
+              message,
+              ...(plan ? { requested_plan: plan } : {}),
+            },
           });
           set({ status: "success" });
         } catch (error) {
@@ -474,10 +475,14 @@ export const useBrandApiStore = create<BrandApiState>()(
           throw error;
         }
       },
-      verifyEmail: async (email, code) => {
+      verifyEmail: async (email, code, token) => {
         set({ status: "loading", error: null });
         try {
-          await nibblApi.verifyEmail({ email: email.trim().toLowerCase(), code: code.trim() });
+          await nibblApi.verifyEmail(
+            token
+              ? { email: email.trim().toLowerCase(), token }
+              : { email: email.trim().toLowerCase(), code: code.trim() }
+          );
           set({ status: "success" });
         } catch (error) {
           set({ status: "error", error: readError(error) });
@@ -487,7 +492,7 @@ export const useBrandApiStore = create<BrandApiState>()(
       resendEmailVerification: async (email) => {
         set({ status: "loading", error: null });
         try {
-          await nibblApi.resendEmailVerification(email.trim().toLowerCase());
+          await nibblApi.resendEmailVerification(email.trim().toLowerCase(), "link");
           set({ status: "success" });
         } catch (error) {
           set({ status: "error", error: readError(error) });

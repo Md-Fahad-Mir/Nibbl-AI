@@ -555,6 +555,16 @@ export const backendApi = {
       path: `/brands/${brandId}/review-campaigns/${campaignId}/prompts/${promptId}/`,
       auth: true,
     }),
+    checkoutQuote: (applicationId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brand-applications/${applicationId}/checkout/quote/`,
+      auth: true,
+    }),
+    checkout: (applicationId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brand-applications/${applicationId}/checkout/`,
+      auth: true,
+    }),
     brandPlan: (brandId: string): ApiEndpoint => ({
       method: "GET",
       path: `/brands/${brandId}/billing/plan/`,
@@ -937,11 +947,13 @@ export const nibblApi = {
     role?: "consumer" | "brand" | "admin";
     accept_terms: boolean;
     referral_code?: string;
+    verify_via?: "code" | "link";
+    brand_application?: ApiRecord;
   }) => requestEndpoint<ApiRecord>(backendApi.auth.register, body),
-  verifyEmail: (body: { email: string; code: string }) =>
+  verifyEmail: (body: { email: string; code?: string; token?: string }) =>
     requestEndpoint<ApiRecord>(backendApi.auth.verifyEmail, body),
-  resendEmailVerification: (email: string) =>
-    requestEndpoint<ApiRecord>(backendApi.auth.resendEmailVerification, { email }),
+  resendEmailVerification: (email: string, verifyVia: "code" | "link" = "code") =>
+    requestEndpoint<ApiRecord>(backendApi.auth.resendEmailVerification, { email, verify_via: verifyVia }),
   forgotPassword: (email: string) =>
     requestEndpoint<ApiRecord>(backendApi.auth.forgotPassword, { email }),
   resetPassword: (body: { email: string; code: string; new_password: string }) =>

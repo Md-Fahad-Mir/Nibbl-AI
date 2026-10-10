@@ -18,6 +18,7 @@ import AnalyticsView from "./analytics/AnalyticsView";
 import CustomersView from "./customers/CustomersView";
 import TagGeneratorView from "./tag-generator/TagGeneratorView";
 import PlansView from "./plans/PlansView";
+import BrandCheckout from "./checkout/BrandCheckout";
 import { Product } from "../utils/mockData";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
@@ -147,6 +148,11 @@ export default function OnboardingView() {
   }, [accessToken, refreshToken, loadWorkspace, router]);
 
   const visibleTab = !selectedBrandId && activeTab !== "Settings" ? "Dashboard" : activeTab;
+  // Self-serve signup (Master): an application waiting for checkout, or a
+  // rejected one (shown with its reason).
+  const checkoutApplication =
+    brandApplications.find((application) => application.status === "pending") ??
+    brandApplications.find((application) => application.status === "rejected");
   const visibleViewMode =
     selectedProduct || (viewMode !== "details" && viewMode !== "edit") ? viewMode : "list";
   const selectedBrand = brands.find((item) => String(item.id ?? "") === selectedBrandId);
@@ -308,7 +314,9 @@ export default function OnboardingView() {
               {error}
             </div>
           )}
-          {!selectedBrandId && status !== "loading" ? (
+          {!selectedBrandId && status !== "loading" && checkoutApplication ? (
+            <BrandCheckout application={checkoutApplication} />
+          ) : !selectedBrandId && status !== "loading" ? (
             <div className="bg-white border border-slate-100 rounded-2xl p-8 shadow-sm max-w-2xl">
               <p className="text-xs font-extrabold uppercase tracking-wider text-[#001BD2]">
                 Brand access pending
@@ -318,13 +326,15 @@ export default function OnboardingView() {
               </h1>
               <p className="text-sm font-medium text-[#454656] leading-relaxed mt-3">
                 {brandApplications.length
-                  ? "Your brand application has been submitted and is waiting for admin approval."
+                  ? "Your brand application has been submitted."
                   : "No approved brand workspace is connected to this account yet."}
               </p>
             </div>
           ) : (
             <>
-              {visibleTab === "Dashboard" && <DashboardView />}
+              {visibleTab === "Dashboard" && (
+                <DashboardView onNavigate={(tab) => { setActiveTab(tab); setViewMode("list"); }} />
+              )}
           
               {visibleTab === "Rebate" && <RebatesView />}
           

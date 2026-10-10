@@ -89,6 +89,8 @@ REFERRAL_BONUS_AMOUNT = env("REFERRAL_BONUS_AMOUNT", default="5.00")
 
 # Public base URL used to build campaign URLs / QR payloads.
 PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="http://localhost:8000")
+# Brand dashboard origin — used for the brand email-verification link.
+BRAND_APP_URL = env("BRAND_APP_URL", default="https://brand.joinnibbl.com")
 
 # Reservation system (spec 1.3): 7-day expiry + backend-controlled global cap.
 RESERVATION_EXPIRY_DAYS = env.int("RESERVATION_EXPIRY_DAYS", default=7)

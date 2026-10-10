@@ -83,6 +83,14 @@ class UserSerializer(serializers.ModelSerializer):
         return {"consumer_id": str(obj.id)}
 
 
+class BrandSignupSerializer(serializers.Serializer):
+    brand_name = serializers.CharField(max_length=255)
+    contact_email = serializers.EmailField()
+    website = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
+    message = serializers.CharField(required=False, allow_blank=True, default="")
+    requested_plan = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+
+
 class RegisterSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=255)
     email = serializers.EmailField()
@@ -98,6 +106,10 @@ class RegisterSerializer(serializers.Serializer):
     )
     referral_code = serializers.CharField(required=False, allow_blank=True)
     accept_terms = serializers.BooleanField()
+    # "link" emails a secure one-time verification link (brand signup).
+    verify_via = serializers.ChoiceField(choices=["code", "link"], required=False, default="code")
+    # Brand signup: filed as a brand application once the email is verified.
+    brand_application = BrandSignupSerializer(required=False)
 
     def validate_email(self, value):
         if User.objects.filter(email__iexact=value, is_deleted=False).exists():
@@ -125,11 +137,19 @@ class TokenPairSerializer(serializers.Serializer):
 
 class VerifyEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    code = serializers.CharField(max_length=6)
+    code = serializers.CharField(max_length=6, required=False, allow_blank=True, default="")
+    # From the secure verification link (brand signup), instead of a code.
+    token = serializers.CharField(max_length=64, required=False, allow_blank=True, default="")
+
+    def validate(self, attrs):
+        if not attrs["code"] and not attrs["token"]:
+            raise serializers.ValidationError({"code": "This field is required."})
+        return attrs
 
 
 class ResendEmailVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField()
+    verify_via = serializers.ChoiceField(choices=["code", "link"], required=False, default="code")
 
 
 class RequestPasswordResetSerializer(serializers.Serializer):

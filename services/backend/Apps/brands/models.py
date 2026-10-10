@@ -138,6 +138,11 @@ class BrandApplication(BaseModel):
         related_name="source_application",
     )
 
+    # Self-serve checkout (Master: Checkout & Activation). Paying activates
+    # the brand; admin approval remains as a manual override.
+    checkout_promo_code = models.CharField(max_length=40, blank=True)
+    checkout_payment_intent_id = models.CharField(max_length=255, blank=True)
+
     class Meta:
         ordering = ["-created_at"]
 

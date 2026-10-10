@@ -2,9 +2,10 @@
 
 import DashboardSnapshots from "./DashboardSnapshots";
 import CampaignsTable from "../rebates/CampaignsTable";
+import GetStarted from "./GetStarted";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
-export default function DashboardView() {
+export default function DashboardView({ onNavigate }: { onNavigate: (tab: string) => void }) {
   // Master: the brand name (from Brand Settings) in the welcome message.
   const brand = useBrandApiStore((state) => state.brand);
   const profile = useBrandApiStore((state) => state.profile);
@@ -21,6 +22,8 @@ export default function DashboardView() {
           Here&apos;s what&apos;s happening with your campaigns today.
         </p>
       </div>
+
+      <GetStarted onNavigate={onNavigate} />
 
       {/* SNAPSHOTS (last 30 days) */}
       <DashboardSnapshots />

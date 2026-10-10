@@ -15,6 +15,16 @@ application_patterns = [
         views.BrandApplicationDetailView.as_view(),
         name="application-detail",
     ),
+    path(
+        "<uuid:application_id>/checkout/quote/",
+        views.BrandCheckoutQuoteView.as_view(),
+        name="application-checkout-quote",
+    ),
+    path(
+        "<uuid:application_id>/checkout/",
+        views.BrandCheckoutView.as_view(),
+        name="application-checkout",
+    ),
 ]
 
 brand_patterns = [

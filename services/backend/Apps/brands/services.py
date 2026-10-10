@@ -67,7 +67,9 @@ def submit_application(
 
 
 @transaction.atomic
-def approve_application(*, application: BrandApplication, reviewer: User) -> Brand:
+def approve_application(*, application: BrandApplication, reviewer: User | None) -> Brand:
+    """Create the brand from an application. ``reviewer`` is the approving
+    admin, or None when the brand activates itself through checkout."""
     if application.status != BrandApplication.Status.PENDING:
         raise BrandError("This application has already been reviewed.")
 
@@ -101,11 +103,14 @@ def approve_application(*, application: BrandApplication, reviewer: User) -> Bra
 
     AuditLog.objects.create(
         action=AuditLog.Action.APPROVE,
-        actor_type="user",
-        actor_id=str(reviewer.id),
+        actor_type="user" if reviewer else "system",
+        actor_id=str(reviewer.id) if reviewer else "checkout",
         target_type="brand_application",
         target_id=str(application.id),
-        metadata={"event": "brand_application_approved", "brand_id": str(brand.id)},
+        metadata={
+            "event": "brand_application_approved" if reviewer else "brand_activated_by_checkout",
+            "brand_id": str(brand.id),
+        },
     )
     return brand
 

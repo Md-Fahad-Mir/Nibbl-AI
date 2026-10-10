@@ -9,7 +9,7 @@ import ReceiptHistoryCard from "./ReceiptHistoryCard";
 import ActivityHistoryCard from "./ActivityHistoryCard";
 import InviteFriendsCard from "./InviteFriendsCard";
 import UploadReceiptCard from "./UploadReceiptCard";
-import ReviewChatModal, { ReviewSubmission } from "./ReviewChatModal";
+import ReviewChatModal from "./ReviewChatModal";
 import InviteFriendsModal from "./InviteFriendsModal";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
 
@@ -74,7 +74,6 @@ export default function MyRewardContainer({
     status,
     loadRewardsHub,
     uploadReceipt,
-    submitReview,
     inviteFriend,
   } = useConsumerApiStore();
   const latestError = useConsumerApiStore((state) => state.error);
@@ -240,29 +239,12 @@ export default function MyRewardContainer({
     }
   };
 
-  const handleReviewSubmit = async (submission: ReviewSubmission) => {
-    if (!activeReviewOpportunity) {
-      throw new Error("No review invitation is selected.");
-    }
-
-    const itemName = String(
-      activeReviewOpportunity.product_name ||
-        activeReviewOpportunity.campaign_name ||
-        "Review"
-    );
-
-    await submitReview(
-      activeReviewOpportunity,
-      submission.rating,
-      submission.answers
-    );
+  const handleReviewSubmitted = (itemName: string, reward: string) => {
     setActiveReviewOpportunity(null);
-    
-    // Append review rebate success
     const newActivity: Activity = {
       id: `act-${Date.now()}`,
       type: "verified",
-      title: `Review Approved- $1.00 added to wallet`,
+      title: `Review submitted - $${reward} added to wallet`,
       subtitle: `Feedback submitted for ${itemName}.`,
       statusText: "Verified",
       statusColor: "text-[#00A671]",
@@ -337,13 +319,9 @@ export default function MyRewardContainer({
 
       {activeReviewOpportunity && (
         <ReviewChatModal
-          itemName={String(
-            activeReviewOpportunity.product_name ||
-              activeReviewOpportunity.campaign_name ||
-              "Review opportunity"
-          )}
+          opportunity={activeReviewOpportunity}
           onClose={() => setActiveReviewOpportunity(null)}
-          onSubmit={handleReviewSubmit}
+          onSubmitted={handleReviewSubmitted}
         />
       )}
 

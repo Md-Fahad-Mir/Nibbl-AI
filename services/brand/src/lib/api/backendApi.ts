@@ -550,6 +550,21 @@ export const backendApi = {
       path: `/brands/${brandId}/review-campaigns/${campaignId}/activate/`,
       auth: true,
     }),
+    deleteReviewCampaignPrompt: (brandId: string, campaignId: string, promptId: string): ApiEndpoint => ({
+      method: "DELETE",
+      path: `/brands/${brandId}/review-campaigns/${campaignId}/prompts/${promptId}/`,
+      auth: true,
+    }),
+    brandReviews: (brandId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/reviews/`,
+      auth: true,
+    }),
+    brandReviewAction: (brandId: string, reviewId: string, action: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/reviews/${reviewId}/${action}/`,
+      auth: true,
+    }),
     pauseReviewCampaign: (brandId: string, campaignId: string): ApiEndpoint => ({
       method: "POST",
       path: `/brands/${brandId}/review-campaigns/${campaignId}/pause/`,

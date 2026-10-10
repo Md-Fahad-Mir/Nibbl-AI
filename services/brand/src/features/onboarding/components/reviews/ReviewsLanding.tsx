@@ -7,10 +7,9 @@ interface CampaignItem {
   id: string;
   name: string;
   createdDate: string;
-  status: "Active" | "Paused";
-  reviews: number;
-  todayReviews: number;
-  spend: number;
+  status: string;
+  opportunitiesToday: number;
+  dailyOpportunities: number;
 }
 
 interface ReviewsLandingProps {
@@ -27,7 +26,9 @@ export default function ReviewsLanding({ campaigns, onCreateNew, onViewDetail, o
   const totalReviews = toNumber(analyticsOverview?.reviews);
   const reviewSpend = toNumber(spend.review_reward) + toNumber(spend.review_fee);
   const costPerReview = totalReviews ? reviewSpend / totalReviews : 0;
-  const dailyBudget = campaigns.reduce((sum, campaign) => sum + campaign.spend, 0);
+  const dailyOpportunities = campaigns
+    .filter((campaign) => campaign.status === "Active")
+    .reduce((sum, campaign) => sum + campaign.dailyOpportunities, 0);
   const itemsPerPage = 5;
   const totalPages = Math.max(1, Math.ceil(campaigns.length / itemsPerPage));
   const currentPage = Math.min(page, totalPages);
@@ -97,8 +98,8 @@ export default function ReviewsLanding({ campaigns, onCreateNew, onViewDetail, o
             <img src="/reviews/dailyBudget.svg" alt="Budget" className="w-5 h-5 object-contain" />
           </span>
           <div className="flex flex-col gap-0.5 mt-2">
-            <span className="text-[22px] font-extrabold text-[#131B2E]">{formatMoney(dailyBudget)}</span>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">DAILY BUDGET</span>
+            <span className="text-[22px] font-extrabold text-[#131B2E]">{formatInteger(dailyOpportunities)}</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">REVIEW OPPORTUNITIES / DAY</span>
           </div>
         </div>
 
@@ -145,7 +146,7 @@ export default function ReviewsLanding({ campaigns, onCreateNew, onViewDetail, o
       <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm flex flex-col gap-4 w-full">
         <div className="flex justify-between items-center">
           <span className="text-sm font-bold text-[#131B2E] flex items-center gap-2">
-            <img src="/reviews/ActiveCampains.svg" alt="Active Campaigns" className="w-5 h-5 object-contain" /> Active Campaigns
+            <img src="/reviews/ActiveCampains.svg" alt="Review Campaigns" className="w-5 h-5 object-contain" /> Review Campaigns
           </span>
         </div>
 
@@ -155,8 +156,8 @@ export default function ReviewsLanding({ campaigns, onCreateNew, onViewDetail, o
               <tr className="bg-slate-50 h-12 text-slate-500 font-bold border-b border-slate-100">
                 <th className="px-6 uppercase tracking-wider">CAMPAIGN NAME</th>
                 <th className="px-6 uppercase tracking-wider">STATUS</th>
-                <th className="px-6 uppercase tracking-wider">TOTAL REVIEWS</th>
-                <th className="px-6 uppercase tracking-wider">SPEND</th>
+                <th className="px-6 uppercase tracking-wider">OPPORTUNITIES TODAY</th>
+                <th className="px-6 uppercase tracking-wider">DAILY LIMIT</th>
                 <th className="px-6 text-right">ACTIONS</th>
               </tr>
             </thead>
@@ -182,14 +183,9 @@ export default function ReviewsLanding({ campaigns, onCreateNew, onViewDetail, o
                     </span>
                   </td>
                   <td className="px-6">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-bold">{camp.reviews}</span>
-                      {camp.todayReviews > 0 && (
-                        <span className="text-[9px] text-emerald-600 font-bold">+{camp.todayReviews} today</span>
-                      )}
-                    </div>
+                    <span className="text-sm font-bold">{camp.opportunitiesToday}</span>
                   </td>
-                  <td className="px-6 text-sm font-bold">${camp.spend.toFixed(2)}</td>
+                  <td className="px-6 text-sm font-bold">{camp.dailyOpportunities}</td>
                   <td className="px-6 text-right">
                     <button className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
                       <img src="/reviews/editIcon.svg" alt="Edit" className="w-[18px] h-[18px] object-contain inline" />

@@ -28,15 +28,6 @@ export interface DisplayOffer {
   whereToBuy: string[];
 }
 
-export interface DisplayReview {
-  id: string;
-  author: string;
-  rating: number;
-  body: string;
-  date: string;
-  avatar: string | null;
-}
-
 const fallbackImage = "/homepage/rewardImage.svg";
 const apiOrigin = new URL(API_BASE_URL).origin;
 
@@ -135,22 +126,3 @@ export const displayOffer = (offer: ApiRecord, index = 0): DisplayOffer => ({
   featuredRetailers: Array.isArray(offer.featured_retailers) ? offer.featured_retailers.map(String) : [],
   whereToBuy: Array.isArray(offer.where_to_buy) ? offer.where_to_buy.map(String) : [],
 });
-
-export const displayReviews = (offer?: ApiRecord | null): DisplayReview[] => {
-  const rawReviews = offer?.reviews;
-  if (!Array.isArray(rawReviews)) return [];
-
-  return rawReviews.map((review, index) => {
-    const item = review as ApiRecord;
-    const user = (item.user || item.consumer || {}) as ApiRecord;
-
-    return {
-      id: String(item.id ?? index),
-      author: text(user.full_name ?? user.name ?? item.author_name, "NibblAI shopper"),
-      rating: Number(item.rating ?? 0),
-      body: text(item.content ?? item.body ?? item.comment, "No review text was provided."),
-      date: dateOnly(item.created_at ?? item.updated_at, "Recent"),
-      avatar: imageUrl(user.avatar ?? user.avatar_url ?? item.avatar, "") || null,
-    };
-  });
-};

@@ -371,7 +371,7 @@ def _brand_review(request, brand_id, review_id, *, manager=False) -> Review:
 
 
 def _brand_reviews(request, brand):
-    qs = Review.objects.filter(brand=brand).select_related("product", "user", "review_campaign", "session__receipt")
+    qs = Review.objects.filter(brand=brand).select_related("product", "user", "brand", "review_campaign", "session__receipt")
     params = request.query_params
     if params.get("status"):
         qs = qs.filter(status=params["status"])

@@ -69,7 +69,7 @@ def send_referral_invite(
 ) -> None:
     """Email a friend an invite carrying the inviter's referral code."""
     base_url = getattr(settings, "PUBLIC_BASE_URL", "http://localhost:8000")
-    signup_url = f"{base_url}/signup?ref={referral_code}"
+    signup_url = f"{base_url.rstrip('/')}/r/{referral_code}"
     greeting = f"Hi {friend_name}," if friend_name else "Hi,"
     subject = f"{inviter_name} invited you to NibblAI"
     body = (

@@ -408,6 +408,7 @@ class AdminReferralListView(APIView):
             "flagged": qs.filter(status=Referral.Status.FLAGGED).count(),
             "paid": qs.filter(status=Referral.Status.PAID).count(),
             "rejected": qs.filter(status=Referral.Status.REJECTED).count(),
+            "expired": qs.filter(status=Referral.Status.EXPIRED).count(),
         }
         status_filter = request.query_params.get("status", "")
         if status_filter == "qualified":

@@ -104,3 +104,46 @@ class ReferralQualificationTests(APITestCase):
         with self.captureOnCommitCallbacks(execute=True):
             payouts.add_payout_method(user=user, provider="paypal", handle="invitee@pay.com")
         self.assertIsNotNone(Referral.objects.get().payout_connected_at)
+
+    # --- Master: every step must be finished within 90 days of joining ---
+
+    def test_overview_totals_link_and_days_left(self):
+        user = self.join()
+        self.client.force_authenticate(self.inviter)
+        data = self.client.get(reverse("v1:accounts:users:referrals")).data
+        self.assertTrue(data["referral_link"].endswith(f"/r/{self.inviter.referral_code}"))
+        self.assertEqual((data["reward_amount"], data["window_days"]), ("5.00", 90))
+        self.assertEqual(data["summary"], {"earned": "0", "pending": "5.00", "invited": 1})
+        friend = data["referrals"][0]
+        self.assertIn(friend["days_left"], (89, 90))
+        with self.complete(user):
+            referrals.refresh(user)
+        data = self.client.get(reverse("v1:accounts:users:referrals")).data
+        self.assertEqual((data["summary"]["earned"], data["summary"]["pending"]), ("5.00", "0"))
+        self.assertIsNone(data["referrals"][0]["days_left"])
+
+    def test_expires_after_90_days_and_late_steps_dont_count(self):
+        import datetime as dt
+
+        user = self.join()
+        referral = Referral.objects.get(referred=user)
+        late = timezone.now() + dt.timedelta(days=91)
+        steps = {"claimed_at": timezone.now(), "redeemed_at": timezone.now(), "payout_connected_at": timezone.now(),
+                 "withdrawn_at": late}  # final step after the window
+        with patch("Apps.accounts.referrals._completed_steps", return_value=steps):
+            referrals.refresh(user, now=late)
+        referral.refresh_from_db()
+        self.assertEqual((referral.status, referral.withdrawn_at), ("expired", None))
+        self.assertEqual(_bonus_count(self.inviter), 0)
+        self.client.force_authenticate(self.inviter)
+        friend = self.client.get(reverse("v1:accounts:users:referrals")).data["referrals"][0]
+        self.assertEqual(friend["status"], "expired")
+        self.assertIn("90 days", friend["decision_reason"])
+
+    def test_expiry_job_closes_old_referrals(self):
+        import datetime as dt
+
+        user = self.join()
+        Referral.objects.filter(referred=user).update(created_at=timezone.now() - dt.timedelta(days=91))
+        self.assertEqual(referrals.expire_overdue(), 1)
+        self.assertEqual(Referral.objects.get().status, "expired")

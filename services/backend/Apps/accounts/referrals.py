@@ -7,7 +7,9 @@ A referral reward is earned only after the new shopper:
   4. connects a payout method,
   5. completes any successful withdrawal (it needn't include the reward).
 
-Progress is recomputed whenever one of those things happens. Once all five
+All steps must be finished within REFERRAL_WINDOW_DAYS (90) of joining;
+otherwise the referral expires. Progress is recomputed whenever one of those
+things happens. Once all five
 are done the Referral Flag Rules (Admin Settings) run: a clean referral is
 paid to the referrer's wallet; otherwise it's flagged for Admin, who may
 approve, reject (with a customer-facing reason) or suspend the shopper.
@@ -15,6 +17,8 @@ Referral rewards then follow the normal Wallet / withdrawal rules.
 """
 
 from __future__ import annotations
+
+import datetime as dt
 
 from django.conf import settings
 from django.db import transaction
@@ -114,19 +118,36 @@ def _pay(referral: Referral, *, actor=None) -> Referral:
     return referral
 
 
-def refresh(user) -> Referral | None:
-    """Record newly completed steps; on qualification flag or pay."""
+def deadline(referral: Referral):
+    """Every step must be finished by this time (Master: within 90 days)."""
+    return referral.created_at + dt.timedelta(days=settings.REFERRAL_WINDOW_DAYS)
+
+
+def refresh(user, now=None) -> Referral | None:
+    """Record newly completed steps; on qualification flag or pay; past the
+    90-day window an unfinished referral expires."""
+    now = now or timezone.now()
     referral = Referral.objects.filter(referred=user).select_related("referrer", "referred").first()
     if referral is None or referral.status != Referral.Status.IN_PROGRESS:
         return referral
+    due = deadline(referral)
     changed = []
     for field, value in _completed_steps(user).items():
-        if value and getattr(referral, field) is None:
+        # Only steps finished inside the window count.
+        if value and value <= due and getattr(referral, field) is None:
             setattr(referral, field, value)
             changed.append(field)
     if changed:
         referral.save(update_fields=[*changed, "updated_at"])
-    if all(getattr(referral, f) for f in ("claimed_at", "redeemed_at", "payout_connected_at", "withdrawn_at")):
+    done = all(getattr(referral, f) for f in ("claimed_at", "redeemed_at", "payout_connected_at", "withdrawn_at"))
+    if not done and now > due:
+        referral.status = Referral.Status.EXPIRED
+        referral.decision_reason = (
+            f"Your friend didn't finish every step within {settings.REFERRAL_WINDOW_DAYS} days."
+        )
+        referral.save(update_fields=["status", "decision_reason", "updated_at"])
+        return referral
+    if done:
         referral.qualified_at = timezone.now()
         flags = protection_flags(referral)
         if flags:
@@ -137,6 +158,17 @@ def refresh(user) -> Referral | None:
             referral.save(update_fields=["qualified_at", "updated_at"])
             _pay(referral)
     return referral
+
+
+def expire_overdue(now=None) -> int:
+    """Close in-progress referrals whose 90-day window has passed (cron)."""
+    now = now or timezone.now()
+    cutoff = now - dt.timedelta(days=settings.REFERRAL_WINDOW_DAYS)
+    count = 0
+    for referral in Referral.objects.filter(status=Referral.Status.IN_PROGRESS, created_at__lt=cutoff).select_related("referred"):
+        if refresh(referral.referred, now=now).status == Referral.Status.EXPIRED:
+            count += 1
+    return count
 
 
 def refresh_later(user_id) -> None:

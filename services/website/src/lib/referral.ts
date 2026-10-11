@@ -1,6 +1,7 @@
 /**
- * Referral links (Master: Refer a Friend) — `?ref=CODE` (general link) and
- * `&deal=<campaign id>` (a specific product deal). Captured on arrival and
+ * Referral links (Master: Refer a Friend) — `/r/CODE` (general link) and
+ * `/r/CODE?deal=<campaign id>` (a specific product deal). Older `?ref=CODE`
+ * links still work. Captured on arrival and
  * sent with registration. Also a stable per-browser device id for fraud
  * checks (Master #51), sent as `X-Device-Id`.
  */
@@ -24,11 +25,15 @@ const write = (key: string, value: string) => {
   }
 };
 
+export const rememberReferral = (code: string, deal: string | null) => {
+  if (code.trim()) write(REF_KEY, JSON.stringify({ code: code.trim().toUpperCase(), deal: deal || null }));
+};
+
 export const captureReferral = () => {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams(window.location.search);
   const code = params.get("ref");
-  if (code) write(REF_KEY, JSON.stringify({ code: code.trim().toUpperCase(), deal: params.get("deal") || null }));
+  if (code) rememberReferral(code, params.get("deal"));
 };
 
 export const storedReferral = (): { code: string; deal: string | null } | null => {
@@ -51,8 +56,7 @@ export const clearReferral = () => {
 
 export const referralLink = (code: string, campaignId?: string) => {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  const params = new URLSearchParams({ ref: code, ...(campaignId ? { deal: campaignId } : {}) });
-  return `${origin}/?${params.toString()}`;
+  return `${origin}/r/${encodeURIComponent(code)}${campaignId ? `?deal=${encodeURIComponent(campaignId)}` : ""}`;
 };
 
 export const deviceId = (): string => {

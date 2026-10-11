@@ -143,6 +143,24 @@ def brand_dashboard(brand, days: int = 30, now=None) -> dict:
             "performance": cycle_performance(campaign, now),
         })
 
+    # Review campaigns: Results = invitations / completed reviews in the period.
+    from Apps.reviews.models import ReviewCampaign
+
+    sessions = ReviewSession.objects.filter(review_campaign__brand=brand, created_at__gte=start, created_at__lt=now)
+    period_reviews = Review.objects.filter(brand=brand, created_at__gte=start, created_at__lt=now)
+    for rc in ReviewCampaign.objects.filter(brand=brand).exclude(status=ReviewCampaign.Status.ARCHIVED):
+        r_invitations = sessions.filter(review_campaign=rc).count()
+        r_completed = period_reviews.filter(review_campaign=rc).count()
+        campaigns.append({
+            "id": str(rc.id),
+            "name": rc.name,
+            "type": "review",
+            "display_status": rc.status,
+            "invitations": r_invitations,
+            "completed": r_completed,
+            "completion_rate": _rate(r_completed, r_invitations),
+        })
+
     return {
         "period": {"days": days, "start": start, "end": now},
         "available_funds": str(wallet.reward_available()) if wallet else "0.00",

@@ -7,7 +7,6 @@ import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatInteger, formatMoney, titleCase, toNumber } from "../../utils/backendMappers";
 
 type CampaignTypeFilter = "All Types" | "Rebate" | "Review";
-type CampaignDateFilter = "Last 30 Days" | "Last 90 Days" | "All Time";
 
 type DashboardCampaign = {
   id: string;
@@ -18,7 +17,6 @@ type DashboardCampaign = {
   activity: string;
   activitySub: string;
   thumbnail: string;
-  timestamp: number | null;
 };
 
 const campaignId = (campaign: ApiRecord) =>
@@ -50,21 +48,6 @@ const statusText = (campaign: ApiRecord) => {
   if (review) return review;
   const status = titleCase(campaignStatusValue(campaign));
   return campaign.pending_revision ? `${status} · Changes Pending Review` : status;
-};
-
-const campaignTimestamp = (campaign: ApiRecord) => {
-  const rawDate =
-    campaign.created_at ??
-    campaign.start_at ??
-    campaign.updated_at ??
-    campaign.createdAt ??
-    campaign.startAt ??
-    campaign.created ??
-    campaign.launched_at ??
-    campaign.activated_at;
-  if (typeof rawDate !== "string" || !rawDate) return null;
-  const timestamp = new Date(rawDate).getTime();
-  return Number.isNaN(timestamp) ? null : timestamp;
 };
 
 const campaignProducts = (campaign: ApiRecord) => {
@@ -101,17 +84,15 @@ const inlineProductImage = (campaign: ApiRecord) => {
 
 export default function CampaignsTable() {
   const [typeFilter, setTypeFilter] = useState<CampaignTypeFilter>("All Types");
-  const [dateFilter, setDateFilter] = useState<CampaignDateFilter>("Last 30 Days");
   const [showTypeFilter, setShowTypeFilter] = useState(false);
-  const [showDateFilter, setShowDateFilter] = useState(false);
   const [page, setPage] = useState(1);
   const campaigns = useBrandApiStore((state) => state.campaigns);
   const reviewCampaigns = useBrandApiStore((state) => state.reviewCampaigns);
   const analyticsCampaigns = useBrandApiStore((state) => state.analyticsCampaigns);
-  // Last-30-day results per campaign (Master: claims / redemptions).
+  // Results per campaign for the dashboard date range (Master: claims /
+  // redemptions for rebates, invitations / completed reviews for reviews).
   const dashboard = useBrandApiStore((state) => state.analyticsDashboard);
   const products = useBrandApiStore((state) => state.products);
-  const [now] = useState(() => Date.now());
 
   const rows: DashboardCampaign[] = useMemo(() => {
     const analyticsByCampaign = new Map(
@@ -149,43 +130,30 @@ export default function CampaignsTable() {
           activity: `${formatInteger(claims)} Claims`,
           activitySub: `${formatInteger(redemptions)} Redemptions`,
           thumbnail: thumbnailForCampaign(campaign, "/Auth/rebateImage.svg"),
-          timestamp: campaignTimestamp(campaign),
         };
       }),
-      ...reviewCampaigns.map((campaign) => ({
-        id: campaignId(campaign),
-        name: String(campaign.name ?? "Untitled review campaign"),
-        type: "REVIEW" as const,
-        status: statusText(campaign),
-        spend: toNumber(campaign.daily_budget),
-        activity: `${formatInteger(campaign.prompts instanceof Array ? campaign.prompts.length : 0)} Prompts`,
-        activitySub: `${formatMoney(campaign.reward_amount)} Reward`,
-        thumbnail: thumbnailForCampaign(campaign, "/Auth/reviewImage.svg"),
-        timestamp: campaignTimestamp(campaign),
-      })),
+      ...reviewCampaigns.filter((campaign) => String(campaign.status ?? "").toLowerCase() !== "archived").map((campaign) => {
+        const results = resultsByCampaign.get(campaignId(campaign));
+        return {
+          id: campaignId(campaign),
+          name: String(campaign.name ?? "Untitled review campaign"),
+          type: "REVIEW" as const,
+          status: statusText(campaign),
+          spend: toNumber(campaign.daily_budget),
+          activity: `${formatInteger(results?.invitations)} Invitations`,
+          activitySub: `${formatInteger(results?.completed)} Completed`,
+          thumbnail: thumbnailForCampaign(campaign, "/Auth/reviewImage.svg"),
+        };
+      }),
     ].filter((campaign) => campaign.id);
   }, [analyticsCampaigns, campaigns, dashboard, products, reviewCampaigns]);
 
-  const activeRows = useMemo(() => {
-    const dateWindow =
-      dateFilter === "Last 30 Days"
-        ? 30 * 24 * 60 * 60 * 1000
-        : dateFilter === "Last 90 Days"
-          ? 90 * 24 * 60 * 60 * 1000
-          : null;
-
-    return rows.filter((campaign) => {
-      const matchesType =
-        typeFilter === "All Types" || campaign.type === typeFilter.toUpperCase();
-      const matchesDate =
-        dateWindow === null ||
-        campaign.timestamp === null ||
-        campaign.timestamp >= now - dateWindow;
-
+  const activeRows = useMemo(
+    () =>
       // Master: Campaign Performance includes ended campaigns.
-      return matchesType && matchesDate;
-    });
-  }, [dateFilter, now, rows, typeFilter]);
+      rows.filter((campaign) => typeFilter === "All Types" || campaign.type === typeFilter.toUpperCase()),
+    [rows, typeFilter]
+  );
 
   const itemsPerPage = 5;
   const totalPages = Math.max(1, Math.ceil(activeRows.length / itemsPerPage));
@@ -194,17 +162,10 @@ export default function CampaignsTable() {
   const visibleRows = activeRows.slice(pageStart, pageStart + itemsPerPage);
   const pageNumbers = Array.from({ length: totalPages }, (_, index) => index + 1);
   const typeOptions: CampaignTypeFilter[] = ["All Types", "Rebate", "Review"];
-  const dateOptions: CampaignDateFilter[] = ["Last 30 Days", "Last 90 Days", "All Time"];
 
   const selectTypeFilter = (value: CampaignTypeFilter) => {
     setTypeFilter(value);
     setShowTypeFilter(false);
-    setPage(1);
-  };
-
-  const selectDateFilter = (value: CampaignDateFilter) => {
-    setDateFilter(value);
-    setShowDateFilter(false);
     setPage(1);
   };
 
@@ -222,7 +183,6 @@ export default function CampaignsTable() {
               type="button"
               onClick={() => {
                 setShowTypeFilter((value) => !value);
-                setShowDateFilter(false);
               }}
               className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#C5C5D9]/20 rounded-lg text-xs font-bold text-[#454656] cursor-pointer hover:bg-slate-50"
             >
@@ -238,36 +198,6 @@ export default function CampaignsTable() {
                     onClick={() => selectTypeFilter(option)}
                     className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-slate-50 border-none bg-transparent cursor-pointer ${
                       typeFilter === option ? "text-[#001BD2]" : "text-[#131B2E]"
-                    }`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setShowDateFilter((value) => !value);
-                setShowTypeFilter(false);
-              }}
-              className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#C5C5D9]/20 rounded-lg text-xs font-bold text-[#454656] cursor-pointer hover:bg-slate-50"
-            >
-              <span>{dateFilter}</span>
-              <span className="text-[10px]">v</span>
-            </button>
-            {showDateFilter && (
-              <div className="absolute right-0 mt-2 w-40 bg-white border border-slate-200 shadow-lg rounded-xl py-1 z-30">
-                {dateOptions.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => selectDateFilter(option)}
-                    className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-slate-50 border-none bg-transparent cursor-pointer ${
-                      dateFilter === option ? "text-[#001BD2]" : "text-[#131B2E]"
                     }`}
                   >
                     {option}

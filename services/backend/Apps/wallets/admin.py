@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from Apps.wallets.models import Hold, LedgerEntry, Wallet
+from Apps.wallets.models import Hold, LedgerEntry, RefundRequest, Wallet
 
 
 @admin.register(Wallet)
@@ -42,3 +42,10 @@ class HoldAdmin(admin.ModelAdmin):
     list_filter = ("status",)
     search_fields = ("wallet__id", "reference_id", "idempotency_key")
     readonly_fields = ("created_at", "updated_at", "captured_at", "released_at")
+
+
+@admin.register(RefundRequest)
+class RefundRequestAdmin(admin.ModelAdmin):
+    list_display = ("brand", "amount", "status", "created_at", "decided_at")
+    list_filter = ("status",)
+    readonly_fields = [f.name for f in RefundRequest._meta.fields]

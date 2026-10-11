@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import RebatesLandingCard from "./RebatesLandingCard";
+import CampaignLimitBanner from "./CampaignLimitBanner";
 import {
   formatInteger,
   formatMinutes,
@@ -31,9 +32,10 @@ interface RebatesLandingProps {
   campaigns: Campaign[];
   onCreateNew: () => void;
   onEditCampaign: (camp: Campaign) => void;
+  onOpenPlans?: () => void;
 }
 
-export default function RebatesLanding({ campaigns, onCreateNew, onEditCampaign }: RebatesLandingProps) {
+export default function RebatesLanding({ campaigns, onCreateNew, onEditCampaign, onOpenPlans }: RebatesLandingProps) {
   const [filter, setFilter] = useState<Campaign["status"]>("ACTIVE");
   const rebatesSummary = useBrandApiStore((state) => state.analyticsRebatesSummary);
 
@@ -89,6 +91,8 @@ export default function RebatesLanding({ campaigns, onCreateNew, onEditCampaign 
           <span>+</span> Create Rebate Campaign
         </button>
       </div>
+
+      <CampaignLimitBanner onOpenPlans={onOpenPlans} />
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-2 bg-[#FAF8FF] font-manrope self-start">

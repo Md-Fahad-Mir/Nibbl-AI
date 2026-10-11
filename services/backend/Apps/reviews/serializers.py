@@ -243,6 +243,10 @@ class BrandReviewSerializer(serializers.ModelSerializer):
     verified_purchase = serializers.SerializerMethodField()
     reward = serializers.SerializerMethodField()
     receipt = serializers.SerializerMethodField()
+    reviewer_display = serializers.SerializerMethodField()
+    retailer = serializers.SerializerMethodField()
+    region = serializers.SerializerMethodField()
+    verification = serializers.SerializerMethodField()
 
     class Meta:
         model = Review
@@ -251,8 +255,49 @@ class BrandReviewSerializer(serializers.ModelSerializer):
             "verified_purchase", "rating", "title", "content", "status", "published_at", "held_until",
             "would_recommend", "questions_and_answers", "brand_response", "brand_response_at",
             "flag_reason", "flag_note", "flagged_at", "disclosure", "reward", "receipt", "created_at",
+            "reviewer_display", "retailer", "region", "verification",
         ]
         read_only_fields = fields
+
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        # Master plans: identity limited to first name + last initial, and the
+        # email shown only for negative-review service recovery (1–3★).
+        if self.context.get("limited_identity"):
+            data["shopper_name"] = data["reviewer_display"]
+            if (obj.rating or 0) > 3:
+                data["customer_email"] = ""
+        return data
+
+    def get_reviewer_display(self, obj) -> str:
+        parts = (obj.user.full_name or "").split()
+        if not parts:
+            return "Customer"
+        return f"{parts[0]} {parts[-1][0]}." if len(parts) > 1 else parts[0]
+
+    def get_retailer(self, obj) -> str:
+        receipt = obj.session.receipt if obj.session_id else None
+        return receipt.merchant if receipt else ""
+
+    def get_region(self, obj) -> str:
+        location = getattr(obj.user, "discovery_location", None)
+        return location.state if location else ""
+
+    def get_verification(self, obj) -> list:
+        """Gating summary: the checks the review passed before it existed."""
+        session = obj.session if obj.session_id else None
+        if session is None:
+            return []
+        receipt = session.receipt
+        return [
+            {"label": "Valid receipt detected", "ok": receipt is not None},
+            {"label": "Product match confirmed", "ok": session.product_id == obj.product_id},
+            {"label": "Purchase date within window", "ok": bool(receipt and receipt.purchased_at)},
+            {"label": f"Retailer eligible ({receipt.merchant})" if receipt and receipt.merchant else "Retailer eligible",
+             "ok": receipt is not None},
+            {"label": "One review per product per receipt", "ok": True},
+            {"label": f"Reward issued: ${session.reward_amount}", "ok": session.status == "completed"},
+        ]
 
     def get_verified_purchase(self, obj) -> bool:
         return obj.session_id is not None
@@ -279,7 +324,7 @@ class RespondSerializer(serializers.Serializer):
 
 class FlagSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=100)
-    note = serializers.CharField(required=False, allow_blank=True, default="", max_length=2000)
+    note = serializers.CharField(required=False, allow_blank=True, default="", max_length=500)
 
 
 class FlagDecisionSerializer(serializers.Serializer):

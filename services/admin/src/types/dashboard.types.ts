@@ -30,6 +30,7 @@ export type SidebarNavItem =
   | "review-flags"
   | "brand-discovery"
   | "referrals"
+  | "refunds"
   | "withdraw-request"
   | "payout-reviews"
   | "settings"

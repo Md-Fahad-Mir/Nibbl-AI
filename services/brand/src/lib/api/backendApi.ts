@@ -612,6 +612,16 @@ export const backendApi = {
       path: `/brands/${brandId}/review-campaigns/${campaignId}/image/`,
       auth: true,
     }),
+    refundRequests: (brandId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/wallet/refunds/`,
+      auth: true,
+    }),
+    requestRefund: (brandId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/wallet/refunds/`,
+      auth: true,
+    }),
     walletFunding: (brandId: string): ApiEndpoint => ({
       method: "GET",
       path: `/brands/${brandId}/wallet/funding/`,

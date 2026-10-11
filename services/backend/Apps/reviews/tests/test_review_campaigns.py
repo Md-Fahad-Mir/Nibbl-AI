@@ -159,7 +159,7 @@ class ReviewCampaignTests(APITestCase):
         self.client.force_authenticate(self.owner)
         url = reverse("v1:reviews:brand-review-action", args=[self.brand.id, review.id, "flag"])
         self.assertEqual(self.client.post(url, {"reason": "bogus"}, format="json").status_code, 400)
-        self.client.post(url, {"reason": "Not about this product", "note": "Wrong item"}, format="json")
+        self.client.post(url, {"reason": "Wrong product (does not match receipt)", "note": "Wrong item"}, format="json")
         self.assertEqual(rc.release_held(now=timezone.now() + dt.timedelta(days=8)), 0)  # flagged waits for Nibbl
         admin = User.objects.create_user(email="a@x.com", password="x", full_name="A", role=User.Role.ADMIN, is_staff=True)
         self.client.force_authenticate(admin)
@@ -185,6 +185,63 @@ class ReviewCampaignTests(APITestCase):
         url = reverse("v1:reviews:review-helpful", args=[review.id])
         self.client.post(url)
         self.assertEqual(self.client.post(url).data["helpful_count"], 1)
+
+    def test_review_management_filters_kpis_and_plan_identity(self):
+        from Apps.offers.models import ShopperLocation
+        from Apps.receipts.models import Receipt
+
+        user, review = self._low_review()
+        Receipt.objects.filter(user=user).update(merchant="Target")
+        ShopperLocation.objects.create(user=user, zip="60601", state="IL", lat=41.88, lng=-87.62)
+        self.client.force_authenticate(self.owner)
+        url = reverse("v1:reviews:brand-review-list", args=[self.brand.id])
+
+        data = self.client.get(url).data
+        cost = Decimal("1.00") + self.brand.plan.review_fee
+        summary = data["summary"]
+        self.assertEqual((Decimal(summary["review_spend"]), Decimal(summary["cost_per_review"])), (cost, cost))
+        self.assertEqual((summary["status_counts"]["all"], summary["status_counts"]["held"]), (1, 1))
+        self.assertEqual(data["filter_options"], {"retailers": ["Target"], "regions": ["IL"]})
+        row = data["reviews"][0]
+        self.assertEqual((row["retailer"], row["region"], row["reviewer_display"]), ("Target", "IL", "Sam S."))
+        self.assertEqual(len(row["verification"]), 6)
+        self.assertEqual(row["shopper_name"], "Sam Shopper")  # Pro: full identity
+
+        for params, expected in (({"retailer": "Walmart"}, 0), ({"retailer": "target"}, 1),
+                                 ({"region": "IL"}, 1), ({"q": "chips"}, 1), ({"q": "nothing"}, 0)):
+            self.assertEqual(len(self.client.get(url, params).data["reviews"]), expected, params)
+
+        # Starter: first name + last initial; email only for 1–3★ service recovery.
+        self.brand.plan = Plan.objects.get(slug="starter")
+        self.brand.save()
+        row = self.client.get(url).data["reviews"][0]
+        self.assertEqual((row["shopper_name"], row["customer_email"]), ("Sam S.", user.email))
+        Review.objects.filter(id=review.id).update(rating=5)
+        self.assertEqual(self.client.get(url).data["reviews"][0]["customer_email"], "")
+
+        doc = self.client.get(reverse("v1:reviews:brand-review-export", args=[self.brand.id]), {"type": "text"})
+        body = doc.content.decode()
+        self.assertTrue(doc["Content-Disposition"].endswith('.txt"'))
+        self.assertIn("Verified purchase", body)
+        self.assertIn("Sam S.", body)
+        self.assertNotIn(user.email, body)
+
+    def test_dashboard_lists_review_campaign_results(self):
+        self._low_review()
+        self.client.force_authenticate(self.owner)
+        data = self.client.get(reverse("v1:analytics:brand-dashboard", args=[self.brand.id]), {"days": 7}).data
+        row = next(c for c in data["campaigns"] if c["type"] == "review")
+        self.assertEqual((row["id"], row["invitations"], row["completed"]), (str(self.review_campaign.id), 1, 1))
+        self.assertEqual(data["period"]["days"], 7)
+
+    def test_flag_reasons_follow_master(self):
+        _user, review = self._low_review()
+        self.client.force_authenticate(self.owner)
+        url = reverse("v1:reviews:brand-review-action", args=[self.brand.id, review.id, "flag"])
+        too_long = {"reason": "Other policy violation", "note": "x" * 501}
+        self.assertEqual(self.client.post(url, too_long, format="json").status_code, 400)
+        ok = self.client.post(url, {"reason": "Personal information (PII)", "note": "Phone number"}, format="json")
+        self.assertEqual((ok.status_code, ok.data["flag_reason"]), (200, "Personal information (PII)"))
 
     def test_campaign_api_and_suggestions(self):
         self.client.force_authenticate(self.owner)

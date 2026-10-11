@@ -28,11 +28,12 @@ const Row = ({ title, tiles }: { title: string; tiles: Tile[] }) => (
   </section>
 );
 
-/** Master dashboard snapshots (last 30 days; no mini charts or comparison
+/** Master dashboard snapshots (selected date range, default last 30 days; no mini charts or comparison
  *  badges). Total Brand Cost = shopper rewards + Nibbl fees, excluding
  *  subscriptions; cost per result shows "—" when there are no results. */
 export default function DashboardSnapshots() {
   const dashboard = useBrandApiStore((state) => state.analyticsDashboard);
+  const days = useBrandApiStore((state) => state.dashboardDays);
   if (!dashboard) return null;
   const rebates = (dashboard.rebates || {}) as ApiRecord;
   const reviews = (dashboard.reviews || {}) as ApiRecord;
@@ -40,7 +41,7 @@ export default function DashboardSnapshots() {
   return (
     <div className="flex flex-col gap-8">
       <Row
-        title="Rebates · last 30 days"
+        title={`Rebates · last ${days} days`}
         tiles={[
           { label: "Claims", value: formatInteger(rebates.claims) },
           { label: "Redemptions", value: formatInteger(rebates.redemptions) },
@@ -53,7 +54,7 @@ export default function DashboardSnapshots() {
         ]}
       />
       <Row
-        title="Reviews · last 30 days"
+        title={`Reviews · last ${days} days`}
         tiles={[
           { label: "Review invitations", value: formatInteger(reviews.invitations) },
           { label: "Reviews completed", value: formatInteger(reviews.completed) },

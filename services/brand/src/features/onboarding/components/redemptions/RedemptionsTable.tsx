@@ -2,6 +2,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ApiRecord } from "@/lib/api/backendApi";
+import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import RedemptionRow from "./RedemptionRow";
 
 interface RedemptionItem {
@@ -45,7 +47,16 @@ interface RedemptionsTableProps {
 
 type VisibleTab = "Approved" | "Rejected" | "Manual Review";
 
-const dateFilters = ["Last 30 Days", "All Time"] as const;
+const dateFilters = ["Last 7 Days", "Last 30 Days", "Last 90 Days", "All Time"] as const;
+const DAYS: Record<string, number> = { "Last 7 Days": 7, "Last 30 Days": 30, "Last 90 Days": 90 };
+
+const productIdsOf = (campaign: ApiRecord) =>
+  (Array.isArray(campaign.products) ? campaign.products : Array.isArray(campaign.product_ids) ? campaign.product_ids : [])
+    .map((p) => (p && typeof p === "object" ? String((p as ApiRecord).id ?? "") : String(p)))
+    .filter(Boolean);
+
+const filterClass =
+  "h-10 px-3 bg-white border border-[#C5C5D9]/30 rounded-xl text-xs font-semibold text-[#131B2E] outline-none focus:border-[#001BD2]";
 const tabs: VisibleTab[] = ["Approved", "Rejected", "Manual Review"];
 
 export default function RedemptionsTable({
@@ -60,23 +71,52 @@ export default function RedemptionsTable({
   );
   const [showDate, setShowDate] = useState(false);
   const [page, setPage] = useState(1);
-  const [thirtyDaysAgo] = useState(() => Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [now] = useState(() => Date.now());
+  // Master Redemptions ③: search + campaign, product, status and date filters.
+  const [search, setSearch] = useState("");
+  const [campaignFilter, setCampaignFilter] = useState("");
+  const [productFilter, setProductFilter] = useState("");
+  const campaigns = useBrandApiStore((state) => state.campaigns);
+  const products = useBrandApiStore((state) => state.products);
+
+  const campaignNames = useMemo(
+    () => Array.from(new Set([
+      ...campaigns.map((c) => String(c.name ?? "")),
+      ...redemptions.map((r) => r.campaignName),
+    ].filter(Boolean))).sort(),
+    [campaigns, redemptions]
+  );
 
   const filtered = useMemo(() => {
     let next = redemptions.filter((redemption) => redemption.status === activeTab);
     // Receipts awaiting review are never hidden by the date filter — each
     // one has an auto-approval deadline the brand must act before.
-    if (dateFilter === "Last 30 Days" && activeTab !== "Manual Review") {
+    const days = DAYS[dateFilter];
+    if (days && activeTab !== "Manual Review") {
       next = next.filter((redemption) => {
         const source =
           redemption.submittedAt ||
           `${redemption.submittedDate} ${redemption.submittedTime}`;
         const timestamp = new Date(source).getTime();
-        return Number.isNaN(timestamp) || timestamp >= thirtyDaysAgo;
+        return Number.isNaN(timestamp) || timestamp >= now - days * 24 * 60 * 60 * 1000;
       });
     }
+    if (campaignFilter) next = next.filter((r) => r.campaignName === campaignFilter);
+    if (productFilter) {
+      // A redemption belongs to a product through its campaign's eligible products.
+      const names = new Set(
+        campaigns.filter((c) => productIdsOf(c).includes(productFilter)).map((c) => String(c.name ?? ""))
+      );
+      next = next.filter((r) => names.has(r.campaignName));
+    }
+    const q = search.trim().toLowerCase();
+    if (q) {
+      next = next.filter((r) =>
+        [r.userName, r.userEmail, r.campaignName, r.receiptMerchant ?? ""].some((v) => v.toLowerCase().includes(q))
+      );
+    }
     return next;
-  }, [activeTab, dateFilter, redemptions, thirtyDaysAgo]);
+  }, [activeTab, campaignFilter, campaigns, dateFilter, now, productFilter, redemptions, search]);
 
   const isManualReview = activeTab === "Manual Review";
   const title =
@@ -145,6 +185,21 @@ export default function RedemptionsTable({
             </div>
           )}
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
+        <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Search customer, email, campaign or retailer…" className={filterClass} />
+        <select value={campaignFilter} onChange={(e) => { setCampaignFilter(e.target.value); setPage(1); }}
+          className={filterClass} aria-label="Campaign">
+          <option value="">All Campaigns</option>
+          {campaignNames.map((name) => <option key={name} value={name}>{name}</option>)}
+        </select>
+        <select value={productFilter} onChange={(e) => { setProductFilter(e.target.value); setPage(1); }}
+          className={filterClass} aria-label="Product">
+          <option value="">All Products</option>
+          {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
       </div>
 
       <div className="w-full bg-white border border-[#C5C5D9]/10 shadow-sm rounded-[22px] overflow-hidden flex flex-col">

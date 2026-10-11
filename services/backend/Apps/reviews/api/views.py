@@ -390,9 +390,26 @@ def _brand_review(request, brand_id, review_id, *, manager=False) -> Review:
     return review
 
 
+def _brand_ctx(request, brand):
+    from Apps.brands.customers import _full_access
+
+    return {"request": request, "limited_identity": not _full_access(brand)}
+
+
 def _brand_reviews(request, brand):
-    qs = Review.objects.filter(brand=brand).select_related("product", "user", "brand", "review_campaign", "session__receipt")
+    qs = Review.objects.filter(brand=brand).select_related(
+        "product", "user", "user__discovery_location", "brand", "review_campaign", "session__receipt"
+    )
     params = request.query_params
+    if params.get("q"):
+        from django.db.models import Q
+
+        q = params["q"].strip()
+        qs = qs.filter(Q(product__name__icontains=q) | Q(title__icontains=q) | Q(content__icontains=q))
+    if params.get("retailer"):
+        qs = qs.filter(session__receipt__merchant__iexact=params["retailer"])
+    if params.get("region"):
+        qs = qs.filter(user__discovery_location__state__iexact=params["region"])
     if params.get("status"):
         qs = qs.filter(status=params["status"])
     if params.get("rating"):
@@ -408,7 +425,7 @@ def _brand_reviews(request, brand):
 
 @extend_schema(tags=["review-management"])
 class BrandReviewListView(APIView):
-    """?status=published|held|flagged|removed &rating= &product= &from= &to="""
+    """?status=published|held|flagged|removed &rating= &product= &retailer= &region= &q= &from= &to="""
 
     permission_classes = [IsAuthenticated]
 
@@ -421,14 +438,32 @@ class BrandReviewListView(APIView):
         published = all_reviews.filter(status=Review.Status.PUBLISHED)
         from django.db.models import Avg
 
+        from django.db.models import Count
+        from django.utils import timezone
+
+        from Apps.analytics.dashboard import _cost, _per
+        from Apps.wallets.models import LedgerEntry
+
         avg = published.aggregate(a=Avg("rating"))["a"]
+        # Review spend = $1 shopper rewards + plan review fees actually charged.
+        spend = _cost(brand, brand.created_at, timezone.now(),
+                      [LedgerEntry.Category.REVIEW_REWARD, LedgerEntry.Category.REVIEW_FEE])
+        counts = dict(all_reviews.values_list("status").annotate(n=Count("id")).values_list("status", "n"))
+        with_receipt = all_reviews.filter(session__receipt__isnull=False)
         return Response({
             "summary": {
                 "total_reviews": all_reviews.exclude(status=Review.Status.REMOVED).count(),
                 "low_rating_awaiting_action": all_reviews.filter(status=Review.Status.HELD).count(),
                 "average_rating": round(avg, 2) if avg is not None else None,
+                "review_spend": str(spend),
+                "cost_per_review": _per(spend, all_reviews.filter(session__isnull=False).count()),
+                "status_counts": {"all": sum(counts.values()), **counts},
             },
-            "reviews": s.BrandReviewSerializer(reviews, many=True, context=_ctx(request)).data,
+            "filter_options": {
+                "retailers": sorted({m for m in with_receipt.values_list("session__receipt__merchant", flat=True) if m}),
+                "regions": sorted({r for r in all_reviews.values_list("user__discovery_location__state", flat=True) if r}),
+            },
+            "reviews": s.BrandReviewSerializer(reviews, many=True, context=_brand_ctx(request, brand)).data,
         })
 
 
@@ -447,6 +482,8 @@ class BrandReviewExportView(APIView):
 
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand)
+        if request.query_params.get("type") == "text":
+            return _reviews_document(request, brand)
         buffer = io.StringIO()
         writer = csv.writer(buffer)
         writer.writerow(["review_id", "product", "rating", "title", "review", "status", "published_at",
@@ -462,6 +499,34 @@ class BrandReviewExportView(APIView):
         response = HttpResponse(buffer.getvalue(), content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="{brand.slug}-reviews.csv"'
         return response
+
+
+DISCLOSURE = "Verified purchase. This shopper received a reward for an honest review."
+
+
+def _reviews_document(request, brand):
+    """Master "Download Reviews": the reviews as readable text, each with the
+    verified-purchase + rewarded-review disclosure."""
+    from django.http import HttpResponse
+
+    ser = s.BrandReviewSerializer(context={"request": request, "limited_identity": True})
+    blocks = []
+    for r in _brand_reviews(request, brand).exclude(status=Review.Status.REMOVED):
+        lines = [
+            f"{'★' * r.rating}{'☆' * (5 - r.rating)}  {r.title}".rstrip(),
+            f"{r.product.name} — {ser.get_reviewer_display(r)}, {r.created_at:%B %d, %Y}",
+            "",
+            r.content,
+            "",
+            r.disclosure or DISCLOSURE,
+        ]
+        if r.brand_response:
+            lines += ["", f"Response from {brand.name}: {r.brand_response}"]
+        blocks.append("\n".join(lines))
+    body = f"{brand.name} — Reviews\n\n" + ("\n\n" + "-" * 60 + "\n\n").join(blocks) + "\n"
+    response = HttpResponse(body, content_type="text/plain; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{brand.slug}-reviews.txt"'
+    return response
 
 
 @extend_schema(tags=["review-management"])
@@ -483,7 +548,7 @@ class BrandReviewActionView(APIView):
             review = _run(rc.flag, review, actor=request.user, **serializer.validated_data)
         else:
             raise NotFound()
-        return Response(s.BrandReviewSerializer(review, context=_ctx(request)).data)
+        return Response(s.BrandReviewSerializer(review, context=_brand_ctx(request, review.brand)).data)
 
 
 # --- Nibbl admin: flagged reviews -------------------------------------------

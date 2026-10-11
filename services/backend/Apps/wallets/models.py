@@ -104,6 +104,7 @@ class LedgerEntry(models.Model):
         PAYOUT = "payout", "Payout"
         REFERRAL_BONUS = "referral_bonus", "Referral bonus"
         ADJUSTMENT = "adjustment", "Manual adjustment"
+        REFUND = "refund", "Refund to brand"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     wallet = models.ForeignKey(
@@ -192,3 +193,41 @@ class Hold(models.Model):
 
     def __str__(self):
         return f"hold {self.amount} ({self.status})"
+
+
+class RefundRequest(models.Model):
+    """A brand's request to get Available Cash back (Master Wallet: Available
+    Cash is refundable; Reserved Funds and Promotional Credits are not).
+    Nibbl reviews it, returns the money through Stripe, then marks it refunded
+    — which debits the wallet with a ``refund`` ledger entry."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        REFUNDED = "refunded", "Refunded"
+        REJECTED = "rejected", "Rejected"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    brand = models.ForeignKey("brands.Brand", on_delete=models.CASCADE, related_name="refund_requests")
+    wallet = models.ForeignKey(Wallet, on_delete=models.PROTECT, related_name="refund_requests")
+    amount = models.DecimalField(**MONEY_FIELD)
+    reason = models.TextField(blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    # Shown to the brand: why it was rejected, or the refund reference.
+    decision_note = models.TextField(blank=True)
+    stripe_reference = models.CharField(max_length=100, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"refund {self.amount} ({self.status})"

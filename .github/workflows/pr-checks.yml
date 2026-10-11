@@ -16,6 +16,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       ai: ${{ steps.filter.outputs.ai }}
       infra: ${{ steps.filter.outputs.infra }}
+      webapps: ${{ steps.filter.outputs.changes }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -26,6 +27,15 @@ jobs:
               - 'services/backend/**'
             ai:
               - 'services/ai/**'
+            website:
+              - 'services/website/**'
+              - 'deployment/docker/nextjs.Dockerfile'
+            brand:
+              - 'services/brand/**'
+              - 'deployment/docker/nextjs.Dockerfile'
+            admin:
+              - 'services/admin/**'
+              - 'deployment/docker/nextjs.Dockerfile'
             infra:
               - 'infrastructure/**'
               - 'deployment/**'
@@ -143,3 +153,23 @@ jobs:
           cd infrastructure/terraform/environments/production
           terraform init -backend=false
           terraform validate
+
+  # Builds each changed web app's production image (no push) so a broken
+  # build is caught before merge instead of in frontend-deploy.yml.
+  webapp:
+    name: Web app ${{ matrix.app }}
+    needs: changes
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [website, brand, admin]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        if: ${{ contains(fromJSON(needs.changes.outputs.webapps), matrix.app) }}
+        uses: actions/checkout@v4
+
+      - name: Build production image
+        if: ${{ contains(fromJSON(needs.changes.outputs.webapps), matrix.app) }}
+        run: docker build -f deployment/docker/nextjs.Dockerfile services/${{ matrix.app }}

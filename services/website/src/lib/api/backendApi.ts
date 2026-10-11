@@ -857,6 +857,8 @@ export const nibblApi = {
     requestEndpoint<ApiRecord>(backendApi.consumer.offerDetail(campaignId)),
   offerDetails: (campaignId: string) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.offerDetails(campaignId)),
+  offerByUrl: (token: string) =>
+    requestEndpoint<ApiRecord>(backendApi.consumer.offerByUrl(token)),
   saveOffer: (campaignId: string) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.saveOffer(campaignId)),
   createReservation: (

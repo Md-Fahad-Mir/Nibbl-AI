@@ -36,6 +36,11 @@ urlpatterns = [
         views.BrandWeeklyStatementExportView.as_view(),
         name="brand-weekly-statement-export",
     ),
+    path(
+        "brands/<uuid:brand_id>/wallet/refunds/",
+        views.BrandRefundRequestView.as_view(),
+        name="brand-refund-requests",
+    ),
     # Customer wallet
     path("wallet/", views.CustomerWalletView.as_view(), name="customer-wallet"),
     path(

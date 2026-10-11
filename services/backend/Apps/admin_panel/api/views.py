@@ -444,3 +444,52 @@ class AdminReferralActionView(APIView):
             raise ValidationError({"detail": str(exc)})
         referral.refresh_from_db()
         return Response(_referral_row(referral))
+
+
+@extend_schema(tags=["admin"])
+class AdminRefundRequestListView(APIView):
+    """Brand refund requests. ?status=pending|refunded|rejected"""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        from Apps.wallets import refunds
+        from Apps.wallets.models import RefundRequest
+
+        qs = RefundRequest.objects.select_related("brand", "requested_by", "wallet")
+        summary = {status: qs.filter(status=status).count() for status in RefundRequest.Status.values}
+        if request.query_params.get("status"):
+            qs = qs.filter(status=request.query_params["status"])
+        results = []
+        for refund in qs[:500]:
+            results.append({**refunds.row(refund), "available_cash": str(refunds.refundable(refund.wallet))})
+        return Response({"summary": summary, "results": results})
+
+
+@extend_schema(tags=["admin"])
+class AdminRefundRequestActionView(APIView):
+    """POST …/refunded/ {reference, note} after returning the money in Stripe,
+    or …/reject/ {note} (shown to the brand)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request, refund_id, action):
+        from Apps.wallets import refunds
+        from Apps.wallets.models import RefundRequest
+
+        refund = RefundRequest.objects.select_related("brand", "wallet", "requested_by").filter(id=refund_id).first()
+        if refund is None or action not in ("refunded", "reject"):
+            raise NotFound("Refund request not found.")
+        note = str(request.data.get("note", ""))
+        try:
+            if action == "refunded":
+                refund = refunds.mark_refunded(
+                    refund, admin=request.user, reference=str(request.data.get("reference", "")), note=note,
+                )
+            else:
+                refund = refunds.reject(refund, admin=request.user, note=note)
+        except refunds.RefundError as exc:
+            raise ValidationError({"detail": str(exc)})
+        return Response(refunds.row(refund))

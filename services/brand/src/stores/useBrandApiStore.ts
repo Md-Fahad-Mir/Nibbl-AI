@@ -283,6 +283,8 @@ interface BrandApiState {
   analyticsRebatesSummary: ApiRecord | null;
   /** Dashboard snapshots, conversion and campaign performance (Master definitions). */
   analyticsDashboard: ApiRecord | null;
+  /** Dashboard date range in days (Master: default Last 30 Days). */
+  dashboardDays: number;
   loadAnalyticsDashboard: (days?: number) => Promise<void>;
   analyticsCampaigns: ApiRecord[];
   analyticsProducts: ApiRecord[];
@@ -382,6 +384,7 @@ export const useBrandApiStore = create<BrandApiState>()(
       analyticsOverview: null,
       analyticsRebatesSummary: null,
       analyticsDashboard: null,
+      dashboardDays: 30,
       analyticsCampaigns: [],
       analyticsProducts: [],
       members: [],
@@ -540,9 +543,11 @@ export const useBrandApiStore = create<BrandApiState>()(
           set({ status: "error", error: readError(error) });
         }
       },
-      loadAnalyticsDashboard: async (days = 30) => {
+      loadAnalyticsDashboard: async (days) => {
         const brandId = get().selectedBrandId;
         if (!brandId) return;
+        if (days === undefined) days = get().dashboardDays;
+        else set({ dashboardDays: days });
         const dashboard = await optionalRequest(
           () => apiClient.request<ApiRecord>(backendApi.brand.analyticsDashboard(brandId), { query: { days: String(days) } }),
           null

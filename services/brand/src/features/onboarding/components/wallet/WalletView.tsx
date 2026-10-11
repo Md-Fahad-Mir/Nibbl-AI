@@ -5,9 +5,14 @@ import WalletOverview from "./WalletOverview";
 import WalletDetails from "./WalletDetails";
 import WeeklyStatements from "./WeeklyStatements";
 import FundingAndSpending from "./FundingAndSpending";
+import { ApiRecord } from "@/lib/api/backendApi";
+import { RefundRequestList, RequestRefundModal, useRefunds } from "./RefundRequests";
 
 export default function WalletView() {
   const [viewModeSetting, setViewModeSetting] = useState<"overview" | "details">("overview");
+  const [refunding, setRefunding] = useState(false);
+  const refunds = useRefunds();
+  const refundRequests = (Array.isArray(refunds.data?.requests) ? refunds.data.requests : []) as ApiRecord[];
 
   return (
     <div className="flex flex-col gap-8 w-full animate-slide-up text-left font-manrope">
@@ -22,6 +27,10 @@ export default function WalletView() {
             Overview of available balance, limits, and transactions history.
           </p>
         </div>
+        <button onClick={() => setRefunding(true)} disabled={!refunds.data}
+          className="h-10 px-5 rounded-full border border-[#001BD2]/40 text-[#001BD2] text-sm font-bold disabled:opacity-50 cursor-pointer">
+          Request Refund
+        </button>
       </div>
 
       {/* Overview vs Details Sub-navigation Toggles */}
@@ -55,12 +64,26 @@ export default function WalletView() {
             <WalletOverview onViewAll={() => setViewModeSetting("details")} />
             <FundingAndSpending />
             <WeeklyStatements />
+            <RefundRequestList requests={refundRequests} />
+            <p className="text-xs text-[#64748B]">
+              Available Cash is refundable. Reserved Funds and Promotional Credits are non-refundable.
+            </p>
           </div>
         ) : (
           <WalletDetails />
         )}
       </div>
 
+      {refunding && refunds.data && (
+        <RequestRefundModal
+          refundable={String(refunds.data.refundable ?? "0")}
+          onClose={() => setRefunding(false)}
+          onDone={(data) => {
+            refunds.setData(data);
+            setRefunding(false);
+          }}
+        />
+      )}
     </div>
   );
 }

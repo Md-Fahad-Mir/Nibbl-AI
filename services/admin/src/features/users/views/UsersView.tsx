@@ -51,6 +51,9 @@ export const UsersView = () => {
       case "referrals":
         router.push("/referrals");
         break;
+      case "refunds":
+        router.push("/refunds");
+        break;
       case "payout-reviews":
         router.push("/payout-reviews");
         break;

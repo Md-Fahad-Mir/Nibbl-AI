@@ -39,9 +39,15 @@ from Apps.wallets.models import Hold, LedgerEntry
 logger = logging.getLogger(__name__)
 
 RECOMMEND_QUESTION = "Would you buy it again or recommend it to a friend?"
+# Master "Flag Review for Removal" reasons.
 FLAG_REASONS = (
-    "Not about this product", "Offensive or abusive", "Contains personal information",
-    "Spam or advertising", "Suspected fraud", "Other",
+    "Wrong product (does not match receipt)",
+    "Unrelated content (not about the product)",
+    "Spam or fraud (fake or incentivized content)",
+    "Personal information (PII)",
+    "Profanity or abusive language",
+    "Prohibited claim (e.g., medical, health, unverified)",
+    "Other policy violation",
 )
 
 
@@ -459,7 +465,7 @@ def flag(review: Review, *, reason: str, note: str = "", actor) -> Review:
     if reason not in FLAG_REASONS:
         raise ReviewCampaignError("Choose a removal reason.")
     review.status = Review.Status.FLAGGED
-    review.flag_reason, review.flag_note, review.flagged_at = reason, (note or "")[:2000], timezone.now()
+    review.flag_reason, review.flag_note, review.flagged_at = reason, (note or "")[:500], timezone.now()
     review.save(update_fields=["status", "flag_reason", "flag_note", "flagged_at", "updated_at"])
     _audit(review, AuditLog.Action.UPDATE, actor, event="flagged", reason=reason, note=note)
     return review

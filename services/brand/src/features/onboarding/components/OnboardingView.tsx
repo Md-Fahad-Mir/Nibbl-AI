@@ -342,7 +342,7 @@ export default function OnboardingView() {
                 <DashboardView onNavigate={(tab) => { setActiveTab(tab); setViewMode("list"); }} />
               )}
           
-              {visibleTab === "Rebate" && <RebatesView />}
+              {visibleTab === "Rebate" && <RebatesView onOpenPlans={() => setActiveTab("Plans")} />}
           
               {visibleTab === "Reviews" && (
                 <ReviewsView

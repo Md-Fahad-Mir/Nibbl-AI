@@ -216,6 +216,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ),
     },
     {
+      id: "refunds",
+      label: "Refunds",
+      icon: (isActive) => (
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={isActive ? "#FEFEFE" : "#3E3EDF"}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M3 7v6h6" />
+          <path d="M21 17a9 9 0 0 0-15-6.7L3 13" />
+        </svg>
+      ),
+    },
+    {
       id: "brand-discovery",
       label: "Brand Discovery",
       icon: (isActive) => (

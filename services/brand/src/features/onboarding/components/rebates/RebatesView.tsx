@@ -67,7 +67,7 @@ const mapCampaign = (campaign: ApiRecord, metrics?: ApiRecord): Campaign => {
 
 type Screen = { name: "list" } | { name: "builder"; campaign: ApiRecord | null } | { name: "detail"; id: string };
 
-export default function RebatesView() {
+export default function RebatesView({ onOpenPlans }: { onOpenPlans?: () => void } = {}) {
   const [screen, setScreen] = useState<Screen>({ name: "list" });
   const apiCampaigns = useBrandApiStore((state) => state.campaigns);
   const analyticsCampaigns = useBrandApiStore((state) => state.analyticsCampaigns);
@@ -84,6 +84,7 @@ export default function RebatesView() {
           campaigns={campaigns}
           onCreateNew={() => setScreen({ name: "builder", campaign: null })}
           onEditCampaign={(camp) => setScreen({ name: "detail", id: camp.id })}
+          onOpenPlans={onOpenPlans}
         />
       )}
       {screen.name === "builder" && (

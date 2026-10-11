@@ -43,6 +43,44 @@ def _require_membership(user, brand, *, manager=False, active=False):
 # Brand (escrow) wallet
 # ---------------------------------------------------------------------------
 @extend_schema(tags=["wallets"])
+class BrandRefundRequestView(APIView):
+    """Master Wallet "Request Refund". GET: refundable Available Cash + the
+    brand's requests. POST {amount, reason}: Owner only (billing)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _payload(self, brand):
+        from Apps.wallets import refunds
+
+        wallet = services.get_or_create_brand_wallet(brand)
+        return {
+            "refundable": str(refunds.refundable(wallet)),
+            "requests": [refunds.row(r) for r in brand.refund_requests.select_related("brand", "requested_by")[:50]],
+        }
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id):
+        brand = _brand_or_404(brand_id)
+        _require_membership(request.user, brand)
+        return Response(self._payload(brand))
+
+    @extend_schema(request=None, responses={201: None})
+    def post(self, request, brand_id):
+        from Apps.brands.access import require_membership
+        from Apps.wallets import refunds
+
+        brand = _brand_or_404(brand_id)
+        require_membership(request.user, brand, owner=True)
+        try:
+            refunds.request_refund(
+                brand, amount=request.data.get("amount"), reason=str(request.data.get("reason", "")), user=request.user,
+            )
+        except refunds.RefundError as exc:
+            raise ValidationError({"detail": str(exc)})
+        return Response(self._payload(brand), status=201)
+
+
+@extend_schema(tags=["wallets"])
 class BrandWalletView(APIView):
     permission_classes = [IsAuthenticated]
 

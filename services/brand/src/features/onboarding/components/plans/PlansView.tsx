@@ -22,6 +22,13 @@ const FEATURES: Record<string, string[]> = {
 };
 const INCLUDED = "All plans include OCR receipt verification, fraud protection, Wallet funding, review campaigns, and review exports.";
 
+// Master Plans §4 "Feature Comparison" rows not carried as plan fields.
+const SCALE_ONLY: Record<string, Record<string, string>> = {
+  "Future API & integrations": { scale: "Coming Soon" },
+  "Monthly account manager": { scale: "Yes" },
+  "Early feature access": { scale: "Yes" },
+};
+
 const reviewCost = (plan: ApiRecord) => formatMoney(1 + Number(plan.review_fee ?? 0));
 const fee = (plan: ApiRecord) => `${Number(plan.rebate_fee_percent ?? 0)}%`;
 
@@ -178,6 +185,45 @@ export default function PlansView() {
         })}
       </div>
       <p className="text-xs text-[#64748B] -mt-4">{INCLUDED}</p>
+
+      {plans.length > 0 && (
+        <section className="bg-white border border-[#EAEDFF] rounded-[20px] p-6 shadow-sm flex flex-col gap-3">
+          <h3 className="font-jakarta font-bold text-base text-[#131B2E]">Feature Comparison</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[11px] font-bold uppercase tracking-wider text-[#454656] border-b border-[#EAEDFF]">
+                  <th className="py-2 pr-4 text-left">Feature</th>
+                  {plans.map((plan) => (
+                    <th key={String(plan.slug)} className={`py-2 px-4 text-center ${plan.slug === overview.plan ? "text-[#001BD2]" : ""}`}>
+                      {String(plan.name)}{plan.slug === overview.plan ? " (current)" : ""}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {([
+                  ["Active rebate campaigns", (p: ApiRecord) => String(p.max_active_campaigns)],
+                  ["Rebate reward fee", fee],
+                  ["Completed review cost", reviewCost],
+                  ["Customer identity", (p: ApiRecord) =>
+                    p.data_access_level === "full" ? "Full opted-in contacts" : "Limited (first name + last initial)"],
+                  ["Customer CSV download", (p: ApiRecord) => (p.data_access_level === "full" ? "Yes" : "No")],
+                  ...Object.entries(SCALE_ONLY).map(([label, values]) =>
+                    [label, (p: ApiRecord) => values[String(p.slug)] ?? "No"] as const),
+                ] as const).map(([label, value]) => (
+                  <tr key={label} className="border-b border-[#F8F9FF]">
+                    <td className="py-2 pr-4 text-[#454656]">{label}</td>
+                    {plans.map((plan) => (
+                      <td key={String(plan.slug)} className="py-2 px-4 text-center font-semibold text-[#131B2E]">{value(plan)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="bg-white border border-[#EAEDFF] rounded-[20px] p-6 shadow-sm flex flex-col gap-3">
         <h3 className="font-jakarta font-bold text-base text-[#131B2E]">Billing history</h3>

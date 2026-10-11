@@ -623,6 +623,12 @@ export const backendApi = {
       path: `/admin/referrals/${referralId}/${action}/`,
       auth: true,
     }),
+    refundRequests: { method: "GET", path: "/admin/refund-requests/", auth: true },
+    refundRequestAction: (refundId: string, action: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/refund-requests/${refundId}/${action}/`,
+      auth: true,
+    }),
     brandDiscovery: { method: "GET", path: "/admin/brand-discovery/", auth: true },
     brandDiscoveryInsight: (brand: string): ApiEndpoint => ({
       method: "GET",
@@ -890,6 +896,10 @@ export const nibblApi = {
     requestEndpoint<ApiRecord>(backendApi.admin.referrals, undefined, status ? { status } : undefined),
   adminReferralAction: (referralId: string, action: "approve" | "reject" | "suspend", body: ApiRecord = {}) =>
     requestEndpoint<ApiRecord>(backendApi.admin.referralAction(referralId, action), body),
+  adminRefundRequests: (status: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.refundRequests, undefined, status ? { status } : undefined),
+  adminRefundRequestAction: (refundId: string, action: "refunded" | "reject", body: ApiRecord = {}) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.refundRequestAction(refundId, action), body),
   adminFlaggedReviews: () =>
     requestEndpoint<ApiRecord[]>(backendApi.admin.flaggedReviews),
   decideFlaggedReview: (reviewId: string, action: "remove" | "keep", note: string) =>

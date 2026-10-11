@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Header from "../../homepage/components/Header";
 import Footer from "../../homepage/components/Footer";
 import WalletCardSection from "./WalletCardSection";
-import RecentRewardsCard from "./RecentRewardsCard";
-import WithdrawFundsModal from "./WithdrawFundsModal";
+import WalletActivity from "./WalletActivity";
+import RewardDetailsModal from "./RewardDetailsModal";
+import WithdrawFlow from "./WithdrawFlow";
 import BankDetailsModal from "./BankDetailsModal";
-import VerifyWithdrawalModal from "./VerifyWithdrawalModal";
 import VerifyPhoneModal from "./VerifyPhoneModal";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
-import { ApiError, nibblApi } from "@/lib/api/backendApi";
+import { ApiError, ApiRecord, nibblApi } from "@/lib/api/backendApi";
 
 interface WalletContainerProps {
   onTabChange: (tab: "offer" | "wallet" | "scan" | "profile" | "brand" | "notification", extra?: string) => void;
@@ -23,17 +23,22 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
   // Master: "Payout account already connected" → Request Review.
   const [duplicateAccount, setDuplicateAccount] = useState<{ provider: string; handle: string } | null>(null);
   const [reviewRequested, setReviewRequested] = useState(false);
-  const [verify, setVerify] = useState<{ phone: string; methodId: string } | null>(null);
-  const [verifySubmitting, setVerifySubmitting] = useState(false);
-  const [verifyError, setVerifyError] = useState("");
   // Withdrawal waiting on the shopper to verify a phone number first.
   const [phoneGateMethodId, setPhoneGateMethodId] = useState<string | null>(null);
-  const { wallet, redemptions, payoutMethods, unreadCount, loadWallet, createPayoutMethod, sendWithdrawalCode, requestWithdrawal } =
-    useConsumerApiStore();
+  const [activity, setActivity] = useState<ApiRecord | null>(null);
+  const [openItem, setOpenItem] = useState<ApiRecord | null>(null);
+  const { wallet, payoutMethods, unreadCount, loadWallet, createPayoutMethod } = useConsumerApiStore();
+
+  const loadActivity = useCallback(() => {
+    nibblApi.walletActivity().then(setActivity).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     void loadWallet();
-  }, [loadWallet]);
+    loadActivity();
+  }, [loadWallet, loadActivity]);
+
+  const scrollToActivity = () => document.getElementById("wallet-history-section")?.scrollIntoView({ behavior: "smooth" });
 
   const available = Number(wallet?.available ?? wallet?.balance ?? 0);
   const canWithdraw = available >= 0.01;
@@ -44,36 +49,11 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
     .filter((method) => String(method.review_status ?? "approved") === "approved")
     .map((method) => ({
       id: String(method.id),
-      label: `${String(method.provider ?? "").toUpperCase()} · ${String(method.handle ?? "")}`,
+      provider: String(method.provider ?? ""),
+      handle: String(method.handle ?? ""),
     }));
-
-  const finalizeWithdrawal = (methodId: string, code?: string) =>
-    requestWithdrawal(methodId, available.toFixed(2), code).then(() => {
-      setVerify(null);
-      setWalletMessage("Withdrawal request submitted.");
-    });
-
-  // Start a withdrawal on an approved method: request an SMS code, or (when
-  // SMS verification isn't enabled) submit the withdrawal directly.
-  const startWithdrawal = async (methodId: string) => {
-    try {
-      const { phone } = await sendWithdrawalCode(methodId, available.toFixed(2));
-      setVerifyError("");
-      setVerify({ phone, methodId });
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 503) {
-        await finalizeWithdrawal(methodId);
-      } else if (
-        err instanceof ApiError &&
-        (err.data as { code?: string } | null)?.code === "phone_verification_required"
-      ) {
-        // No verified phone yet: verify inline, then resume this withdrawal.
-        setPhoneGateMethodId(methodId);
-      } else {
-        throw err;
-      }
-    }
-  };
+  const summary = (activity?.summary ?? {}) as ApiRecord;
+  const activityItems = (Array.isArray(activity?.items) ? activity.items : []) as ApiRecord[];
 
   return (
     <div className="w-full bg-[#FEFEFE] min-h-screen flex flex-col font-sans select-none">
@@ -82,6 +62,7 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
       <main className="flex-grow flex flex-col items-center py-10 px-4 sm:px-6 max-w-[1440px] mx-auto w-full gap-8">
         <WalletCardSection
           balance={available}
+          pending={summary.pending_approval != null ? Number(summary.pending_approval) : undefined}
           withdrawDisabled={!canWithdraw}
           onWithdrawClick={() => {
             if (!canWithdraw) {
@@ -91,10 +72,7 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
             setWalletMessage(null);
             setIsWithdrawModalOpen(true);
           }}
-          onHistoryClick={() => {
-            const el = document.getElementById("wallet-history-section");
-            el?.scrollIntoView({ behavior: "smooth" });
-          }}
+          onHistoryClick={scrollToActivity}
         />
         {walletMessage && (
           <p className="text-sm font-medium text-[#E65353]">
@@ -103,30 +81,34 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
         )}
         
         <div id="wallet-history-section" className="w-full flex justify-center mt-2">
-          <RecentRewardsCard redemptions={redemptions} />
+          <WalletActivity items={activityItems} onOpen={setOpenItem} />
         </div>
       </main>
 
       <Footer onTabChange={onTabChange} />
 
       {isWithdrawModalOpen && (
-        <WithdrawFundsModal
-          amount={available}
+        <WithdrawFlow
+          available={available}
           methods={approvedMethods}
           onClose={() => setIsWithdrawModalOpen(false)}
-          onConfirm={(methodId) => {
-            setIsWithdrawModalOpen(false);
-            setWalletMessage(null);
-            void startWithdrawal(methodId).catch((error: unknown) => {
-              setWalletMessage(error instanceof Error ? error.message : "Withdrawal request failed.");
-            });
-          }}
-          onAddNew={() => {
+          onAddMethod={() => {
             setIsWithdrawModalOpen(false);
             setIsBankModalOpen(true);
           }}
+          onNeedPhone={(methodId) => {
+            setIsWithdrawModalOpen(false);
+            setPhoneGateMethodId(methodId);
+          }}
+          onSubmitted={loadActivity}
+          onViewActivity={() => {
+            setIsWithdrawModalOpen(false);
+            scrollToActivity();
+          }}
         />
       )}
+
+      {openItem && <RewardDetailsModal item={openItem} onClose={() => setOpenItem(null)} />}
 
       {isBankModalOpen && (
         <BankDetailsModal
@@ -140,14 +122,16 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
             void createPayoutMethod(details.provider, details.handle)
               .then(async (method) => {
                 // A newly added account beyond the first is held for review and
-                // can't be withdrawn to until an admin approves it.
+                // can't be withdrawn to until an admin approves it (Master:
+                // "Change request submitted").
                 if (String(method.review_status ?? "approved") !== "approved") {
                   setWalletMessage(
-                    "Your payout account was added and is pending review. You can withdraw once it's approved."
+                    "Change request submitted. Nibbl will review your request before updating your payout method. Withdrawals to it will resume after the change is approved."
                   );
                   return;
                 }
-                await startWithdrawal(String(method.id));
+                await loadWallet();
+                setIsWithdrawModalOpen(true);
               })
               .catch((error: unknown) => {
                 const code = error instanceof ApiError ? (error.data as { code?: string } | null)?.code : undefined;
@@ -203,39 +187,13 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
           reason="Withdrawals are protected by an SMS code. Verify your mobile number to continue."
           onClose={() => setPhoneGateMethodId(null)}
           onVerified={() => {
-            const methodId = phoneGateMethodId;
+            // Phone verified: resume the withdrawal flow.
             setPhoneGateMethodId(null);
-            void startWithdrawal(methodId).catch((error: unknown) => {
-              setWalletMessage(error instanceof Error ? error.message : "Withdrawal request failed.");
-            });
+            setIsWithdrawModalOpen(true);
           }}
         />
       )}
 
-      {verify && (
-        <VerifyWithdrawalModal
-          phone={verify.phone}
-          amount={available}
-          submitting={verifySubmitting}
-          error={verifyError}
-          onVerify={(code) => {
-            setVerifySubmitting(true);
-            setVerifyError("");
-            finalizeWithdrawal(verify.methodId, code)
-              .catch((error: unknown) =>
-                setVerifyError(error instanceof Error ? error.message : "Verification failed.")
-              )
-              .finally(() => setVerifySubmitting(false));
-          }}
-          onResend={() => {
-            setVerifyError("");
-            void sendWithdrawalCode(verify.methodId, available.toFixed(2)).catch(() =>
-              setVerifyError("Could not resend the code.")
-            );
-          }}
-          onClose={() => setVerify(null)}
-        />
-      )}
     </div>
   );
 }

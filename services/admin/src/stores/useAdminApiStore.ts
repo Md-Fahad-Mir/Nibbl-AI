@@ -14,7 +14,6 @@ import { BrandDetail } from "@/types/brand.types";
 import { MonthlyEarning, StatCardData } from "@/types/dashboard.types";
 import { TransactionDetail } from "@/types/earnings.types";
 import { UserDetail } from "@/types/users.types";
-import { WithdrawRequestDetail, WithdrawStatus } from "@/types/withdraw-request.types";
 
 type LoadState = "idle" | "loading" | "success" | "error";
 
@@ -180,25 +179,6 @@ const mapMonthlyEarnings = (items: ApiRecord[]): MonthlyEarning[] => {
     );
 };
 
-const toWithdrawStatus = (value: unknown): WithdrawStatus => {
-  const status = String(value ?? "").toLowerCase();
-  if (status === "paid" || status === "approved" || status === "processing") return "Approved";
-  if (status === "rejected" || status === "cancelled" || status === "flagged") return "Cancelled";
-  return "Pending";
-};
-
-const mapWithdrawal = (item: ApiRecord, index: number): WithdrawRequestDetail => ({
-  id: String(item.id ?? index),
-  sl: String(index + 1),
-  userName: String(item.user_email ?? item.user_name ?? item.customer_email ?? ""),
-  providerName: String(item.provider ?? ""),
-  bankName: String(item.provider ?? "Payout provider"),
-  accountType: String(item.provider ?? ""),
-  accountNumber: String(item.handle ?? item.payout_method ?? ""),
-  withdrawAmount: money(item.amount),
-  status: toWithdrawStatus(item.status),
-});
-
 interface AdminApiState {
   accessToken: string | null;
   refreshToken: string | null;
@@ -206,7 +186,6 @@ interface AdminApiState {
   overview: ApiRecord | null;
   users: UserDetail[];
   brands: BrandDetail[];
-  withdrawals: WithdrawRequestDetail[];
   transactions: TransactionDetail[];
   monthlyEarnings: MonthlyEarning[];
   stats: StatCardData[];
@@ -221,13 +200,11 @@ interface AdminApiState {
   loadUsers: () => Promise<void>;
   loadBrands: () => Promise<void>;
   loadBrandDetail: (brand: BrandDetail) => Promise<BrandDetail>;
-  loadWithdrawals: () => Promise<void>;
   loadTransactions: () => Promise<void>;
   updateProfile: (body: ApiRecord | FormData) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
-  processWithdrawal: (withdrawalId: string, action: "approve" | "reject") => Promise<void>;
   suspendBrand: (brandId: string) => Promise<void>;
   reactivateBrand: (brandId: string) => Promise<void>;
   approveBrand: (brand: BrandDetail) => Promise<void>;
@@ -256,7 +233,6 @@ export const useAdminApiStore = create<AdminApiState>()(
       overview: null,
       users: [],
       brands: [],
-      withdrawals: [],
       transactions: [],
       monthlyEarnings: [],
       stats: [],
@@ -439,10 +415,6 @@ export const useAdminApiStore = create<AdminApiState>()(
           sl: brand.sl,
         };
       },
-      loadWithdrawals: async () => {
-        const response = await apiClient.request<unknown>(backendApi.admin.withdrawals);
-        set({ withdrawals: listResults(response).map(mapWithdrawal) });
-      },
       loadTransactions: async () => {
         const response = await apiClient.request<unknown>(backendApi.admin.transactions);
         const transactionList = listResults(response);
@@ -497,10 +469,6 @@ export const useAdminApiStore = create<AdminApiState>()(
           set({ status: "error", error: readError(error) });
           throw error;
         }
-      },
-      processWithdrawal: async (withdrawalId, action) => {
-        await apiClient.request(backendApi.admin.withdrawalAction(withdrawalId, action));
-        await get().loadWithdrawals();
       },
       suspendBrand: async (brandId) => {
         await apiClient.request(backendApi.admin.suspendBrand(brandId));

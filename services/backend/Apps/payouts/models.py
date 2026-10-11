@@ -88,6 +88,9 @@ class WithdrawalRequest(BaseModel):
         PAID = "paid", "Paid"
         REJECTED = "rejected", "Rejected"
         FLAGGED = "flagged", "Flagged"
+        # PayPal couldn't pay it (imported results). Retryable failures keep
+        # the amount reserved; permanent ones return it to the balance.
+        FAILED = "failed", "Failed"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="withdrawals"
@@ -121,6 +124,12 @@ class WithdrawalRequest(BaseModel):
         PayoutBatch, null=True, blank=True, on_delete=models.SET_NULL,
         related_name="withdrawals",
     )
+    # Customer-facing reason for a rejection (admin_note stays internal).
+    decision_reason = models.TextField(blank=True)
+    # From the imported PayPal results.
+    paypal_transaction_id = models.CharField(max_length=64, blank=True)
+    failure_reason = models.CharField(max_length=255, blank=True)
+    failure_permanent = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-created_at"]

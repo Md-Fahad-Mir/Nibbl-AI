@@ -601,6 +601,8 @@ export const backendApi = {
       path: "/admin/payout-batches/",
       auth: true,
     },
+    withdrawalBoard: { method: "GET", path: "/admin/withdrawals/board/", auth: true },
+    importPayoutResults: { method: "POST", path: "/admin/payout-results/import/", auth: true },
     exportPayoutBatch: (batchId: string): ApiEndpoint => ({
       method: "GET",
       path: `/admin/payout-batches/${batchId}/export/`,
@@ -896,6 +898,18 @@ export const nibblApi = {
     requestEndpoint<ApiRecord>(backendApi.admin.referrals, undefined, status ? { status } : undefined),
   adminReferralAction: (referralId: string, action: "approve" | "reject" | "suspend", body: ApiRecord = {}) =>
     requestEndpoint<ApiRecord>(backendApi.admin.referralAction(referralId, action), body),
+  withdrawalBoard: (tab: string, q: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.withdrawalBoard, undefined, { tab, ...(q ? { q } : {}) }),
+  withdrawalAction: (withdrawalId: string, action: string, body: ApiRecord = {}) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.withdrawalAction(withdrawalId, action), body),
+  payoutBatches: () => requestEndpoint<ApiRecord[]>(backendApi.admin.payoutBatches),
+  createPayoutBatch: (withdrawalIds: string[]) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.createPayoutBatch, { withdrawal_ids: withdrawalIds }),
+  importPayoutResults: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return requestEndpoint<ApiRecord>(backendApi.admin.importPayoutResults, form);
+  },
   adminRefundRequests: (status: string) =>
     requestEndpoint<ApiRecord>(backendApi.admin.refundRequests, undefined, status ? { status } : undefined),
   adminRefundRequestAction: (refundId: string, action: "refunded" | "reject", body: ApiRecord = {}) =>

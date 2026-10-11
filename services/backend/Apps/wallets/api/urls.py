@@ -49,6 +49,7 @@ urlpatterns = [
         name="customer-wallet-transactions",
     ),
     path("activity/", views.CustomerActivityView.as_view(), name="customer-activity"),
+    path("wallet/activity/", views.ShopperWalletActivityView.as_view(), name="shopper-wallet-activity"),
     path(
         "wallet/statement/",
         views.CustomerStatementView.as_view(),

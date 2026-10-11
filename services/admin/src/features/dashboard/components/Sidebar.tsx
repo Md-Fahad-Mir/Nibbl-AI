@@ -274,7 +274,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: "withdraw-request",
-      label: "Withdraw Request",
+      label: "Withdrawals",
       icon: (isActive) => (
         <svg
           width="24"

@@ -195,6 +195,8 @@ export const backendApi = {
       auth: true,
     },
     activity: { method: "GET", path: "/activity/", auth: true },
+    walletActivity: { method: "GET", path: "/wallet/activity/", auth: true },
+    claimSlots: { method: "GET", path: "/reservations/slots/", auth: true },
     redemptions: { method: "GET", path: "/redemptions/", auth: true },
     redemptionDetail: (redemptionId: string): ApiEndpoint => ({
       method: "GET",
@@ -914,6 +916,8 @@ export const nibblApi = {
       backendApi.consumer.myReviews
     ),
   wallet: () => requestEndpoint<ApiRecord>(backendApi.consumer.wallet),
+  walletActivity: () => requestEndpoint<ApiRecord>(backendApi.consumer.walletActivity),
+  claimSlots: () => requestEndpoint<{ used: number; limit: number; available: number }>(backendApi.consumer.claimSlots),
   walletStatement: (query?: RequestOptions["query"]) =>
     requestEndpoint<PaginatedResponse<ApiRecord>>(
       backendApi.consumer.walletStatement,

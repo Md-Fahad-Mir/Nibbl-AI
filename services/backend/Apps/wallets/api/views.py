@@ -260,6 +260,20 @@ class CustomerActivityView(generics.ListAPIView):
 
 
 @extend_schema(tags=["wallets"])
+class ShopperWalletActivityView(APIView):
+    """Master shopper Wallet: available + pending-approval totals and every
+    reward / withdrawal with its status, reference and timeline."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        from Apps.wallets.activity import shopper_activity
+
+        return Response(shopper_activity(request.user, request))
+
+
+@extend_schema(tags=["wallets"])
 class CustomerStatementView(APIView):
     """Merged statement: completed ledger entries + open (pending) withdrawals."""
 

@@ -255,7 +255,8 @@ class BatchTests(APITestCase):
         m1, m2 = _method(u1, handle="a@paypal.com"), _method(u2, provider="venmo", handle="b-venmo")
         w1 = services.request_withdrawal(user=u1, payout_method_id=m1.id, amount=Decimal("20.00"))
         w2 = services.request_withdrawal(user=u2, payout_method_id=m2.id, amount=Decimal("30.00"))
-        services.approve_withdrawal(withdrawal=w1, admin=admin)
+        # Master: safe requests are Ready for Batch at once; $30 > $25 needs review.
+        self.assertEqual((w1.status, w2.status), (S.APPROVED, S.PENDING))
         services.approve_withdrawal(withdrawal=w2, admin=admin)
 
         batch = services.create_batch(admin=admin)
@@ -290,7 +291,7 @@ class AdminApiTests(APITestCase):
         user, wallet = _funded_user(balance="100.00")
         method = _method(user)
         w = services.request_withdrawal(
-            user=user, payout_method_id=method.id, amount=Decimal("25.00")
+            user=user, payout_method_id=method.id, amount=Decimal("30.00")
         )
         admin = _admin()
         self.client.force_authenticate(admin)

@@ -1,0 +1,134 @@
+name: Nibbl AI Web Apps Deploy
+
+# Builds and deploys the three Next.js apps (shopper website, brand dashboard,
+# admin dashboard) to the production box. Separate from deploy.yml so a web
+# app change never restarts the backend / AI containers.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/admin/**'
+      - 'services/brand/**'
+      - 'services/website/**'
+      - 'deployment/docker/nextjs.Dockerfile'
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: 'Apps to deploy (JSON list)'
+        default: '["website","brand","admin"]'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-1
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ github.event_name == 'workflow_dispatch' && inputs.apps || steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            website:
+              - 'services/website/**'
+              - 'deployment/docker/nextjs.Dockerfile'
+            brand:
+              - 'services/brand/**'
+              - 'deployment/docker/nextjs.Dockerfile'
+            admin:
+              - 'services/admin/**'
+              - 'deployment/docker/nextjs.Dockerfile'
+
+  deploy:
+    name: Build & deploy ${{ matrix.app }}
+    needs: changes
+    if: ${{ needs.changes.outputs.apps != '[]' && needs.changes.outputs.apps != '' }}
+    runs-on: ubuntu-latest
+    environment: production
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.changes.outputs.apps) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # NEXT_PUBLIC_* values are compiled into the browser bundle, so they are
+      # build args. The Stripe publishable key is public by design; keep the
+      # repo variable in the same mode (test / live) as the backend's secret key.
+      - name: Build & push image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/${{ matrix.app }}
+          file: ./deployment/docker/nextjs.Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_NIBBLAI_API_BASE_URL=https://api.joinnibbl.com
+            NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${{ vars.STRIPE_PUBLISHABLE_KEY }}
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/nibblai-${{ matrix.app }}:latest
+            ${{ steps.login-ecr.outputs.registry }}/nibblai-${{ matrix.app }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      - name: Run the new image on the instance via SSM
+        run: |
+          set -euo pipefail
+          APP='${{ matrix.app }}'
+          case "$APP" in
+            brand) PORT=3001 ;;
+            admin) PORT=3002 ;;
+            website) PORT=3003 ;;
+          esac
+          REGISTRY='${{ steps.login-ecr.outputs.registry }}'
+          IMAGE="$REGISTRY/nibblai-$APP:${{ github.sha }}"
+
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=nibblai-production" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].InstanceId' --output text)
+          echo "Deploying $IMAGE to $INSTANCE_ID on 127.0.0.1:$PORT"
+
+          SCRIPT="set -e
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY
+          docker pull $IMAGE
+          docker rm -f nibblai-$APP 2>/dev/null || true
+          docker run -d --name nibblai-$APP --restart always -p 127.0.0.1:$PORT:3000 --log-opt max-size=10m --log-opt max-file=3 $IMAGE
+          for i in \$(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:$PORT/ && echo ready && exit 0; sleep 2; done
+          docker logs --tail 50 nibblai-$APP; exit 1"
+          PARAMS=$(jq -n --arg s "$SCRIPT" '{commands: ($s | split("\n"))}')
+
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Nibbl AI web app deploy $APP ${{ github.sha }}" \
+            --parameters "$PARAMS" \
+            --query Command.CommandId --output text)
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
+
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query '[StandardOutputContent,StandardErrorContent]' --output text
+          STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query Status --output text)
+          echo "Deploy status: $STATUS"
+          [ "$STATUS" = "Success" ] || exit 1

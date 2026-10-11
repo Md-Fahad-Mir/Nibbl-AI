@@ -93,6 +93,9 @@ export default function AuthContainer() {
   const [autoUploadReservationId, setAutoUploadReservationId] = useState<string | null>(null);
   const [autoSelectReservationId, setAutoSelectReservationId] = useState<string | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
+  // Offer opened from a campaign link / QR (/c/<token>) while signed out:
+  // shown right after sign-in.
+  const [linkedCampaignId, setLinkedCampaignId] = useState<string>("");
   const [authFlow, setAuthFlow] = useState<"signup" | "password-reset" | null>(null);
   const [passwordResetCode, setPasswordResetCode] = useState("");
   const {
@@ -114,8 +117,19 @@ export default function AuthContainer() {
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get("tab");
+      const linkedCampaign = params.get("campaign");
 
-      if (tab === "offer" || tab === "brand") {
+      if (linkedCampaign) {
+        window.history.replaceState(null, "", "/");
+        setSelectedCampaignId(linkedCampaign);
+        if (hasStoredAccessToken()) {
+          void loadOfferDetails(linkedCampaign);
+          setStage("claim-details");
+        } else {
+          setLinkedCampaignId(linkedCampaign);
+          setStage("splash");
+        }
+      } else if (tab === "offer" || tab === "brand") {
         setStage("home");
       } else if (tab === "wallet") {
         setStage("wallet");
@@ -140,7 +154,7 @@ export default function AuthContainer() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loadOfferDetails]);
 
   useEffect(() => {
     if (!hasRestoredNavigation || !accessToken) return;
@@ -237,6 +251,13 @@ export default function AuthContainer() {
     if (!data.password) return;
     try {
       await login(data.email, data.password, data.rememberMe);
+      if (linkedCampaignId) {
+        setSelectedCampaignId(linkedCampaignId);
+        setLinkedCampaignId("");
+        void loadOfferDetails(linkedCampaignId);
+        setStage("claim-details");
+        return;
+      }
       if (storageAvailable()) window.localStorage.setItem(ROUTE_STORAGE_KEY, "home");
       setStage("home");
     } catch {

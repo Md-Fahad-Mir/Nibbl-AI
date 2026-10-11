@@ -10,6 +10,7 @@ pays the reward.
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import APIException, NotFound, ValidationError
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -163,6 +164,25 @@ class ReviewCampaignListCreateView(APIView):
             raise ValidationError({"name": "Enter the campaign name."})
         campaign = _run(rc.create_campaign, brand=brand, product_ids=data.pop("product_ids", None), **data)
         return Response(s.ReviewCampaignSerializer(campaign, context=_ctx(request)).data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(tags=["review-campaigns"])
+class ReviewCampaignImageView(APIView):
+    """Upload the review campaign image (multipart, field ``image``)."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(request=None, responses={200: s.ReviewCampaignSerializer})
+    def put(self, request, brand_id, campaign_id):
+        from Apps.campaigns.serializers import CampaignImageSerializer
+
+        campaign = _campaign(request, brand_id, campaign_id, manager=True)
+        serializer = CampaignImageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        campaign.image = serializer.validated_data["image"]
+        campaign.save(update_fields=["image", "updated_at"])
+        return Response(s.ReviewCampaignSerializer(campaign, context=_ctx(request)).data)
 
 
 @extend_schema(tags=["review-campaigns"])

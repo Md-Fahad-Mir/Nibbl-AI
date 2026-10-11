@@ -200,3 +200,18 @@ class ReviewCampaignTests(APITestCase):
         self.assertEqual(sugg["suggestions"], ["What flavor next?"])
         act = self.client.post(reverse("v1:reviews:campaign-action", args=[self.brand.id, created["id"], "activate"]))
         self.assertEqual(act.data["status"], "active")
+
+    def test_campaign_image_upload(self):
+        import io
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        buffer = io.BytesIO()
+        Image.new("RGB", (4, 4), "red").save(buffer, "PNG")
+        self.client.force_authenticate(self.owner)
+        url = reverse("v1:reviews:campaign-image", args=[self.brand.id, self.review_campaign.id])
+        resp = self.client.put(url, {"image": SimpleUploadedFile("c.png", buffer.getvalue(), content_type="image/png")},
+                               format="multipart")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["image_url"])

@@ -17,6 +17,11 @@ urlpatterns = [
         name="brand-redemption-list",
     ),
     path(
+        "brands/<uuid:brand_id>/redemptions/export/",
+        views.BrandRedemptionExportView.as_view(),
+        name="brand-redemption-export",
+    ),
+    path(
         "brands/<uuid:brand_id>/redemptions/<uuid:redemption_id>/",
         views.BrandRedemptionDetailView.as_view(),
         name="brand-redemption-detail",

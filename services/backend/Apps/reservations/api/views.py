@@ -37,6 +37,13 @@ class ReservationListCreateView(APIView):
     def post(self, request):
         serializer = s.CreateReservationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        # Master "Reserve Offer": two distinct checked consents are required
+        # (Nibbl email + SMS, Brand email + SMS) — "Required consent" pop-up.
+        if not (serializer.validated_data["consent_nibbl"] and serializer.validated_data["consent_brand"]):
+            raise ValidationError({
+                "detail": "Please agree to both Nibbl and brand email and SMS to claim this offer.",
+                "code": "consent_required",
+            })
         try:
             reservation = services.create_reservation(
                 user=request.user,
@@ -45,7 +52,7 @@ class ReservationListCreateView(APIView):
                 consent_brand=serializer.validated_data["consent_brand"],
             )
         except ReservationError as exc:
-            raise ValidationError({"detail": str(exc)})
+            raise ValidationError({"detail": str(exc), "code": exc.code})
         risk.record(request, request.user, "claim")
         return Response(
             s.ReservationSerializer(reservation, context={"request": request}).data,

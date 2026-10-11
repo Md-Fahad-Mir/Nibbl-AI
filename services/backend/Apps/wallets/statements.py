@@ -40,9 +40,9 @@ def _money(value) -> str:
     return str((value or ZERO).quantize(CENT))
 
 
-def week_summary(wallet, start: dt.date, now=None) -> dict:
-    now = now or timezone.now()
-    begin, end = day_bounds(start)
+def spending(wallet, begin, end) -> dict:
+    """Spending Overview for any period (Master: Wallet §4) — also each
+    weekly statement row."""
     debits = LedgerEntry.objects.filter(
         wallet=wallet, entry_type=LedgerEntry.EntryType.DEBIT, created_at__gte=begin, created_at__lt=end,
     )
@@ -56,15 +56,59 @@ def week_summary(wallet, start: dt.date, now=None) -> dict:
     plan = total(category=C.SUBSCRIPTION)
     credits = total(category__in=(*FEES, C.SUBSCRIPTION), is_promotional=True)
     return {
-        "week_start": start,
-        "week_end": start + dt.timedelta(days=6),
-        "in_progress": begin <= now < end,
         "rebate_rewards": _money(rebate),
         "review_rewards": _money(review),
         "fees": _money(fees),
         "plan_charges": _money(plan),
         "credits_applied": _money(credits),
         "total_cash_spent": _money(rebate + review + fees + plan - credits),
+    }
+
+
+def week_summary(wallet, start: dt.date, now=None) -> dict:
+    now = now or timezone.now()
+    begin, end = day_bounds(start)
+    return {
+        "week_start": start,
+        "week_end": start + dt.timedelta(days=6),
+        "in_progress": begin <= now < end,
+        **spending(wallet, begin, end),
+    }
+
+
+CYCLES_PER_WEEK = 7  # 25-hour claim cycles that can start within 7 days
+
+
+def campaign_funding(brand) -> dict:
+    """Campaign Funding (Master: Wallet §2): the most that all active
+    campaigns could need over the next 7 days vs Available Funds."""
+    from Apps.billing.services import rebate_processing_fee, review_fee
+    from Apps.campaigns import deals
+    from Apps.campaigns.models import Campaign
+    from Apps.reviews.campaigns import reward_amount
+    from Apps.reviews.models import ReviewCampaign
+    from Apps.wallets.services import get_or_create_brand_wallet
+
+    plan = brand.plan
+    rebate_need = ZERO
+    for campaign in brand.campaigns.filter(status=Campaign.Status.ACTIVE):
+        reward = deals.max_reward(campaign) or ZERO
+        fee = rebate_processing_fee(plan, reward) if plan else ZERO
+        rebate_need += (reward + fee) * (campaign.claim_capacity or 0) * CYCLES_PER_WEEK
+    review_need = ZERO
+    per_review = reward_amount() + (review_fee(plan) if plan else ZERO)
+    for campaign in brand.review_campaigns.filter(status=ReviewCampaign.Status.ACTIVE):
+        review_need += per_review * campaign.daily_opportunities * 7
+    wallet = get_or_create_brand_wallet(brand)
+    available = wallet.reward_available()
+    need = rebate_need + review_need
+    return {
+        "seven_day_need": _money(need),
+        "rebate_need": _money(rebate_need),
+        "review_need": _money(review_need),
+        "available": _money(available),
+        "all_funded": available >= need,
+        "shortfall": _money(max(need - available, ZERO)),
     }
 
 

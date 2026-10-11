@@ -1,7 +1,31 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import { imageUrl } from "../lib/offerMappers";
+
+// Master "Return Action Prompt": cards the shopper chose to "Save for Later"
+// stay in My Offers but leave this carousel for the rest of the visit.
+const SAVED_KEY = "nibbl-saved-for-later";
+const readSaved = (): string[] => {
+  try {
+    return JSON.parse(sessionStorage.getItem(SAVED_KEY) || "[]");
+  } catch {
+    return [];
+  }
+};
+
+/** Exact time left until a claim's receipt deadline, e.g. "2d 4h left". */
+export const timeRemaining = (value: unknown) => {
+  const deadline = Date.parse(String(value ?? ""));
+  if (Number.isNaN(deadline)) return "";
+  const minutes = Math.max(0, Math.floor((deadline - Date.now()) / 60000));
+  if (minutes === 0) return "Expired";
+  const d = Math.floor(minutes / 1440);
+  const h = Math.floor((minutes % 1440) / 60);
+  const m = minutes % 60;
+  return `${d ? `${d}d ` : ""}${d || h ? `${h}h ` : ""}${d ? "" : `${m}m `}left`;
+};
 
 interface PendingRewardsProps {
   reservations?: Record<string, unknown>[];
@@ -18,6 +42,18 @@ export default function PendingRewards({
   onUploadReceiptClick,
   onLeaveReviewClick,
 }: PendingRewardsProps) {
+  const [saved, setSaved] = useState<string[]>(() => (typeof window === "undefined" ? [] : readSaved()));
+  const saveForLater = (key: string) => {
+    const next = [...saved, key];
+    setSaved(next);
+    try {
+      sessionStorage.setItem(SAVED_KEY, JSON.stringify(next));
+    } catch {
+      // Per-visit convenience only.
+    }
+  };
+  const visibleReservations = reservations.filter((r) => !saved.includes(`receipt:${String(r.id)}`));
+  const visibleReviews = reviewOpportunities.filter((o) => !saved.includes(`review:${String(o.id)}`));
   const pendingReceipts = receipts.filter((receipt) =>
     ["pending", "manual_review", "processing"].includes(
       String(receipt.status || "").toLowerCase()
@@ -35,18 +71,19 @@ export default function PendingRewards({
         Your Pending Rewards
       </h2>
 
-      {/* Cards list (Figma Frame 2147229293 layout width 760px on desktop) */}
-      <div className="flex flex-wrap gap-8 items-center justify-center lg:justify-start">
-        {reservations.map((reservation, index) => (
+      {/* Swipeable carousel of pending actions (Master: Return Action Prompt) */}
+      <div className="flex gap-6 items-stretch overflow-x-auto snap-x snap-mandatory pb-3 -mx-1 px-1">
+        {visibleReservations.map((reservation, index) => (
           <PendingRewardCard
             key={`reservation-${String(reservation.id || index)}`}
             item={reservation}
             type="receipt"
             onAction={() => onUploadReceiptClick?.(String(reservation.id || ""))}
+            onSaveForLater={() => saveForLater(`receipt:${String(reservation.id)}`)}
           />
         ))}
 
-        {reviewOpportunities.map((opportunity, index) => (
+        {visibleReviews.map((opportunity, index) => (
           <PendingRewardCard
             key={`review-${String(opportunity.id || index)}`}
             item={opportunity}
@@ -54,6 +91,7 @@ export default function PendingRewards({
             onAction={() =>
               onLeaveReviewClick?.(String(opportunity.id || ""))
             }
+            onSaveForLater={() => saveForLater(`review:${String(opportunity.id)}`)}
           />
         ))}
 
@@ -64,6 +102,12 @@ export default function PendingRewards({
             type="verification"
           />
         ))}
+
+        {hasPendingRewards && !visibleReservations.length && !visibleReviews.length && !pendingReceipts.length && (
+          <div className="w-full rounded-lg border border-gray-100 bg-white p-6 text-sm text-gray-500">
+            You saved your pending actions for later — find them in My Offers.
+          </div>
+        )}
 
         {!hasPendingRewards && (
           <div className="w-full rounded-lg border border-gray-100 bg-white p-6 text-sm text-gray-400 shadow-[0px_2px_7.6px_rgba(0,0,0,0.08)]">
@@ -79,10 +123,12 @@ function PendingRewardCard({
   item,
   type,
   onAction,
+  onSaveForLater,
 }: {
   item: Record<string, unknown>;
   type: "receipt" | "review" | "verification";
   onAction?: () => void;
+  onSaveForLater?: () => void;
 }) {
   const image = imageUrl(
     item.product_image || item.image || item.campaign_image,
@@ -93,12 +139,13 @@ function PendingRewardCard({
   );
   const brand = String(item.brand_name || "Brand");
   const expires = String(item.expires_at || item.end_at || "").slice(0, 10);
+  const remaining = type === "receipt" ? timeRemaining(item.expires_at) : "";
   const reward = formatRewardAmount(item.reward_amount, type === "review" ? "1.00" : "0.00");
   const isReview = type === "review";
   const isVerification = type === "verification";
 
   return (
-    <div className="w-full max-w-[364px] min-h-[156px] bg-[#FEFEFE] shadow-[0px_2px_7.6px_rgba(0,0,0,0.12)] rounded-lg p-2 pl-3 flex gap-[12px] items-center border border-gray-50 flex-shrink-0">
+    <div className="w-[88%] sm:w-full max-w-[364px] min-h-[156px] bg-[#FEFEFE] shadow-[0px_2px_7.6px_rgba(0,0,0,0.12)] rounded-lg p-2 pl-3 flex gap-[12px] items-center border border-gray-50 flex-shrink-0 snap-start">
       <div className="w-[100px] h-[111px] bg-gray-50 rounded-lg overflow-hidden relative flex-shrink-0">
         {image ? (
           <Image
@@ -119,8 +166,8 @@ function PendingRewardCard({
         <div className="w-full flex flex-col gap-1.5">
           <div className="w-full h-[15px] flex justify-between items-center text-[12px] font-normal leading-[15px] text-[#4D4D4D]">
             <span className="truncate pr-1">{brand}</span>
-            <span className="flex-shrink-0">
-              {expires ? `Expires ${expires}` : "No expiry"}
+            <span className={`flex-shrink-0 ${remaining ? "font-semibold text-[#E65353]" : ""}`}>
+              {remaining || (expires ? `Expires ${expires}` : "No expiry")}
             </span>
           </div>
 
@@ -130,7 +177,7 @@ function PendingRewardCard({
             </h3>
             <span className="text-[14px] font-medium leading-[17px] text-[#2D2D2D] truncate">
               {isReview
-                ? "Review invitation"
+                ? `Review invitation · earn ${reward}`
                 : isVerification
                   ? `${reward} verification pending`
                   : `${reward} reward`}
@@ -150,11 +197,17 @@ function PendingRewardCard({
           } hover:opacity-90 active:scale-[0.98] disabled:cursor-default disabled:active:scale-100 text-[18px] font-medium leading-[22px] rounded-lg shadow-[0_4px_4px_rgba(0,0,0,0.12),inset_0_4px_4px_rgba(255,255,255,0.12)] flex items-center justify-center cursor-pointer focus:outline-none min-w-0`}
         >
           {isReview
-            ? `Leave Review for ${reward}`
+            ? "View Details"
             : isVerification
               ? "Verification Pending"
-              : "Upload Receipt"}
+              : "Submit Receipt"}
         </button>
+        {onSaveForLater && (
+          <button type="button" onClick={onSaveForLater}
+            className="text-[13px] font-medium text-[#575757] hover:underline cursor-pointer self-start -mt-2">
+            Save for Later
+          </button>
+        )}
       </div>
     </div>
   );

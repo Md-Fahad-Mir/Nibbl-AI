@@ -115,6 +115,30 @@ def _csv(filename, rows):
 
 
 @extend_schema(tags=["wallets"])
+class BrandFundingView(APIView):
+    """Campaign Funding (7-day need vs Available Funds) + Spending Overview
+    for ?from=&to= (default last 30 days)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id):
+        from django.utils import timezone
+
+        brand = _brand_or_404(brand_id)
+        _require_membership(request.user, brand)
+        wallet = services.get_or_create_brand_wallet(brand)
+        start = _parse_day(request.query_params.get("from"))
+        end = _parse_day(request.query_params.get("to"))
+        begin = statements.day_bounds(start)[0] if start else timezone.now() - dt.timedelta(days=30)
+        finish = statements.day_bounds(end)[0] + dt.timedelta(days=1) if end else timezone.now()
+        return Response({
+            "funding": statements.campaign_funding(brand),
+            "spending": {"from": begin, "to": finish, **statements.spending(wallet, begin, finish)},
+        })
+
+
+@extend_schema(tags=["wallets"])
 class BrandWeeklyStatementsView(APIView):
     """One summarized row per week, newest first (?weeks=, default 12, max 104)."""
 

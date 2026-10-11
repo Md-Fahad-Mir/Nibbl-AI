@@ -56,7 +56,7 @@ class OfferPayloadContractTests(APITestCase):
     def test_offer_detail_reflects_claim_state_after_reservation(self):
         claim = self.client.post(
             reverse("v1:reservations:reservation-list"),
-            {"campaign": str(self.campaign.id)}, format="json",
+            {"campaign": str(self.campaign.id), "consent_nibbl": True, "consent_brand": True}, format="json",
         )
         self.assertEqual(claim.status_code, status.HTTP_201_CREATED)
         resp = self.client.get(

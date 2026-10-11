@@ -5,6 +5,7 @@ import CustomerMetrics from "./CustomerMetrics";
 import CustomerLedger, { CustomerData } from "./CustomerLedger";
 import CustomerProfileView from "./CustomerProfileView";
 import SuspendCustomerModal from "./SuspendCustomerModal";
+import ComingSoonIntegrations from "./ComingSoonIntegrations";
 import { ApiRecord, API_BASE_URL, backendAssetUrl, tokenStorage } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatDate, formatMoney, toNumber } from "../../utils/backendMappers";
@@ -242,6 +243,7 @@ export default function CustomersView() {
               setModalCust(customer);
             }}
           />
+          <ComingSoonIntegrations />
         </div>
       )}
 

@@ -52,8 +52,7 @@ def needs_attention() -> dict:
             Q(status=W.FLAGGED) | Q(status=W.PENDING, needs_review=True)
         ).count(),
         "campaign_approvals": CampaignReview.objects.filter(status=CampaignReview.Status.PENDING).count(),
-        # Payout results aren't imported yet, so failures aren't tracked.
-        "failed_payouts": None,
+        "failed_payouts": WithdrawalRequest.objects.filter(status=WithdrawalRequest.Status.FAILED).count(),
         "suspended_shoppers": User.objects.filter(role=User.Role.CONSUMER, is_active=False, is_deleted=False).count(),
         "brand_suspensions": BrandCustomerSuspension.objects.filter(is_active=True).count(),
         "flagged_reviews": Review.objects.filter(status=Review.Status.FLAGGED).count(),

@@ -191,7 +191,7 @@ class AdminWithdrawalActionView(APIView):
 
     permission_classes = [IsPlatformAdmin]
 
-    _ACTIONS = {"approve", "reject", "flag", "mark-paid", "note"}
+    _ACTIONS = {"approve", "reject", "flag", "mark-paid", "note", "retry", "return-funds"}
 
     @extend_schema(request=s.ReasonSerializer, responses={200: s.WithdrawalSerializer})
     def post(self, request, withdrawal_id, action):
@@ -201,6 +201,10 @@ class AdminWithdrawalActionView(APIView):
 
         if action == "approve":
             withdrawal = _run(services.approve_withdrawal, withdrawal=withdrawal, admin=request.user)
+        elif action == "retry":
+            withdrawal = _run(services.retry_failed, withdrawal=withdrawal, admin=request.user)
+        elif action == "return-funds":
+            withdrawal = _run(services.return_failed_funds, withdrawal=withdrawal, admin=request.user)
         elif action == "mark-paid":
             withdrawal = _run(services.mark_paid, withdrawal=withdrawal, admin=request.user)
         elif action == "note":
@@ -211,6 +215,9 @@ class AdminWithdrawalActionView(APIView):
             reason_ser = s.ReasonSerializer(data=request.data)
             reason_ser.is_valid(raise_exception=True)
             reason = reason_ser.validated_data.get("reason", "")
+            if action == "reject" and not reason.strip():
+                # Master: a rejection requires a customer-facing reason.
+                raise ValidationError({"detail": "Enter the reason shown to the shopper."})
             fn = services.reject_withdrawal if action == "reject" else services.flag_withdrawal
             withdrawal = _run(fn, withdrawal=withdrawal, admin=request.user, reason=reason)
 
@@ -298,3 +305,127 @@ class AdminBatchExportView(APIView):
         if batch is None:
             raise NotFound("Batch not found.")
         return Response(services.export_batch(batch))
+
+
+# ---------------------------------------------------------------------------
+# Admin: Master "Withdrawals" board, PayPal file and results import
+# ---------------------------------------------------------------------------
+_TABS = {
+    "ready": ["approved"],
+    "review": ["pending", "flagged"],
+    "processing": ["processing"],
+    "completed": ["paid"],
+    "failed": ["failed"],
+}
+
+
+def _board_row(w, history) -> dict:
+    h = history.get(w.user_id, {})
+    return {
+        "id": str(w.id),
+        "reference": f"WD-{w.created_at:%Y%m%d}-{str(w.id)[:4].upper()}",
+        "shopper_name": w.user.full_name,
+        "shopper_email": w.user.email,
+        "provider": w.provider,
+        "handle": w.handle,
+        "amount": str(w.amount),
+        "status": w.status,
+        "requested_at": w.created_at,
+        "flag_reason": (w.admin_note or ("Over the withdrawal review threshold." if w.needs_review else ""))
+        if w.status in ("pending", "flagged") else "",
+        "batch_id": str(w.batch_id) if w.batch_id else None,
+        "paid_at": w.paid_at,
+        "paypal_transaction_id": w.paypal_transaction_id,
+        "failure_reason": w.failure_reason,
+        "failure_permanent": w.failure_permanent,
+        "history": {"total": h.get("total", 0), "completed": h.get("paid", 0), "failed": h.get("failed", 0)},
+    }
+
+
+@extend_schema(tags=["admin-payouts"])
+class AdminWithdrawalBoardView(APIView):
+    """?tab=ready|review|processing|completed|failed &q= — tab counts, rows
+    (with shopper history for Manual Review) and the per-payout fee estimate."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        from django.conf import settings
+        from django.db.models import Count, Q
+
+        from Apps.payouts.models import WithdrawalRequest
+
+        tab = request.query_params.get("tab", "ready")
+        statuses = _TABS.get(tab, _TABS["ready"])
+        qs = WithdrawalRequest.objects.select_related("user").filter(status__in=statuses)
+        q = request.query_params.get("q", "").strip()
+        if q:
+            match = Q(user__email__icontains=q) | Q(user__full_name__icontains=q) | Q(handle__icontains=q)
+            if services._looks_like_uuid(q):
+                match |= Q(id=q)
+            qs = qs.filter(match)
+        rows = list(qs.order_by("-created_at")[:500])
+        history = {
+            r["user_id"]: r for r in WithdrawalRequest.objects.filter(user_id__in={w.user_id for w in rows})
+            .values("user_id").annotate(total=Count("id"), paid=Count("id", filter=Q(status="paid")),
+                                        failed=Count("id", filter=Q(status="failed")))
+        }
+        counts = {
+            name: WithdrawalRequest.objects.filter(status__in=sts).count() for name, sts in _TABS.items()
+        }
+        return Response({
+            "counts": counts,
+            "fee_per_payout": str(settings.PAYOUT_FEE_ESTIMATE),
+            "results": [_board_row(w, history) for w in rows],
+        })
+
+
+@extend_schema(tags=["admin-payouts"])
+class AdminBatchPayPalFileView(APIView):
+    """Download the PayPal Payouts bulk-upload CSV for a batch."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, batch_id):
+        import csv
+        import io
+
+        from django.http import HttpResponse
+
+        batch = get_batch(batch_id)
+        if batch is None:
+            raise NotFound("Batch not found.")
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(services.PAYPAL_FILE_HEADER)
+        writer.writerows(services.paypal_file_rows(batch))
+        response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="paypal-payouts-{str(batch.id)[:8]}.csv"'
+        return response
+
+
+@extend_schema(tags=["admin-payouts"])
+class AdminPayPalResultsImportView(APIView):
+    """POST multipart ``file``: PayPal's payout results (CSV). Matches rows on
+    the Withdrawal ID (``Reference ID``); safe to import more than once."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request):
+        import csv
+        import io
+
+        upload = request.FILES.get("file")
+        if upload is None:
+            raise ValidationError({"detail": "Choose the PayPal results file (CSV)."})
+        try:
+            text = upload.read().decode("utf-8-sig")
+        except UnicodeDecodeError:
+            raise ValidationError({"detail": "The file must be a CSV export from PayPal."})
+        rows = list(csv.DictReader(io.StringIO(text)))
+        if not rows:
+            raise ValidationError({"detail": "The file has no rows."})
+        return Response(_run(services.import_paypal_results, rows, admin=request.user))

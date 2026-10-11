@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from Apps.accounts import twilio_verify
 from Apps.common.exceptions import DomainError
-from Apps.common.models import get_platform_settings
+from Apps.common.models import AuditLog, get_platform_settings
 from Apps.common.money import ZERO, to_money
 from Apps.payouts.models import PayoutBatch, PayoutMethod, WithdrawalRequest
 from Apps.wallets import services as wallet_services
@@ -245,10 +245,13 @@ def request_withdrawal(*, user, payout_method_id, amount, code="") -> Withdrawal
 
     if FraudFlag.objects.filter(user=user, detail__contains=f"{DUPLICATE_PAYOUT_FLAG} — review requested").exists():
         device_risk.append("Duplicate payout account under review.")
+    needs_review = _withdrawal_needs_review(user, amount) or bool(device_risk)
+    # Master: safe requests enter Ready for Batch automatically (approved);
+    # only requests matching a review rule wait in Manual Review.
     withdrawal = WithdrawalRequest.objects.create(
         user=user, payout_method=method, provider=method.provider,
-        handle=method.handle, amount=amount, status=S.PENDING,
-        needs_review=_withdrawal_needs_review(user, amount) or bool(device_risk),
+        handle=method.handle, amount=amount, status=S.PENDING if needs_review else S.APPROVED,
+        needs_review=needs_review,
         admin_note=" ".join(device_risk),
     )
     hold = wallet_services.place_hold(
@@ -276,11 +279,23 @@ def _stamp(withdrawal: WithdrawalRequest, admin) -> None:
     withdrawal.reviewed_at = timezone.now()
 
 
+def _audit(withdrawal: WithdrawalRequest, admin, event: str, before: str, **meta) -> None:
+    """Master: every withdrawal decision logs the admin, time, reason and
+    before/after status."""
+    AuditLog.objects.create(
+        actor_type="admin", actor_id=str(admin.id) if admin else "", action=AuditLog.Action.UPDATE,
+        target_type="withdrawal", target_id=str(withdrawal.id),
+        metadata={"event": event, "before": before, "after": withdrawal.status, **meta},
+    )
+
+
 def approve_withdrawal(*, withdrawal, admin) -> WithdrawalRequest:
     _require_status(withdrawal, {S.PENDING, S.FLAGGED})
+    before = withdrawal.status
     withdrawal.status = S.APPROVED
     _stamp(withdrawal, admin)
     withdrawal.save(update_fields=["status", "reviewed_by", "reviewed_at", "updated_at"])
+    _audit(withdrawal, admin, "withdrawal_approved", before)
     return withdrawal
 
 
@@ -299,15 +314,18 @@ def flag_withdrawal(*, withdrawal, admin, reason="") -> WithdrawalRequest:
 @transaction.atomic
 def reject_withdrawal(*, withdrawal, admin, reason="") -> WithdrawalRequest:
     _require_status(withdrawal, {S.PENDING, S.APPROVED, S.PROCESSING, S.FLAGGED})
+    before = withdrawal.status
     if withdrawal.hold_id and withdrawal.hold.status == Hold.Status.ACTIVE:
         wallet_services.release_hold(hold=withdrawal.hold)
     withdrawal.status = S.REJECTED
     if reason:
         withdrawal.admin_note = reason
+        withdrawal.decision_reason = reason
     _stamp(withdrawal, admin)
     withdrawal.save(
-        update_fields=["status", "admin_note", "reviewed_by", "reviewed_at", "updated_at"]
+        update_fields=["status", "admin_note", "decision_reason", "reviewed_by", "reviewed_at", "updated_at"]
     )
+    _audit(withdrawal, admin, "withdrawal_rejected", before, reason=reason)
     return withdrawal
 
 
@@ -381,3 +399,150 @@ def export_batch(batch: PayoutBatch) -> dict:
         "count": len(rows),
         "rows": rows,
     }
+
+
+# ---------------------------------------------------------------------------
+# PayPal file + imported results (Master Admin Sheet 1 — Withdrawals)
+# ---------------------------------------------------------------------------
+PAYPAL_FILE_HEADER = ["Email/Phone", "Amount", "Currency code", "Reference ID", "Note to recipient", "Recipient wallet"]
+
+
+def paypal_file_rows(batch: PayoutBatch) -> list[list[str]]:
+    """PayPal Payouts bulk-upload rows. ``Reference ID`` is our internal
+    Withdrawal ID — the key PayPal's results are matched back on."""
+    rows = []
+    for w in batch.withdrawals.all().order_by("created_at"):
+        rows.append([
+            w.handle, str(w.amount), "USD", str(w.id), "Your Nibbl rewards",
+            "Venmo" if w.provider == "venmo" else "PayPal",
+        ])
+    if batch.status == PayoutBatch.Status.CREATED:
+        batch.status = PayoutBatch.Status.EXPORTED
+        batch.exported_at = timezone.now()
+        batch.save(update_fields=["status", "exported_at", "updated_at"])
+    return rows
+
+
+# PayPal payout item statuses → our outcome.
+PAID_STATUSES = {"SUCCESS", "SUCCEEDED", "SUCCESSFUL", "COMPLETED", "PAID", "CLAIMED"}
+STILL_PROCESSING = {"PENDING", "UNCLAIMED", "ONHOLD", "ON HOLD", "PROCESSING", "NEW"}
+PERMANENT_FAILURES = {"RETURNED", "REFUNDED", "REVERSED", "BLOCKED", "DENIED", "CANCELED", "CANCELLED"}
+
+_ID_COLUMNS = ("reference id", "sender item id", "sender_item_id", "withdrawal id", "withdrawal_id", "custom id")
+_STATUS_COLUMNS = ("transaction status", "status", "payout item status", "transaction_status")
+_REASON_COLUMNS = ("failure reason", "error", "errors", "reason", "error message")
+_TXN_COLUMNS = ("transaction id", "paypal transaction id", "payout item id", "transaction_id")
+
+
+def _pick(row: dict, names) -> str:
+    for name in names:
+        if name in row and str(row[name]).strip():
+            return str(row[name]).strip()
+    return ""
+
+
+def _fail(withdrawal, *, admin, reason: str, permanent: bool, before: str) -> None:
+    withdrawal.status = S.FAILED
+    withdrawal.failure_reason = (reason or "PayPal could not complete this payment.")[:255]
+    withdrawal.failure_permanent = permanent
+    if permanent and withdrawal.hold_id and withdrawal.hold.status == Hold.Status.ACTIVE:
+        wallet_services.release_hold(hold=withdrawal.hold)
+    _stamp(withdrawal, admin)
+    withdrawal.save(update_fields=["status", "failure_reason", "failure_permanent", "reviewed_by", "reviewed_at",
+                                   "updated_at"])
+    _audit(withdrawal, admin, "payout_failed", before, reason=withdrawal.failure_reason, permanent=permanent)
+
+
+@transaction.atomic
+def import_paypal_results(rows: list[dict], *, admin) -> dict:
+    """Apply a PayPal Payouts results file. Rows match on the internal
+    Withdrawal ID; partial success is supported and re-importing the same
+    file changes nothing (no duplicate wallet or ledger activity)."""
+    summary = {"paid": 0, "failed": 0, "still_processing": 0, "already_recorded": 0, "unmatched": []}
+    touched_batches = set()
+    for raw in rows:
+        row = {str(k).strip().lower(): v for k, v in raw.items() if k is not None}
+        ref = _pick(row, _ID_COLUMNS)
+        status = _pick(row, _STATUS_COLUMNS).upper()
+        if not ref:
+            continue
+        withdrawal = (
+            WithdrawalRequest.objects.select_related("hold").filter(id=ref).first()
+            if _looks_like_uuid(ref) else None
+        )
+        if withdrawal is None:
+            summary["unmatched"].append(ref)
+            continue
+        if withdrawal.batch_id:
+            touched_batches.add(withdrawal.batch_id)
+        before = withdrawal.status
+        if status in PAID_STATUSES:
+            if withdrawal.status == S.PAID:
+                summary["already_recorded"] += 1
+                continue
+            if withdrawal.status not in (S.PROCESSING, S.FAILED) or (
+                withdrawal.status == S.FAILED and withdrawal.failure_permanent
+            ):
+                summary["unmatched"].append(ref)
+                continue
+            withdrawal.status = S.PROCESSING  # mark_paid accepts processing
+            mark_paid(withdrawal=withdrawal, admin=admin)
+            withdrawal.paypal_transaction_id = _pick(row, _TXN_COLUMNS)[:64]
+            withdrawal.failure_reason, withdrawal.failure_permanent = "", False
+            withdrawal.save(update_fields=["paypal_transaction_id", "failure_reason", "failure_permanent", "updated_at"])
+            _audit(withdrawal, admin, "payout_paid", before, transaction_id=withdrawal.paypal_transaction_id)
+            summary["paid"] += 1
+        elif status in STILL_PROCESSING or not status:
+            summary["still_processing"] += 1
+        else:
+            permanent = status in PERMANENT_FAILURES
+            if withdrawal.status == S.FAILED and (withdrawal.failure_permanent or not permanent):
+                summary["already_recorded"] += 1
+                continue
+            if withdrawal.status not in (S.PROCESSING, S.FAILED):
+                summary["unmatched"].append(ref)
+                continue
+            reason = _pick(row, _REASON_COLUMNS) or status.title()
+            _fail(withdrawal, admin=admin, reason=reason, permanent=permanent, before=before)
+            summary["failed"] += 1
+
+    for batch in PayoutBatch.objects.filter(id__in=touched_batches):
+        if not batch.withdrawals.filter(status=S.PROCESSING).exists() and batch.status != PayoutBatch.Status.COMPLETED:
+            batch.status = PayoutBatch.Status.COMPLETED
+            batch.save(update_fields=["status", "updated_at"])
+    return summary
+
+
+def _looks_like_uuid(value: str) -> bool:
+    import uuid
+
+    try:
+        uuid.UUID(value)
+        return True
+    except ValueError:
+        return False
+
+
+@transaction.atomic
+def retry_failed(*, withdrawal, admin) -> WithdrawalRequest:
+    """A retryable failure goes back to Ready for Batch (still reserved)."""
+    if withdrawal.status != S.FAILED or withdrawal.failure_permanent:
+        raise PayoutError("Only a retryable failed payout can be retried.")
+    if not (withdrawal.hold_id and withdrawal.hold.status == Hold.Status.ACTIVE):
+        raise PayoutError("The withdrawal's hold is unavailable.")
+    before = withdrawal.status
+    withdrawal.status = S.APPROVED
+    withdrawal.batch = None
+    _stamp(withdrawal, admin)
+    withdrawal.save(update_fields=["status", "batch", "reviewed_by", "reviewed_at", "updated_at"])
+    _audit(withdrawal, admin, "payout_retry", before, reason=withdrawal.failure_reason)
+    return withdrawal
+
+
+@transaction.atomic
+def return_failed_funds(*, withdrawal, admin) -> WithdrawalRequest:
+    """Mark a failed payout permanent: the amount returns to the balance."""
+    if withdrawal.status != S.FAILED or withdrawal.failure_permanent:
+        raise PayoutError("Only a retryable failed payout can be closed.")
+    _fail(withdrawal, admin=admin, reason=withdrawal.failure_reason, permanent=True, before=withdrawal.status)
+    return withdrawal

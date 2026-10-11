@@ -40,7 +40,7 @@ class WalletStatementTests(APITestCase):
         self.assertIn("withdrawal", kinds)
 
         withdrawal = next(r for r in resp.data["results"] if r["kind"] == "withdrawal")
-        self.assertEqual(withdrawal["status"], "pending")
+        self.assertEqual(withdrawal["status"], "approved")  # safe request → Ready for Batch
         self.assertEqual(Decimal(withdrawal["amount"]), Decimal("-10.00"))
 
         ledger = next(r for r in resp.data["results"] if r["kind"] == "ledger")

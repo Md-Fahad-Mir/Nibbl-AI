@@ -5,7 +5,7 @@ import Image from "next/image";
 import Header from "./Header";
 import Footer from "./Footer";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
-import { ApiError } from "@/lib/api/backendApi";
+import { ApiError, nibblApi } from "@/lib/api/backendApi";
 import { displayOffer } from "../lib/offerMappers";
 
 // Master "Rebate Restriction Pop-ups" — keyed by the API's error code.
@@ -45,10 +45,24 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
   } = useConsumerApiStore();
   const [restriction, setRestriction] = useState<{ code: string; message: string } | null>(null);
   const latestError = useConsumerApiStore((state) => state.error);
+  // Master ④/⑤: personal claim-slot use, and a separate confirmation screen
+  // (the slot is only consumed on Confirm & Reserve).
+  const [slots, setSlots] = useState<{ used: number; limit: number; available: number } | null>(null);
+  const [confirmDeadline, setConfirmDeadline] = useState<Date | null>(null);
+  const [reserving, setReserving] = useState(false);
 
   useEffect(() => {
     if (campaignId) void loadOfferDetails(campaignId);
   }, [campaignId, loadOfferDetails]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let live = true;
+    nibblApi.claimSlots().then((data) => live && setSlots(data)).catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [accessToken]);
 
   const fallbackOffer = offers.find((offer) => String(offer.campaign_id ?? offer.id) === campaignId);
   const offer = selectedOffer || fallbackOffer;
@@ -70,12 +84,25 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
       return;
     }
 
-    const id = campaignId || details?.id;
-    if (!id) {
+    if (!(campaignId || details?.id)) {
       setMessage("No backend campaign id was found for this offer.");
       return;
     }
+    if (slots && slots.available <= 0) {
+      setRestriction({
+        code: "slots_full",
+        message: `You're using all ${slots.limit} claim slots. Submit a receipt or wait for one to clear before claiming another offer.`,
+      });
+      return;
+    }
+    // The 7-day window starts when the shopper confirms (Master).
+    setConfirmDeadline(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  };
 
+  const confirmReservation = async () => {
+    const id = campaignId || details?.id;
+    if (!id) return;
+    setReserving(true);
     try {
       const reservation = await claimOffer(id, {
         consent_nibbl: consentNibbl,
@@ -93,6 +120,9 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
         return;
       }
       setMessage(backendMessage || "Could not claim this offer.");
+    } finally {
+      setReserving(false);
+      setConfirmDeadline(null);
     }
   };
 
@@ -205,6 +235,16 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
 
               {/* Marketing consents — two separate checkboxes, both required (Master: Reserve Offer) */}
               <div className="w-full max-w-[335px] flex flex-col gap-2 text-left">
+                {slots && (
+                  <div className="flex items-center justify-between gap-2 text-[13px] text-[#4D4D4D]">
+                    <span>{slots.used} of {slots.limit} claim slots used</span>
+                    <span className="flex gap-1">
+                      {Array.from({ length: slots.limit }, (_, i) => (
+                        <span key={i} className={`w-3 h-3 rounded-full ${i < slots.used ? "bg-[#3E3EDF]" : "border border-[#3E3EDF]"}`} />
+                      ))}
+                    </span>
+                  </div>
+                )}
                 <label className="flex items-start gap-2 text-[12px] leading-[16px] text-[#4D4D4D] cursor-pointer">
                   <input
                     type="checkbox"
@@ -237,7 +277,7 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
                 disabled={Boolean(details?.unavailableReason)}
                 className="w-full max-w-[197px] h-[46px] bg-gradient-to-b from-[#3E3EDF] to-[#3E3EDF] hover:opacity-90 active:scale-[0.98] text-[#FEFEFE] text-[16px] font-medium leading-[24px] rounded-lg shadow-[0_4px_4px_rgba(0,0,0,0.12),inset_0_4px_4px_rgba(255,255,255,0.12)] flex items-center justify-center cursor-pointer transition-all focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {details?.unavailableReason ? "Not available" : "Claim Offer"}
+                {details?.unavailableReason ? "Not available" : "Continue"}
             </button>
             {message && (
               <p className={`text-center text-[13px] font-medium ${status === "error" ? "text-[#E65353]" : "text-[#00A671]"}`}>
@@ -281,6 +321,63 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
 
       {/* Footer */}
       <Footer onTabChange={onTabChange} />
+
+      {/* Master ⑤ Confirm Reservation */}
+      {confirmDeadline && details && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-[440px] bg-white rounded-[16px] p-6 flex flex-col gap-4">
+            <div>
+              <h3 className="text-[20px] font-semibold text-[#1F1D1D]">Confirm your reservation</h3>
+              {slots && (
+                <p className="text-[13px] text-[#575757]">This will use slot {slots.used + 1} of {slots.limit}.</p>
+              )}
+            </div>
+            <div className="flex items-center gap-3 border border-gray-100 rounded-[10px] p-3">
+              {details.products[0]?.image && (
+                <div className="relative w-14 h-14 rounded-[8px] overflow-hidden bg-gray-50 flex-shrink-0">
+                  <Image src={details.products[0].image} alt="" fill sizes="56px" className="object-contain" />
+                </div>
+              )}
+              <div className="flex flex-col">
+                <span className="text-[12px] text-[#8A8A8A]">{details.brand}</span>
+                <span className="text-[15px] font-medium text-[#1F1D1D]">
+                  {details.products.length === 1 ? details.products[0].name : details.headline || details.title}
+                </span>
+                <span className="self-start mt-1 text-[13px] font-medium text-[#3E3EDF] bg-[#EEF0FF] rounded-full px-2 py-0.5">
+                  {details.rewardLabel}
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 text-[14px]">
+              <div>
+                <div className="font-medium text-[#1F1D1D]">Purchase at</div>
+                <div className="text-[#575757]">{details.retailerWording}</div>
+              </div>
+              <div>
+                <div className="font-medium text-[#E65353]">
+                  Purchase and submit receipt by{" "}
+                  {confirmDeadline.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </div>
+                <div className="text-[#575757]">7 days from now. Your receipt date must be today or later.</div>
+              </div>
+              {slots && (
+                <div className="text-[#575757]">
+                  This will use slot {slots.used + 1} of {slots.limit}. You&apos;ll have {Math.max(slots.available - 1, 0)}{" "}
+                  remaining slot{slots.available - 1 === 1 ? "" : "s"} after this reservation.
+                </div>
+              )}
+            </div>
+            <button disabled={reserving} onClick={() => void confirmReservation()}
+              className="h-11 rounded-[10px] bg-[#3E3EDF] text-white text-[15px] font-medium cursor-pointer disabled:opacity-50">
+              {reserving ? "Reserving…" : "Confirm & Reserve"}
+            </button>
+            <button disabled={reserving} onClick={() => setConfirmDeadline(null)}
+              className="h-11 rounded-[10px] bg-[#EEF0FF] text-[#3E3EDF] text-[15px] font-medium cursor-pointer">
+              Back
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Auth Modal Overlay (Blurred background, overlay card) */}
       {isModalOpen && (

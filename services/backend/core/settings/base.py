@@ -86,6 +86,8 @@ LOCAL_APPS = [
 
 # Promotional referral reward (M1 "Invite Friends, Earn $5").
 REFERRAL_BONUS_AMOUNT = env("REFERRAL_BONUS_AMOUNT", default="5.00")
+# Estimated PayPal/Venmo fee per payout, for the admin batch summary.
+PAYOUT_FEE_ESTIMATE = env("PAYOUT_FEE_ESTIMATE", default="0.25")
 
 # Public base URL used to build campaign URLs / QR payloads.
 PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="http://localhost:8000")

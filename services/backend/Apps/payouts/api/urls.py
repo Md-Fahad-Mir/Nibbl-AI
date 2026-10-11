@@ -19,4 +19,7 @@ urlpatterns = [
     path("admin/withdrawals/<uuid:withdrawal_id>/<str:action>/", views.AdminWithdrawalActionView.as_view(), name="admin-withdrawal-action"),
     path("admin/payout-batches/", views.AdminBatchListCreateView.as_view(), name="admin-batch-list"),
     path("admin/payout-batches/<uuid:batch_id>/export/", views.AdminBatchExportView.as_view(), name="admin-batch-export"),
+    path("admin/payout-batches/<uuid:batch_id>/paypal-file/", views.AdminBatchPayPalFileView.as_view(), name="admin-batch-paypal-file"),
+    path("admin/payout-results/import/", views.AdminPayPalResultsImportView.as_view(), name="admin-payout-results-import"),
+    path("admin/withdrawals/board/", views.AdminWithdrawalBoardView.as_view(), name="admin-withdrawal-board"),
 ]

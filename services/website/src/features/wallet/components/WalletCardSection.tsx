@@ -4,6 +4,8 @@ import Image from "next/image";
 
 interface WalletCardSectionProps {
   balance: number;
+  // Master Wallet Overview: rewards pending approval (not withdrawable yet).
+  pending?: number;
   onWithdrawClick: () => void;
   withdrawDisabled?: boolean;
   onHistoryClick?: () => void;
@@ -11,6 +13,7 @@ interface WalletCardSectionProps {
 
 export default function WalletCardSection({
   balance,
+  pending,
   onWithdrawClick,
   withdrawDisabled = false,
   onHistoryClick,
@@ -51,7 +54,15 @@ export default function WalletCardSection({
             <span className="text-[32px] font-bold leading-[39px] text-[#FEFEFE]">
               {balance.toFixed(2)}
             </span>
+            <span className="text-[14px] text-white/80">available</span>
           </div>
+
+          {pending !== undefined && (
+            <div className="flex flex-col justify-center">
+              <span className="text-[24px] font-semibold leading-[29px] text-[#FEFEFE]">${pending.toFixed(2)}</span>
+              <span className="text-[13px] text-white/80">Pending approval — moves to available after the rebate is approved</span>
+            </div>
+          )}
         </div>
 
         {/* Buttons Row (Frame 2147229130) */}
@@ -91,7 +102,7 @@ export default function WalletCardSection({
               />
             </div>
             <span className="text-[24px] font-normal leading-[29px]">
-              Wallet History
+              View wallet activity
             </span>
           </button>
         </div>

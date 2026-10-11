@@ -82,6 +82,30 @@ resource "aws_iam_role_policy" "ec2_secrets_manager" {
   })
 }
 
+# SES: the backend sends system email (verification codes, notifications) as
+# @joinnibbl.com through Amazon SES using this role — no SMTP password needed.
+resource "aws_iam_role_policy" "ec2_ses_send" {
+  name = "${var.project_name}-${var.environment}-ses-send"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SendAsJoinNibbl"
+        Effect = "Allow"
+        Action = ["ses:SendEmail", "ses:SendRawEmail"]
+        # The domain identity's default configuration set (reputation metrics)
+        # is checked on every send too.
+        Resource = [
+          "arn:aws:ses:${var.region}:${data.aws_caller_identity.current.account_id}:identity/${var.domain}",
+          "arn:aws:ses:${var.region}:${data.aws_caller_identity.current.account_id}:configuration-set/*",
+        ]
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-${var.environment}-ec2-profile"
   role = aws_iam_role.ec2.name

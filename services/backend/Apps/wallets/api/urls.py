@@ -22,6 +22,11 @@ urlpatterns = [
         name="brand-wallet-ledger-export",
     ),
     path(
+        "brands/<uuid:brand_id>/wallet/funding/",
+        views.BrandFundingView.as_view(),
+        name="brand-wallet-funding",
+    ),
+    path(
         "brands/<uuid:brand_id>/wallet/statements/",
         views.BrandWeeklyStatementsView.as_view(),
         name="brand-weekly-statements",

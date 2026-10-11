@@ -10,6 +10,7 @@ import type { ReviewSelection } from "@/stores/useBrandApiStore";
 import { ApiRecord, apiClient, backendApi, backendAssetUrl } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatDate, formatMoney, formatTime, toNumber } from "../../utils/backendMappers";
+import { downloadCsv } from "../wallet/WeeklyStatements";
 
 interface RedemptionItem {
   id: string;
@@ -266,6 +267,16 @@ export default function RedemptionsView() {
           <p className="text-[#454656] text-sm md:text-base font-medium mt-1">
             Manage and verify cashback claims across all active campaigns.
           </p>
+          <button
+            type="button"
+            onClick={() =>
+              selectedBrandId &&
+              void downloadCsv(`/brands/${selectedBrandId}/redemptions/export/`, "redemptions.csv").catch(() => undefined)
+            }
+            className="self-start mt-2 h-9 px-4 rounded-full bg-[#E2E7FF] text-[#001BD2] text-xs font-bold cursor-pointer"
+          >
+            Export CSV
+          </button>
         </div>
 
         {/* Stats stack next to header */}

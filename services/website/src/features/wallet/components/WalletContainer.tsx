@@ -10,7 +10,7 @@ import BankDetailsModal from "./BankDetailsModal";
 import VerifyWithdrawalModal from "./VerifyWithdrawalModal";
 import VerifyPhoneModal from "./VerifyPhoneModal";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
-import { ApiError } from "@/lib/api/backendApi";
+import { ApiError, nibblApi } from "@/lib/api/backendApi";
 
 interface WalletContainerProps {
   onTabChange: (tab: "offer" | "wallet" | "scan" | "profile" | "brand" | "notification", extra?: string) => void;
@@ -20,6 +20,9 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
   const [walletMessage, setWalletMessage] = useState<string | null>(null);
+  // Master: "Payout account already connected" → Request Review.
+  const [duplicateAccount, setDuplicateAccount] = useState<{ provider: string; handle: string } | null>(null);
+  const [reviewRequested, setReviewRequested] = useState(false);
   const [verify, setVerify] = useState<{ phone: string; methodId: string } | null>(null);
   const [verifySubmitting, setVerifySubmitting] = useState(false);
   const [verifyError, setVerifyError] = useState("");
@@ -147,10 +150,52 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
                 await startWithdrawal(String(method.id));
               })
               .catch((error: unknown) => {
+                const code = error instanceof ApiError ? (error.data as { code?: string } | null)?.code : undefined;
+                if (code === "duplicate_payout_account") {
+                  setReviewRequested(false);
+                  setDuplicateAccount({ provider: details.provider, handle: details.handle });
+                  return;
+                }
                 setWalletMessage(error instanceof Error ? error.message : "Withdrawal request failed.");
               });
           }}
         />
+      )}
+
+      {duplicateAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-[420px] bg-white rounded-[16px] p-6 flex flex-col gap-3 text-center">
+            <h3 className="text-[18px] font-semibold text-[#1F1D1D]">
+              {reviewRequested ? "Review requested" : "Payout account already connected"}
+            </h3>
+            <p className="text-[14px] text-[#575757]">
+              {reviewRequested
+                ? "Nibbl will review your request. No action is needed unless we contact you."
+                : "This payout account is already connected to another Nibbl account. You can request a review if you believe this is an error."}
+            </p>
+            {reviewRequested ? (
+              <button onClick={() => setDuplicateAccount(null)}
+                className="h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">Done</button>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={() => setDuplicateAccount(null)}
+                  className="flex-1 h-11 rounded-lg border border-gray-200 text-sm font-semibold text-[#575757] cursor-pointer">Cancel</button>
+                <button
+                  onClick={() =>
+                    void nibblApi.requestPayoutReview(duplicateAccount)
+                      .then(() => setReviewRequested(true))
+                      .catch((err: unknown) => {
+                        setDuplicateAccount(null);
+                        setWalletMessage(err instanceof Error ? err.message : "Could not request a review.");
+                      })
+                  }
+                  className="flex-1 h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">
+                  Request Review
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {phoneGateMethodId && (

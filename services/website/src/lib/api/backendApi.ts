@@ -207,6 +207,7 @@ export const backendApi = {
       path: "/payout-methods/",
       auth: true,
     },
+    requestPayoutReview: { method: "POST", path: "/payout-methods/request-review/", auth: true },
     deletePayoutMethod: (methodId: string): ApiEndpoint => ({
       method: "DELETE",
       path: `/payout-methods/${methodId}/`,
@@ -926,6 +927,8 @@ export const nibblApi = {
   payoutMethods: () => requestEndpoint<ApiRecord[]>(backendApi.consumer.payoutMethods),
   createPayoutMethod: (body: ApiRecord) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.createPayoutMethod, body),
+  requestPayoutReview: (body: { provider: string; handle: string }) =>
+    requestEndpoint<ApiRecord>(backendApi.consumer.requestPayoutReview, body),
   createWithdrawal: (body: { payout_method: string; amount: string; code?: string }) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.createWithdrawal, body),
   sendWithdrawalCode: (body: { payout_method: string; amount: string }) =>

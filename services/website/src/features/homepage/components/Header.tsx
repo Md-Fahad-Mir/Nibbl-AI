@@ -13,6 +13,11 @@ interface HeaderProps {
 }
 
 export default function Header({ activeTab = "offer", onTabChange, unreadCount = 0 }: HeaderProps) {
+  // Master: the My Offers badge counts pending actions (receipts to submit +
+  // review opportunities), not total offers.
+  const pendingActions = useConsumerApiStore(
+    (state) => state.reservations.length + state.reviewOpportunities.length
+  );
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const user = useConsumerApiStore((state) => state.user);
   const avatar = imageUrl(user?.avatar_url ?? user?.avatar ?? user?.profile_image, "");
@@ -81,6 +86,11 @@ export default function Header({ activeTab = "offer", onTabChange, unreadCount =
             }`}
           >
             Scan
+            {pendingActions > 0 && (
+              <span className="ml-1.5 inline-flex min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full bg-[#E65353] text-white text-[10px] font-bold align-middle">
+                {pendingActions > 99 ? "99+" : pendingActions}
+              </span>
+            )}
           </button>
           <button
             onClick={() => onTabChange?.("profile")}
@@ -168,6 +178,11 @@ export default function Header({ activeTab = "offer", onTabChange, unreadCount =
             }`}
           >
             Scan
+            {pendingActions > 0 && (
+              <span className="ml-1.5 inline-flex min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full bg-[#E65353] text-white text-[10px] font-bold align-middle">
+                {pendingActions > 99 ? "99+" : pendingActions}
+              </span>
+            )}
           </button>
           <button
             onClick={() => {

@@ -33,7 +33,7 @@
 - [x] ✅ **16. Campaign-level suppression (not brand-wide)** — discovery hides only the campaign the shopper has an active claim on or is in cooldown for; other campaigns from the same brand still appear
 
 ## Shopper Claim & Receipt Flow
-- [x] ✅ **17. Consent capture** — two separate optional checkboxes at claim (Nibbl email+SMS, Brand email+SMS); snapshot on the reservation + per-user Nibbl / per-brand `MarketingConsent` with grant date; website claim screen has the boxes; app dev guide updated
+- [x] ✅ **17. Consent capture** — two separate checkboxes at claim (Nibbl email+SMS, Brand email+SMS), **both required** to claim (Master "Reserve Offer"; "Required consent" pop-up, API code `consent_required`); snapshot on the reservation + per-user Nibbl / per-brand `MarketingConsent` with grant date; website claim screen has the boxes; app dev guide updated
 - [x] ✅ **18. Active claim slots** — per-shopper hard cap (`ACTIVE_CLAIM_SLOTS`, default 5) enforced on claim; `GET /reservations/slots/` returns used/limit/available for the "3 of 5" display (app/website consume it)
 - [x] ✅ **19. Receipt validation / duplicate fingerprint / quantity allocation** — physical-receipt identity (merchant + date + time; different transaction no. or register = different receipt; total/misreads never make a receipt "new"), one shopper account per receipt, per-unit allocation (qty 2 funds two claims, never a unit twice; race-safe), rejection releases units, manual-review line selection re-allocates, existing receipts backfilled
 - [x] ✅ **20. Reminder schedule (48h / 12h before expiry)** — fires at 48h and 12h before the reservation's exact deadline (each once, never extends it)
@@ -68,7 +68,7 @@
 - [x] ✅ **37. Tag Generator** — "Coming Soon" static page in brand dashboard (per spec; no backend)
 
 ## Brand Onboarding
-- [x] ✅ **38. Guided onboarding** — self-serve (no admin approval): register with plan choice + company info → verify work email → checkout (plan, promo code, card payment of the first 30 days) activates the brand immediately via the Stripe webhook ($0 due activates without a card) → dashboard "Get ready to launch": first growth goal (new customers / verified reviews), add products, create campaign, fund wallet, go live. Admin approval stays as a manual override. *Email verification is a code, not a link; Stripe webhook must be configured for card checkout*
+- [x] ✅ **38. Guided onboarding** — self-serve (no admin approval): register with plan choice + company info → verify work email → checkout (plan, promo code, card payment of the first 30 days) activates the brand immediately via the Stripe webhook ($0 due activates without a card) → dashboard "Get ready to launch": first growth goal (new customers / verified reviews), add products, create campaign, fund wallet, go live. Admin approval stays as a manual override. Work email verified through a one-time secure link. *Stripe webhook must be configured for card checkout*
 
 ## Shopper Wallet, Withdrawals & Referrals
 - [x] ✅ **39. Wallet & withdrawals** — wallet + withdrawals ✓; **SMS-verified withdrawals live on prod** (Twilio Verify): phone add/verify (Profile + inline at withdrawal, any country, 48h pause on phone change, admin phone reset)

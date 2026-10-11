@@ -61,6 +61,45 @@ class BrandRedemptionListView(APIView):
 
 
 @extend_schema(tags=["redemptions"])
+class BrandRedemptionExportView(APIView):
+    """CSV of the brand's approved redemptions (Master: Redemptions ⑥ Export).
+    Customer identity follows the plan: name + email on full-access plans,
+    the anonymous ``cust_`` reference otherwise."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id):
+        import csv
+        import io
+
+        from django.http import HttpResponse
+
+        from Apps.brands.customers import _anon_ref, _full_access
+
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand)
+        full = _full_access(brand)
+        serializer = s.RedemptionSerializer(context={"request": request})
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(["redemption_id", "approved_at", "campaign", "offer", "customer", "customer_email",
+                         "retailer", "purchase_date", "reward", "nibbl_fee", "approval"])
+        for r in redemptions_for_brand(brand).select_related("campaign", "user", "receipt"):
+            writer.writerow([
+                r.id, (r.issued_at or r.created_at).isoformat(), r.campaign.name, r.campaign.offer_headline,
+                r.user.full_name if full else _anon_ref(brand.id, r.user_id),
+                r.user.email if full else "",
+                r.receipt.merchant if r.receipt_id else "",
+                r.receipt.purchased_at.date().isoformat() if r.receipt_id and r.receipt.purchased_at else "",
+                r.reward_amount, r.fee_amount, serializer.get_approval_label(r),
+            ])
+        response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{brand.slug}-redemptions.csv"'
+        return response
+
+
+@extend_schema(tags=["redemptions"])
 class BrandRedemptionDetailView(APIView):
     permission_classes = [IsAuthenticated]
 

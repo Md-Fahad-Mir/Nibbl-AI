@@ -607,6 +607,16 @@ export const backendApi = {
       path: `/brands/${brandId}/billing/plan/change/`,
       auth: true,
     }),
+    reviewCampaignImage: (brandId: string, campaignId: string): ApiEndpoint => ({
+      method: "PUT",
+      path: `/brands/${brandId}/review-campaigns/${campaignId}/image/`,
+      auth: true,
+    }),
+    walletFunding: (brandId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/wallet/funding/`,
+      auth: true,
+    }),
     weeklyStatements: (brandId: string): ApiEndpoint => ({
       method: "GET",
       path: `/brands/${brandId}/wallet/statements/`,

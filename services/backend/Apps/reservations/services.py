@@ -21,7 +21,15 @@ from Apps.wallets import services as wallet_services
 
 
 class ReservationError(Exception):
-    """Expected, user-facing reservation errors (mapped to HTTP 400)."""
+    """Expected, user-facing reservation errors (mapped to HTTP 400).
+
+    ``code`` names the Master's Rebate Restriction Pop-up so apps can show the
+    matching pop-up: slots_full, already_claimed, cooldown, one_time_redeemed,
+    not_started, paused_or_ended, capacity_reached, unavailable."""
+
+    def __init__(self, message, code: str = "unavailable"):
+        super().__init__(message)
+        self.code = code
 
 
 def _expiry_from(now):
@@ -54,11 +62,14 @@ def _claim_terms(campaign, user, now):
 
     # Cooldown starts at an approved redemption (one-time = forever).
     if is_in_cooldown(user, campaign):
-        raise ReservationError("You've already redeemed this offer recently.")
+        if campaign.one_time_only:
+            raise ReservationError("You've already redeemed this one-time offer.", code="one_time_redeemed")
+        raise ReservationError("You've already redeemed this offer recently.", code="cooldown")
     remaining = deals.capacity_remaining(campaign, now)
     if remaining is not None and remaining <= 0:
         raise ReservationError(
-            "Current rebates have been claimed. This offer is temporarily unavailable."
+            "Current rebates have been claimed. This offer is temporarily unavailable.",
+            code="capacity_reached",
         )
     reward = deals.max_reward(campaign)
     if not reward:
@@ -89,8 +100,15 @@ def _record_marketing_consent(*, user, brand, now) -> None:
 def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE,
                        consent_nibbl=False, consent_brand=False) -> Reservation:
     campaign = _lock_campaign(campaign_id)
-    if campaign is None or not campaign.is_live or not campaign.brand.is_operational:
+    if campaign is None or not campaign.brand.is_operational:
         raise ReservationError("This offer is not available.")
+    if not campaign.is_live:
+        now = timezone.now()
+        if campaign.status == Campaign.Status.ACTIVE and campaign.start_at and now < campaign.start_at:
+            raise ReservationError(
+                f"This offer starts on {timezone.localtime(campaign.start_at):%b %d, %Y}.", code="not_started"
+            )
+        raise ReservationError("This offer has been paused or has ended.", code="paused_or_ended")
 
     # A shopper suspended by this brand can't claim its offers.
     from Apps.brands.customers import is_suspended_from_brand
@@ -102,7 +120,7 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE,
     if Reservation.objects.filter(
         user=user, campaign=campaign, status=Reservation.Status.ACTIVE
     ).exists():
-        raise ReservationError("You already have an active claim for this offer.")
+        raise ReservationError("You already have an active claim for this offer.", code="already_claimed")
 
     # Per-shopper active-claim slot limit (e.g. 3 of 5).
     slot_limit = settings.ACTIVE_CLAIM_SLOTS
@@ -111,7 +129,8 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE,
     ).count() >= slot_limit:
         raise ReservationError(
             f"You've reached your active claim limit ({slot_limit}). Upload a "
-            "receipt or let a claim expire to free up a slot."
+            "receipt or let a claim expire to free up a slot.",
+            code="slots_full",
         )
 
     # Backend-controlled global cap on concurrent active reservations.
@@ -162,9 +181,9 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE,
             idempotency_key=f"reservation-hold:{reservation.id}",
         )
     except wallet_services.InsufficientFunds:
-        raise ReservationError(
-            "The brand wallet has insufficient funds for this reward."
-        )
+        # Master "Campaign funds / end state": shoppers aren't told about
+        # the brand's wallet.
+        raise ReservationError("This offer is temporarily unavailable.", code="unavailable")
 
     reservation.hold = hold
     reservation.save(update_fields=["hold", "updated_at"])

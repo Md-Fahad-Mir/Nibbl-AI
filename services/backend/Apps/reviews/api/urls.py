@@ -10,6 +10,7 @@ urlpatterns = [
     # Brand: review campaigns
     path(f"{_rc}/", views.ReviewCampaignListCreateView.as_view(), name="campaign-list"),
     path(f"{_rc}/<uuid:campaign_id>/", views.ReviewCampaignDetailView.as_view(), name="campaign-detail"),
+    path(f"{_rc}/<uuid:campaign_id>/image/", views.ReviewCampaignImageView.as_view(), name="campaign-image"),
     path(f"{_rc}/<uuid:campaign_id>/products/", views.ReviewCampaignProductsView.as_view(), name="campaign-products"),
     path(f"{_rc}/<uuid:campaign_id>/prompts/", views.ReviewCampaignPromptsView.as_view(), name="campaign-prompts"),
     path(f"{_rc}/<uuid:campaign_id>/prompts/<uuid:prompt_id>/", views.ReviewCampaignPromptDeleteView.as_view(), name="campaign-prompt"),

@@ -60,7 +60,7 @@ class ClaimTests(APITestCase):
 
         resp = self.client.post(
             reverse("v1:reservations:reservation-list"),
-            {"campaign": str(campaign.id)},
+            {"campaign": str(campaign.id), "consent_nibbl": True, "consent_brand": True},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
@@ -85,8 +85,9 @@ class ClaimTests(APITestCase):
         user = _user("c@example.com")
         self.client.force_authenticate(user)
         url = reverse("v1:reservations:reservation-list")
-        first = self.client.post(url, {"campaign": str(campaign.id)}, format="json")
-        second = self.client.post(url, {"campaign": str(campaign.id)}, format="json")
+        body = {"campaign": str(campaign.id), "consent_nibbl": True, "consent_brand": True}
+        first = self.client.post(url, body, format="json")
+        second = self.client.post(url, body, format="json")
         self.assertEqual(first.status_code, status.HTTP_201_CREATED)
         self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -254,35 +255,39 @@ class ConsentCaptureTests(APITestCase):
 
         brand, campaign, _ = _campaign(slug="consenta")
         user = _user("consent@example.com")
-        resp = self._claim(user, campaign, consent_nibbl=True, consent_brand=False)
+        resp = self._claim(user, campaign, consent_nibbl=True, consent_brand=True)
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
 
         reservation = Reservation.objects.get(user=user)
         self.assertTrue(reservation.consent_nibbl_marketing)
-        self.assertFalse(reservation.consent_brand_marketing)
+        self.assertTrue(reservation.consent_brand_marketing)
         self.assertTrue(
             MarketingConsent.objects.filter(user=user, brand__isnull=True, opted_in=True).exists()
         )
-        self.assertFalse(MarketingConsent.objects.filter(user=user, brand=brand).exists())
+        self.assertTrue(MarketingConsent.objects.filter(user=user, brand=brand, opted_in=True).exists())
 
     def test_brand_consent_is_scoped_to_that_brand(self):
         from Apps.accounts.models import MarketingConsent
 
         brand, campaign, _ = _campaign(slug="consentb")
         user = _user("consent2@example.com")
-        self._claim(user, campaign, consent_brand=True)
+        other_brand, _, _ = _campaign(slug="consentb2")
+        self._claim(user, campaign, consent_nibbl=True, consent_brand=True)
         consent = MarketingConsent.objects.get(user=user, brand=brand)
         self.assertTrue(consent.opted_in)
         self.assertIsNotNone(consent.consented_at)
-        self.assertFalse(MarketingConsent.objects.filter(user=user, brand__isnull=True).exists())
+        self.assertFalse(MarketingConsent.objects.filter(user=user, brand=other_brand).exists())
 
-    def test_consents_default_to_not_given(self):
+    def test_both_consents_are_required(self):
+        """Master "Reserve Offer": two distinct checked consents are required."""
         from Apps.accounts.models import MarketingConsent
 
         _, campaign, _ = _campaign(slug="consentc")
         user = _user("consent3@example.com")
-        resp = self._claim(user, campaign)  # old clients send no consent fields
-        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        for consents in ({}, {"consent_nibbl": True}, {"consent_brand": True}):
+            resp = self._claim(user, campaign, **consents)
+            self.assertEqual((resp.status_code, resp.data["code"]), (400, "consent_required"))
+        self.assertFalse(Reservation.objects.filter(user=user).exists())
         self.assertFalse(MarketingConsent.objects.filter(user=user).exists())
 
     def test_failed_claim_does_not_record_consent(self):

@@ -171,6 +171,18 @@ export default function SecurityTab() {
               </p>
             </div>
           )}
+
+          {/* Master Settings §6: Klaviyo shown as Coming Soon — Scale */}
+          <div className="bg-[#F8F9FF] border border-[#EAEDFF] rounded-2xl p-6 flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <h3 className="font-jakarta font-bold text-sm text-[#131B2E]">Klaviyo</h3>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">Coming soon — Scale</span>
+            </div>
+            <p className="text-xs text-[#454656] leading-relaxed">
+              Connect your own Klaviyo account to sync eligible opted-in customer information. Nibbl&apos;s system
+              emails and texts are separate.
+            </p>
+          </div>
         </div>
       </div>
     </div>

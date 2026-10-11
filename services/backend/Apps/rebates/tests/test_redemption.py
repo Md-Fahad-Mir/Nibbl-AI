@@ -113,6 +113,15 @@ class HappyPathTests(APITestCase):
         )
         self.assertEqual(len(brand_hist.data), 1)
 
+        # CSV export: identity follows the plan (anonymized here unless full access).
+        export = self.client.get(reverse("v1:rebates:brand-redemption-export", args=[brand.id]))
+        body = export.content.decode()
+        self.assertEqual(export.status_code, status.HTTP_200_OK)
+        self.assertIn("redemption_id,approved_at,campaign", body)
+        self.assertEqual(len(body.strip().splitlines()), 2)
+        full = bool(brand.plan and brand.plan.data_access_level == "full")
+        self.assertEqual(user.email in body, full)
+
 
 class ManualApprovalTests(APITestCase):
     def test_manual_approve_issues_reward(self):

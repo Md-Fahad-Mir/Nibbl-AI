@@ -295,6 +295,12 @@ export default function OnboardingView() {
           notifications={apiNotifications}
           walletBalance={`$${String(wallet?.reward_available ?? wallet?.available ?? wallet?.balance ?? "0.00")}`}
           onOpenWallet={() => setActiveTab("Wallet")}
+          planName={
+            brand?.plan && typeof brand.plan === "object"
+              ? String((brand.plan as Record<string, unknown>).name ?? "")
+              : undefined
+          }
+          onOpenPlans={() => setActiveTab("Plans")}
           userName={String(profile?.full_name ?? profile?.email ?? "Brand user")}
           userRole={String(profile?.role ?? "brand")}
           avatarUrl={typeof profile?.avatar_url === "string" ? profile.avatar_url : undefined}

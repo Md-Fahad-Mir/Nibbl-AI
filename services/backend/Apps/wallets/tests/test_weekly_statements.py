@@ -78,3 +78,37 @@ class WeeklyStatementTests(APITestCase):
         self.assertEqual(
             self.client.get(reverse("v1:wallets:brand-weekly-statements", args=[self.brand.id])).status_code, 403
         )
+
+
+class FundingAndSpendingTests(APITestCase):
+    """Campaign Funding (7-day need) + Spending Overview (Master: Wallet §2, §4)."""
+
+    def setUp(self):
+        from Apps.campaigns import services as campaign_services
+        from Apps.campaigns.models import Campaign
+        from Apps.common.testing import go_live
+        from Apps.products.services import create_product
+
+        self.owner = User.objects.create_user(email="o@x.com", password="x", full_name="Owner")
+        self.brand = Brand.objects.create(name="Acme", slug="acme", plan=Plan.objects.get(slug="pro"))  # 15% fee
+        BrandMembership.objects.create(brand=self.brand, user=self.owner, role=BrandMembership.Role.OWNER)
+        self.wallet = wallet_services.get_or_create_brand_wallet(self.brand)
+        wallet_services.credit(wallet=self.wallet, amount=Decimal("100"), category=C.FUNDING)
+        product = create_product(brand=self.brand, name="Chips", category="Chips")
+        campaign = campaign_services.create_campaign(
+            brand=self.brand, product_ids=[product.id], name="Free chips", deal_type=Campaign.DealType.FREE,
+            max_rebate=Decimal("5.00"), desired_redemptions=2, estimated_redemption_rate=Decimal("100"),
+        )
+        go_live(campaign)  # capacity 2 per 25h
+        wallet_services.debit(wallet=self.wallet, amount=Decimal("5"), category=C.REBATE_REWARD)
+        self.client.force_authenticate(self.owner)
+
+    def test_seven_day_need_and_spending(self):
+        data = self.client.get(reverse("v1:wallets:brand-wallet-funding", args=[self.brand.id])).data
+        funding = data["funding"]
+        # $5 reward + 15% fee = $5.75 × 2 claims × 7 cycles = $80.50; $95 available.
+        self.assertEqual((funding["seven_day_need"], funding["all_funded"]), ("80.50", True))
+        self.assertEqual((data["spending"]["rebate_rewards"], data["spending"]["total_cash_spent"]), ("5.00", "5.00"))
+        wallet_services.debit(wallet=self.wallet, amount=Decimal("30"), category=C.REBATE_REWARD)
+        funding = self.client.get(reverse("v1:wallets:brand-wallet-funding", args=[self.brand.id])).data["funding"]
+        self.assertEqual((funding["all_funded"], funding["shortfall"]), (False, "15.50"))

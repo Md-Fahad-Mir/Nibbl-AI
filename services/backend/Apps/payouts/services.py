@@ -27,6 +27,16 @@ class PayoutError(DomainError):
     """Expected, user-facing payout errors (mapped to HTTP 400)."""
 
 
+class DuplicatePayoutAccount(PayoutError):
+    """The payout account is connected to another Nibbl account (Master:
+    restriction message with a Request Review button)."""
+
+    code = "duplicate_payout_account"
+
+
+DUPLICATE_PAYOUT_FLAG = "Duplicate payout account"
+
+
 # ---------------------------------------------------------------------------
 # Payout methods
 # ---------------------------------------------------------------------------
@@ -47,12 +57,13 @@ def add_payout_method(*, user, provider, handle, is_default=False) -> PayoutMeth
         FraudFlag.objects.create(
             user=user,
             reason=FraudFlag.Reason.MANUAL,
-            detail=f"Duplicate payout account attempted: {provider}:{handle}",
+            detail=f"{DUPLICATE_PAYOUT_FLAG} attempted: {provider}:{handle}",
         )
-        raise PayoutError(
-            "This payout account is linked to another account and has been "
-            "flagged for review."
+        raise DuplicatePayoutAccount(
+            "This payout account is already connected to another Nibbl account. "
+            "You can request a review if you believe this is an error."
         )
+
 
     # A user's first payout method is usable immediately; any later change goes
     # to a review hold until an admin approves it (spec 2.7).
@@ -72,6 +83,27 @@ def add_payout_method(*, user, provider, handle, is_default=False) -> PayoutMeth
             )
     except IntegrityError:
         raise PayoutError("This payout account is already linked to an account.")
+
+
+
+def request_duplicate_review(*, user, provider, handle) -> int:
+    """Shopper asks Nibbl to review a payout account that's connected to
+    another account. Both accounts' open withdrawals — and any new ones until
+    Admin clears the flag — go to Manual Review. Returns accounts flagged."""
+    from Apps.receipts.models import FraudFlag
+
+    handle = (handle or "").strip()
+    other = PayoutMethod.objects.filter(provider=provider, handle__iexact=handle).exclude(user=user).first()
+    if other is None:
+        raise PayoutError("There's no conflicting payout account to review.")
+    detail = f"{DUPLICATE_PAYOUT_FLAG} — review requested: {provider}:{handle}"
+    users = [user, other.user]
+    for account in users:
+        FraudFlag.objects.create(user=account, reason=FraudFlag.Reason.MANUAL, detail=detail)
+    WithdrawalRequest.objects.filter(user__in=users, status__in=[S.PENDING, S.APPROVED]).update(
+        needs_review=True, admin_note=detail,
+    )
+    return len(users)
 
 
 def remove_payout_method(method: PayoutMethod) -> None:
@@ -209,6 +241,10 @@ def request_withdrawal(*, user, payout_method_id, amount, code="") -> Withdrawal
     # Device / network risk (Master #51) also routes to Manual Review; the
     # reason is admin-only.
     device_risk = risk_reasons(user)
+    from Apps.receipts.models import FraudFlag
+
+    if FraudFlag.objects.filter(user=user, detail__contains=f"{DUPLICATE_PAYOUT_FLAG} — review requested").exists():
+        device_risk.append("Duplicate payout account under review.")
     withdrawal = WithdrawalRequest.objects.create(
         user=user, payout_method=method, provider=method.provider,
         handle=method.handle, amount=amount, status=S.PENDING,

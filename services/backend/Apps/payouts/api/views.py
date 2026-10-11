@@ -61,6 +61,22 @@ class PayoutMethodListCreateView(APIView):
 
 
 @extend_schema(tags=["payout-methods"])
+class PayoutReviewRequestView(APIView):
+    """POST {provider, handle}: 'Request Review' for a payout account that's
+    connected to another Nibbl account."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=s.AddPayoutMethodSerializer, responses={202: None})
+    def post(self, request):
+        serializer = s.AddPayoutMethodSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        _run(services.request_duplicate_review, user=request.user,
+             provider=serializer.validated_data["provider"], handle=serializer.validated_data["handle"])
+        return Response({"detail": "Review requested. Nibbl will look into it — no action is needed unless we contact you."},
+                        status=status.HTTP_202_ACCEPTED)
+
+
 class PayoutMethodDeleteView(APIView):
     permission_classes = [IsAuthenticated]
 

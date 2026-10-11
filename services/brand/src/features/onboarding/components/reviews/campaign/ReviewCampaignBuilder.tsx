@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { ApiRecord } from "@/lib/api/backendApi";
+import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
 interface ReviewCampaignBuilderProps {
@@ -38,6 +38,9 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 export default function ReviewCampaignBuilder({ campaign, onCancel, onSaved }: ReviewCampaignBuilderProps) {
   const products = useBrandApiStore((s) => s.products);
   const saveReviewCampaign = useBrandApiStore((s) => s.saveReviewCampaign);
+  const refreshReviewCampaigns = useBrandApiStore((s) => s.refreshReviewCampaigns);
+  const brandId = useBrandApiStore((s) => s.selectedBrandId);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const [name, setName] = useState(String(campaign?.name ?? ""));
   const [startDate, setStartDate] = useState(dateValue(campaign?.start_at));
@@ -75,6 +78,12 @@ export default function ReviewCampaignBuilder({ campaign, onCancel, onSaved }: R
         product_cooldown_days: cooldown === "one_time" ? 0 : Number(cooldown),
         one_time_only: cooldown === "one_time",
       });
+      if (imageFile && brandId) {
+        const form = new FormData();
+        form.append("image", imageFile);
+        await apiClient.request(backendApi.brand.reviewCampaignImage(brandId, String(saved.id)), { body: form });
+        await refreshReviewCampaigns();
+      }
       onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the campaign.");
@@ -101,6 +110,17 @@ export default function ReviewCampaignBuilder({ campaign, onCancel, onSaved }: R
         <label className={labelClass}>
           Internal campaign name
           <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className={labelClass}>
+          Campaign image (shown on the shopper&apos;s review card)
+          <div className="flex items-center gap-3">
+            {Boolean(imageFile || campaign?.image_url) && (
+              <img src={imageFile ? URL.createObjectURL(imageFile) : String(campaign?.image_url)} alt=""
+                className="w-14 h-14 rounded-xl object-cover bg-[#F2F3FF]" />
+            )}
+            <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+              className="text-sm font-normal normal-case tracking-normal text-[#454656]" />
+          </div>
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className={labelClass}>

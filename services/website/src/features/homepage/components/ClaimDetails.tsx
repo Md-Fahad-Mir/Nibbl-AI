@@ -5,7 +5,21 @@ import Image from "next/image";
 import Header from "./Header";
 import Footer from "./Footer";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
+import { ApiError } from "@/lib/api/backendApi";
 import { displayOffer } from "../lib/offerMappers";
+
+// Master "Rebate Restriction Pop-ups" — keyed by the API's error code.
+const RESTRICTION_TITLES: Record<string, string> = {
+  consent_required: "Consent required",
+  slots_full: "All claim slots are in use",
+  already_claimed: "You've already claimed this offer",
+  cooldown: "This offer is on cooldown for you",
+  one_time_redeemed: "One-time offer already redeemed",
+  not_started: "This offer hasn't started yet",
+  paused_or_ended: "This offer is paused or has ended",
+  capacity_reached: "Current claims are used up",
+  unavailable: "This offer is temporarily unavailable",
+};
 
 interface ClaimDetailsProps {
   campaignId?: string;
@@ -29,6 +43,7 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
     loadOfferDetails,
     claimOffer,
   } = useConsumerApiStore();
+  const [restriction, setRestriction] = useState<{ code: string; message: string } | null>(null);
   const latestError = useConsumerApiStore((state) => state.error);
 
   useEffect(() => {
@@ -47,6 +62,14 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
       return;
     }
 
+    if (!consentNibbl || !consentBrand) {
+      setRestriction({
+        code: "consent_required",
+        message: "Please agree to both Nibbl and brand email and SMS to claim this offer.",
+      });
+      return;
+    }
+
     const id = campaignId || details?.id;
     if (!id) {
       setMessage("No backend campaign id was found for this offer.");
@@ -61,8 +84,14 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
       const reservationId = String(reservation.id || reservation.reservation || "");
       setMessage("Offer claimed. Upload your receipt to complete the reward.");
       onTabChange("scan", reservationId ? `claim:${reservationId}` : undefined);
-    } catch {
+    } catch (error) {
       const backendMessage = useConsumerApiStore.getState().error;
+      const code = error instanceof ApiError ? (error.data as { code?: string } | null)?.code : undefined;
+      if (code && RESTRICTION_TITLES[code]) {
+        setRestriction({ code, message: backendMessage || "This offer can't be claimed right now." });
+        setMessage("");
+        return;
+      }
       setMessage(backendMessage || "Could not claim this offer.");
     }
   };
@@ -174,7 +203,7 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
                 </div>
               )}
 
-              {/* Marketing consents — two separate, optional checkboxes */}
+              {/* Marketing consents — two separate checkboxes, both required (Master: Reserve Offer) */}
               <div className="w-full max-w-[335px] flex flex-col gap-2 text-left">
                 <label className="flex items-start gap-2 text-[12px] leading-[16px] text-[#4D4D4D] cursor-pointer">
                   <input
@@ -183,7 +212,7 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
                     onChange={(e) => setConsentNibbl(e.target.checked)}
                     className="mt-[2px] accent-[#3E3EDF]"
                   />
-                  <span>Send me NibblAI offers and updates by email and SMS.</span>
+                  <span>Send me NibblAI offers and updates by email and SMS. <span className="text-[#E65353]">*</span></span>
                 </label>
                 <label className="flex items-start gap-2 text-[12px] leading-[16px] text-[#4D4D4D] cursor-pointer">
                   <input
@@ -193,7 +222,8 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
                     className="mt-[2px] accent-[#3E3EDF]"
                   />
                   <span>
-                    Send me offers and updates from {details?.brand || "this brand"} by email and SMS.
+                    Send me offers and updates from {details?.brand || "this brand"} by email and SMS.{" "}
+                    <span className="text-[#E65353]">*</span>
                   </span>
                 </label>
               </div>
@@ -309,6 +339,28 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
               New here? It only takes a few seconds.
             </span>
 
+          </div>
+        </div>
+      )}
+      {restriction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-[400px] bg-white rounded-[16px] p-6 flex flex-col gap-3 text-center">
+            <h3 className="text-[18px] font-semibold text-[#1F1D1D]">{RESTRICTION_TITLES[restriction.code]}</h3>
+            <p className="text-[14px] text-[#575757]">{restriction.message}</p>
+            <div className="flex gap-2 mt-1">
+              {restriction.code === "consent_required" ? (
+                <button onClick={() => setRestriction(null)}
+                  className="flex-1 h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">OK</button>
+              ) : restriction.code === "slots_full" || restriction.code === "already_claimed" ? (
+                <button onClick={() => { setRestriction(null); onTabChange("scan"); }}
+                  className="flex-1 h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">View My Offers</button>
+              ) : (
+                <button onClick={() => { setRestriction(null); onBack(); }}
+                  className="flex-1 h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">Explore More Offers</button>
+              )}
+              <button onClick={() => setRestriction(null)}
+                className="flex-1 h-11 rounded-lg border border-gray-200 text-sm font-semibold text-[#575757] cursor-pointer">Close</button>
+            </div>
           </div>
         </div>
       )}

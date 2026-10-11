@@ -25,6 +25,9 @@ interface HeaderProps {
   onOpenProfile?: () => void;
   /** Opens the Wallet (Master: Available Funds links to Wallet). */
   onOpenWallet?: () => void;
+  /** Current plan name, shown once and linked to Plans (Master: Dashboard Home). */
+  planName?: string;
+  onOpenPlans?: () => void;
 }
 
 export default function Header({
@@ -37,6 +40,8 @@ export default function Header({
   avatarUrl,
   onOpenProfile,
   onOpenWallet,
+  planName,
+  onOpenPlans,
 }: HeaderProps) {
   const router = useRouter();
   const logout = useBrandApiStore((state) => state.logout);
@@ -89,6 +94,19 @@ export default function Header({
             <span className="absolute w-2 h-2 bg-[#BA1A1A] rounded-full right-2 top-2 ring-1 ring-white"></span>
           )}
         </button>
+
+        {/* Current plan → Plans */}
+        {planName && (
+          <button
+            type="button"
+            onClick={onOpenPlans}
+            className="hidden sm:flex flex-col items-end font-manrope bg-transparent border-none cursor-pointer"
+            title="Open Plans"
+          >
+            <span className="text-[10px] font-bold text-[#454656] tracking-wider uppercase">Plan</span>
+            <span className="text-sm font-extrabold text-[#001BD2] leading-none mt-0.5">{planName}</span>
+          </button>
+        )}
 
         {/* Wallet Balance Tracker */}
         <button

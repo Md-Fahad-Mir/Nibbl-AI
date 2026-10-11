@@ -86,6 +86,8 @@ LOCAL_APPS = [
 
 # Promotional referral reward (M1 "Invite Friends, Earn $5").
 REFERRAL_BONUS_AMOUNT = env("REFERRAL_BONUS_AMOUNT", default="5.00")
+# Master Refer a Friend: the new shopper must finish every step within this window.
+REFERRAL_WINDOW_DAYS = env.int("REFERRAL_WINDOW_DAYS", default=90)
 # Estimated PayPal/Venmo fee per payout, for the admin batch summary.
 PAYOUT_FEE_ESTIMATE = env("PAYOUT_FEE_ESTIMATE", default="0.25")
 

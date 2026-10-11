@@ -14,6 +14,7 @@ const TABS = [
   { value: "qualified", label: "Qualified" },
   { value: "paid", label: "Paid" },
   { value: "rejected", label: "Rejected" },
+  { value: "expired", label: "Expired (90 days)" },
 ];
 
 const BADGE: Record<string, string> = {
@@ -21,6 +22,7 @@ const BADGE: Record<string, string> = {
   flagged: "bg-red-50 text-red-700",
   paid: "bg-emerald-50 text-emerald-700",
   rejected: "bg-slate-100 text-slate-500",
+  expired: "bg-slate-100 text-slate-500",
 };
 
 const person = (p: unknown) => {
@@ -165,7 +167,8 @@ export const ReferralsView = () => {
           <h1 className="text-2xl font-bold text-[#1A1A2E]">Referrals</h1>
           <p className="text-sm text-[#6B6B80] mt-1">
             A referral pays $5 only after the new shopper joins with the link, claims an offer, gets a redemption
-            approved, connects a payout method and completes a withdrawal. Referrals matching a flag rule wait here.
+            approved, connects a payout method and completes a withdrawal — all within 90 days. Referrals matching a
+            flag rule wait here.
           </p>
         </div>
 

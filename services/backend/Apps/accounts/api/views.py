@@ -264,11 +264,30 @@ class ReferralView(APIView):
 
     @extend_schema(responses={200: s.ReferralOverviewSerializer})
     def get(self, request):
+        from decimal import Decimal
+
+        from django.conf import settings
+
         referrals = request.user.referrals.filter(is_deleted=False).select_related("referral_received")
+        bonus = Decimal(str(settings.REFERRAL_BONUS_AMOUNT))
+        earned = pending = Decimal("0")
+        for friend in referrals:
+            referral = getattr(friend, "referral_received", None) if hasattr(friend, "referral_received") else None
+            if referral is None:
+                continue
+            if referral.status == referral.Status.PAID:
+                earned += referral.reward_amount or bonus
+            elif referral.status in (referral.Status.IN_PROGRESS, referral.Status.FLAGGED):
+                pending += bonus
+        base = str(getattr(settings, "PUBLIC_BASE_URL", "")).rstrip("/")
         payload = {
             "referral_code": request.user.referral_code,
             "total_referrals": referrals.count(),
             "referrals": referrals,
+            "referral_link": f"{base}/r/{request.user.referral_code}",
+            "reward_amount": str(bonus),
+            "window_days": settings.REFERRAL_WINDOW_DAYS,
+            "summary": {"earned": str(earned), "pending": str(pending), "invited": referrals.count()},
         }
         return Response(s.ReferralOverviewSerializer(payload).data)
 

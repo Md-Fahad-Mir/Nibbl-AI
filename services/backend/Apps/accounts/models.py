@@ -325,6 +325,8 @@ class Referral(BaseModel):
         FLAGGED = "flagged", "Flagged"
         PAID = "paid", "Paid"
         REJECTED = "rejected", "Rejected"
+        # Not every step was finished within the referral window (90 days).
+        EXPIRED = "expired", "Expired"
 
     referrer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="referrals_made")
     referred = models.OneToOneField(User, on_delete=models.CASCADE, related_name="referral_received")

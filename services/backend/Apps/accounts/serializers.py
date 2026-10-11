@@ -227,11 +227,29 @@ class ReferralUserSerializer(serializers.ModelSerializer):
     steps = serializers.SerializerMethodField()
     reward_amount = serializers.SerializerMethodField()
     decision_reason = serializers.SerializerMethodField()
+    # Master: "Expires in N days" (all steps within 90 days) — additive.
+    expires_at = serializers.SerializerMethodField()
+    days_left = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "full_name", "created_at", "status", "steps", "reward_amount", "decision_reason"]
+        fields = ["id", "full_name", "created_at", "status", "steps", "reward_amount", "decision_reason",
+                  "expires_at", "days_left"]
         read_only_fields = fields
+
+    def get_expires_at(self, obj):
+        from Apps.accounts.referrals import deadline
+
+        referral = self._referral(obj)
+        if referral is None or referral.status != referral.Status.IN_PROGRESS:
+            return None
+        return deadline(referral)
+
+    def get_days_left(self, obj) -> int | None:
+        from django.utils import timezone
+
+        expires = self.get_expires_at(obj)
+        return max((expires - timezone.now()).days, 0) if expires else None
 
     def _referral(self, obj):
         return getattr(obj, "referral_received", None) if hasattr(obj, "referral_received") else None
@@ -255,13 +273,20 @@ class ReferralUserSerializer(serializers.ModelSerializer):
 
     def get_decision_reason(self, obj):
         referral = self._referral(obj)
-        return referral.decision_reason if referral and referral.status == referral.Status.REJECTED else ""
+        return referral.decision_reason if referral and referral.status in (
+            referral.Status.REJECTED, referral.Status.EXPIRED) else ""
 
 
 class ReferralOverviewSerializer(serializers.Serializer):
     referral_code = serializers.CharField()
     total_referrals = serializers.IntegerField()
     referrals = ReferralUserSerializer(many=True)
+    # Additive (Master Refer a Friend): share link, program terms and the
+    # Earned / Pending / Invited totals.
+    referral_link = serializers.CharField(required=False)
+    reward_amount = serializers.CharField(required=False)
+    window_days = serializers.IntegerField(required=False)
+    summary = serializers.DictField(required=False)
 
 
 class ReferralInviteSerializer(serializers.Serializer):

@@ -17,6 +17,11 @@ class ReservationSerializer(serializers.ModelSerializer):
     # is internal and is never called directly by the client.
     receipt_upload_url = serializers.SerializerMethodField()
     receipt_status = serializers.SerializerMethodField()
+    # Additive (Master Receipt Submission / Outcomes): the claim's locked
+    # receipt requirements and the one-resubmission state.
+    receipt_requirements = serializers.SerializerMethodField()
+    resubmissions_left = serializers.SerializerMethodField()
+    last_receipt_rejection = serializers.CharField(read_only=True)
 
     class Meta:
         model = Reservation
@@ -36,8 +41,28 @@ class ReservationSerializer(serializers.ModelSerializer):
             "created_at",
             "receipt_upload_url",
             "receipt_status",
+            "receipt_requirements",
+            "resubmissions_left",
+            "last_receipt_rejection",
         ]
         read_only_fields = fields
+
+    def get_receipt_requirements(self, obj) -> dict:
+        campaign = obj.campaign
+        snapshot = bool(obj.deal_type)
+        merchants = (obj.allowed_merchants if snapshot else campaign.allowed_merchants) or ""
+        product_ids = obj.eligible_product_ids if snapshot and obj.eligible_product_ids else None
+        products = campaign.products.all() if product_ids is None else campaign.products.filter(id__in=product_ids)
+        return {
+            "purchase_after": obj.created_at,
+            "submit_by": obj.expires_at,
+            "products": [p.name for p in products],
+            "required_quantity": obj.required_quantity or 1,
+            "retailers": [m.strip() for m in merchants.split(",") if m.strip()],
+        }
+
+    def get_resubmissions_left(self, obj) -> int:
+        return 1 if obj.receipt_rejections == 0 else 0
 
     def get_product_name(self, obj):
         first_product = obj.campaign.products.first()

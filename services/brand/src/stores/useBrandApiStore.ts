@@ -293,10 +293,15 @@ interface BrandApiState {
   status: LoadState;
   error: string | null;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  /** Master passwordless sign-in: email a 15-minute one-time link. */
+  requestMagicLink: (email: string) => Promise<void>;
+  signInWithMagicLink: (token: string) => Promise<void>;
+  /** Store the tokens, check brand access and load the applications. */
+  completeSignIn: (tokens: { access: string; refresh: string; user?: ApiRecord }) => Promise<void>;
   registerAndApply: (body: {
     fullName: string;
     email: string;
-    password: string;
+    password?: string;
     brandName: string;
     website?: string;
     phone?: string;
@@ -399,41 +404,63 @@ export const useBrandApiStore = create<BrandApiState>()(
             password,
             remember_me: rememberMe,
           });
-          tokenStorage.set(tokens.access, tokens.refresh);
-          const profile = tokens.user || (await nibblApi.me());
-          if (isPlatformAdminProfile(profile)) {
-            tokenStorage.clear();
-            set({ accessToken: null, refreshToken: null, profile: null });
-            throw new Error(brandAccessError);
-          }
-
-          let submittedApplicationDraft = false;
-          try {
-            submittedApplicationDraft = await submitSavedApplicationDraft();
-          } catch {
-            // Email verification or approval gating can block this until a later login.
-          }
-          const applicationsResponse = await optionalRequest(
-            () => apiClient.request<unknown>(backendApi.brand.applications),
-            []
-          );
-          const brandApplications = listResults(applicationsResponse);
-          if (!isBrandProfile(profile) && !submittedApplicationDraft && !brandApplications.length) {
-            tokenStorage.clear();
-            set({ accessToken: null, refreshToken: null, profile: null });
-            throw new Error(brandAccessError);
-          }
-          set({
-            accessToken: tokens.access,
-            refreshToken: tokens.refresh,
-            profile,
-            brandApplications,
-            status: "success",
-          });
+          await get().completeSignIn(tokens);
         } catch (error) {
           set({ status: "error", error: readError(error) });
           throw error;
         }
+      },
+      requestMagicLink: async (email) => {
+        set({ status: "loading", error: null });
+        try {
+          await nibblApi.requestMagicLink(email.trim().toLowerCase());
+          set({ status: "success" });
+        } catch (error) {
+          set({ status: "error", error: readError(error) });
+          throw error;
+        }
+      },
+      signInWithMagicLink: async (token) => {
+        set({ status: "loading", error: null });
+        try {
+          await get().completeSignIn(await nibblApi.signInWithMagicLink(token));
+        } catch (error) {
+          set({ status: "error", error: readError(error) });
+          throw error;
+        }
+      },
+      completeSignIn: async (tokens) => {
+        tokenStorage.set(tokens.access, tokens.refresh);
+        const profile = tokens.user || (await nibblApi.me());
+        if (isPlatformAdminProfile(profile)) {
+          tokenStorage.clear();
+          set({ accessToken: null, refreshToken: null, profile: null });
+          throw new Error(brandAccessError);
+        }
+
+        let submittedApplicationDraft = false;
+        try {
+          submittedApplicationDraft = await submitSavedApplicationDraft();
+        } catch {
+          // Email verification or approval gating can block this until a later login.
+        }
+        const applicationsResponse = await optionalRequest(
+          () => apiClient.request<unknown>(backendApi.brand.applications),
+          []
+        );
+        const brandApplications = listResults(applicationsResponse);
+        if (!isBrandProfile(profile) && !submittedApplicationDraft && !brandApplications.length) {
+          tokenStorage.clear();
+          set({ accessToken: null, refreshToken: null, profile: null });
+          throw new Error(brandAccessError);
+        }
+        set({
+          accessToken: tokens.access,
+          refreshToken: tokens.refresh,
+          profile,
+          brandApplications,
+          status: "success",
+        });
       },
       registerAndApply: async ({
         fullName,
@@ -482,11 +509,15 @@ export const useBrandApiStore = create<BrandApiState>()(
       verifyEmail: async (email, code, token) => {
         set({ status: "loading", error: null });
         try {
-          await nibblApi.verifyEmail(
+          const result = await nibblApi.verifyEmail(
             token
               ? { email: email.trim().toLowerCase(), token }
               : { email: email.trim().toLowerCase(), code: code.trim() }
           );
+          // Master: the secure link signs the brand straight in.
+          if (typeof result.access === "string" && typeof result.refresh === "string") {
+            await get().completeSignIn({ access: result.access, refresh: result.refresh, user: result });
+          }
           set({ status: "success" });
         } catch (error) {
           set({ status: "error", error: readError(error) });

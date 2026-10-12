@@ -35,6 +35,22 @@ class DuplicateReceipt(ReceiptError):
     """This physical receipt has already been used (mapped to HTTP 409)."""
 
 
+class ReceiptRejected(ReceiptError):
+    """A clear date or required-retailer failure (Master Receipt Outcomes).
+    ``code``: date_rejected / retailer_rejected (one resubmission left) or
+    final_rejection (claim closed, slot released)."""
+
+    def __init__(self, message, *, code):
+        super().__init__(message)
+        self.code = code
+
+
+class _ClearFailure(Exception):
+    def __init__(self, kind, message):
+        super().__init__(message)
+        self.kind = kind
+
+
 class ReceiptUnreadable(ReceiptError):
     """OCR processed the image but it isn't a usable receipt (HTTP 422)."""
 
@@ -90,8 +106,11 @@ def upload_receipt(*, user, reservation_id, image=None, **legacy) -> Receipt:
     # Hard rejections (unaccepted merchant / wrong product / outside the
     # campaign window) raise. Soft problems return a note that blocks
     # auto-reward and sends the receipt to the brand's manual review queue.
-    merchant_note = _check_merchant(extracted, campaign=campaign, reservation=reservation)
-    date_note = _check_purchase_window(extracted, campaign=campaign)
+    try:
+        merchant_note = _check_merchant(extracted, campaign=campaign, reservation=reservation)
+        date_note = _check_purchase_window(extracted, campaign=campaign, reservation=reservation)
+    except _ClearFailure as failure:
+        _record_clear_rejection(reservation, failure)  # always raises
     eligible_product, matched_units, eligible_description = _match_eligible_product(
         extracted, campaign=campaign, reservation=reservation
     )
@@ -333,12 +352,10 @@ def _check_merchant(extracted, *, campaign, reservation=None) -> str:
         return "Merchant could not be read."
     if any(a in merchant_norm or merchant_norm in a for a in allowed):
         return ""
-    raise ReceiptError(
-        "This receipt is not from a merchant accepted for this campaign."
-    )
+    raise _ClearFailure("retailer", "This campaign requires a receipt from an eligible retailer.")
 
 
-def _check_purchase_window(extracted, *, campaign) -> str:
+def _check_purchase_window(extracted, *, campaign, reservation=None) -> str:
     """Check the purchase date against the campaign's start/end window.
 
     A date *outside* the window is a hard rejection — the purchase is provably
@@ -350,11 +367,46 @@ def _check_purchase_window(extracted, *, campaign) -> str:
         return "Purchase date could not be read."
 
     purchased_at = _aware(extracted.purchased_at)
+    outside = "This receipt was purchased outside your eligible period."
     if campaign.start_at and purchased_at < campaign.start_at:
-        raise ReceiptError("This receipt predates the campaign period.")
+        raise _ClearFailure("date", outside)
     if campaign.end_at and purchased_at > campaign.end_at:
-        raise ReceiptError("This receipt is dated after the campaign ended.")
+        raise _ClearFailure("date", outside)
+    if reservation is not None:
+        # Master: the receipt date must be on or after the claim was reserved
+        # (a day's grace covers receipts printed in the shopper's time zone).
+        # The upload itself must happen before the deadline (active claim).
+        if purchased_at.date() < (reservation.created_at - dt.timedelta(days=1)).date():
+            raise _ClearFailure("date", outside)
     return ""
+
+
+def _record_clear_rejection(reservation, failure: "_ClearFailure") -> None:
+    """First clear failure: one resubmission before the original deadline.
+    Second: final rejection — the claim closes and its slot is released."""
+    from Apps.reservations import services as reservation_services
+
+    with transaction.atomic():
+        locked = Reservation.objects.select_for_update().get(pk=reservation.pk)
+        locked.receipt_rejections += 1
+        locked.last_receipt_rejection = str(failure)[:255]
+        locked.save(update_fields=["receipt_rejections", "last_receipt_rejection", "updated_at"])
+        final = locked.receipt_rejections > 1
+        if final:
+            reservation_services.mark_rejected(locked)
+    from Apps.notifications import events
+
+    events.receipt_rejected(locked, reason=str(failure), final=final)
+    if final:
+        raise ReceiptRejected(
+            "This receipt still does not meet the campaign requirements. Your claim is now closed.",
+            code="final_rejection",
+        )
+    raise ReceiptRejected(
+        f"{failure} You can submit one different receipt before your original deadline "
+        f"({locked.expires_at:%b %d, %Y %H:%M} UTC).",
+        code=f"{failure.kind}_rejected",
+    )
 
 
 def _match_eligible_product(extracted, *, campaign, reservation=None):
@@ -507,6 +559,9 @@ def _decide(receipt: Receipt, *, matched_units: int, review_note: str) -> None:
         ),
         reference_type="receipt", reference_id=receipt.id,
     )
+    from Apps.notifications import events
+
+    events.receipt_submitted(receipt)
 
 
 # ---------------------------------------------------------------------------

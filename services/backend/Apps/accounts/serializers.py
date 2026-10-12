@@ -94,7 +94,8 @@ class BrandSignupSerializer(serializers.Serializer):
 class RegisterSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=255)
     email = serializers.EmailField()
-    password = serializers.CharField(write_only=True, validators=[validate_password])
+    # Optional only for the passwordless brand signup (verify_via="link").
+    password = serializers.CharField(write_only=True, validators=[validate_password], required=False)
     # Platform admin is never self-registerable; only consumer and brand are
     # allowed here (brand still requires admin approval before it can log in).
     role = serializers.ChoiceField(
@@ -124,6 +125,12 @@ class RegisterSerializer(serializers.Serializer):
                 "You must accept the terms and conditions."
             )
         return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("password") and attrs.get("verify_via") != "link":
+            raise serializers.ValidationError({"password": "This field is required."})
+        return attrs
 
 
 class LoginSerializer(serializers.Serializer):
@@ -296,3 +303,11 @@ class ReferralInviteSerializer(serializers.Serializer):
 
 class DeleteAccountSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
+
+
+class MagicLinkRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class MagicLinkSignInSerializer(serializers.Serializer):
+    token = serializers.CharField(max_length=128)

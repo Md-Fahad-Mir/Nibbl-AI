@@ -144,7 +144,10 @@ def build_world(*, min_units=1, start_at=None, end_at=None, product_name=PRODUCT
 def claim(campaign, email):
     user = User.objects.create_user(email=email, password="x", full_name="C")
     # A dated campaign is only claimable inside its window: claim at its start.
-    at = campaign.start_at + dt.timedelta(minutes=1) if campaign.start_at else timezone.now()
+    # Otherwise claim the day before the default receipt date (a receipt must
+    # be dated on or after its claim).
+    at = campaign.start_at + dt.timedelta(minutes=1) if campaign.start_at else timezone.make_aware(
+        dt.datetime(2026, 8, 28, 9, 0))
     with patch("django.utils.timezone.now", return_value=at):
         reservation = reservation_services.create_reservation(
             user=user, campaign_id=campaign.id
@@ -477,6 +480,48 @@ class NoShopVerificationTests(APITestCase):
 
 
 # ---------------------------------------------------------------------------
+# Master Receipt Outcomes — one resubmission, then final rejection
+# ---------------------------------------------------------------------------
+class ResubmissionTests(APITestCase):
+    def test_first_clear_rejection_allows_one_resubmission_then_final(self):
+        from Apps.reservations.models import Reservation
+
+        _, brand, product, campaign = build_world()
+        user, reservation = claim(campaign, "a@example.com")  # claimed Aug 28
+        self.client.force_authenticate(user)
+        url = reverse("v1:receipts:receipt-list")
+
+        # Purchased before the claim → date rejection, one resubmission left.
+        with ocr_returning(payload(date="2026-08-20")):
+            first = self.client.post(url, {"reservation": str(reservation.id), "image": image()}, format="multipart")
+        self.assertEqual((first.status_code, first.data["code"]), (400, "date_rejected"))
+        reservation.refresh_from_db()
+        self.assertEqual((reservation.status, reservation.receipt_rejections), (Reservation.Status.ACTIVE, 1))
+        detail = self.client.get(reverse("v1:reservations:reservation-detail", args=[reservation.id])).data
+        self.assertEqual(detail["resubmissions_left"], 0)
+        self.assertIn("eligible period", detail["last_receipt_rejection"])
+        self.assertEqual(detail["receipt_requirements"]["products"], [product.name])
+
+        # Second clear failure → final: claim closed, money and slot released.
+        with ocr_returning(payload(date="2026-08-21")):
+            second = self.client.post(url, {"reservation": str(reservation.id), "image": image()}, format="multipart")
+        self.assertEqual((second.status_code, second.data["code"]), (400, "final_rejection"))
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.status, Reservation.Status.REJECTED)
+        self.assertNotEqual(reservation.hold.status, "active")
+
+    def test_resubmission_with_a_valid_receipt_is_rewarded(self):
+        _, brand, product, campaign = build_world()
+        user, reservation = claim(campaign, "a@example.com")
+        with ocr_returning(payload(date="2026-08-20")):
+            with self.assertRaises(services.ReceiptRejected):
+                services.upload_receipt(user=user, reservation_id=reservation.id, image=image())
+        with ocr_returning(payload()):  # Aug 29, after the claim
+            receipt = services.upload_receipt(user=user, reservation_id=reservation.id, image=image())
+        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+
+
+# ---------------------------------------------------------------------------
 # Test 7 — Outside the campaign window
 # ---------------------------------------------------------------------------
 class CampaignWindowTests(APITestCase):
@@ -502,7 +547,8 @@ class CampaignWindowTests(APITestCase):
                 services.upload_receipt(
                     user=user, reservation_id=reservation.id, image=image()
                 )
-        self.assertIn("predates", str(ctx.exception))
+        self.assertIn("outside your eligible period", str(ctx.exception))
+        self.assertEqual(ctx.exception.code, "date_rejected")  # one resubmission left
         self.assertEqual(balance(user), Decimal("0.00"))
 
     def test_receipt_after_the_campaign_is_rejected(self):
@@ -513,7 +559,7 @@ class CampaignWindowTests(APITestCase):
                 services.upload_receipt(
                     user=user, reservation_id=reservation.id, image=image()
                 )
-        self.assertIn("after the campaign", str(ctx.exception))
+        self.assertIn("outside your eligible period", str(ctx.exception))
         self.assertEqual(balance(user), Decimal("0.00"))
 
 
@@ -874,7 +920,8 @@ class MerchantRestrictionTests(APITestCase):
                 services.upload_receipt(
                     user=user, reservation_id=reservation.id, image=image()
                 )
-        self.assertIn("not from a merchant accepted", str(ctx.exception))
+        self.assertIn("eligible retailer", str(ctx.exception))
+        self.assertEqual(ctx.exception.code, "retailer_rejected")
         self.assertFalse(Receipt.objects.exists())
         self.assertEqual(balance(user), Decimal("0.00"))
 
@@ -924,7 +971,8 @@ class MultipleProductsOnOneReceiptTests(APITestCase):
         # One shopper, two claims: a receipt belongs to one account (Master).
         brand, choc_campaign, cola_campaign = self._two_campaigns()
         u1, r1 = claim(choc_campaign, "a@example.com")
-        r2 = reservation_services.create_reservation(user=u1, campaign_id=cola_campaign.id)
+        with patch("django.utils.timezone.now", return_value=r1.created_at):
+            r2 = reservation_services.create_reservation(user=u1, campaign_id=cola_campaign.id)
         u2 = u1
 
         with ocr_returning(payload()):

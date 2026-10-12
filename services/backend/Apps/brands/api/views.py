@@ -125,6 +125,30 @@ class BrandCheckoutView(APIView):
         return _checkout(request, application_id, checkout.start)
 
 
+@extend_schema(tags=["brand-applications"], request=None, responses={200: None})
+class BrandCheckoutConfirmView(APIView):
+    """$0-due checkout: after the card is saved (SetupIntent confirmed in the
+    browser), verify it with Stripe and activate the brand."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, application_id):
+        from Apps.billing.stripe_gateway import StripeNotConfigured
+        from Apps.brands import checkout
+
+        application = BrandApplication.objects.filter(id=application_id, applicant=request.user).first()
+        if application is None:
+            raise NotFound("Application not found.")
+        try:
+            brand = checkout.confirm_setup(application)
+        except checkout.CheckoutError as exc:
+            raise ValidationError({"detail": str(exc)})
+        except StripeNotConfigured:
+            return Response({"detail": "Card payments are not available right now."},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({"activated": True, "brand": str(brand.id)})
+
+
 # ---------------------------------------------------------------------------
 # Brand profile + membership (member-facing)
 # ---------------------------------------------------------------------------

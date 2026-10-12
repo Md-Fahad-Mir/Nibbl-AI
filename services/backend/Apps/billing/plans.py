@@ -169,6 +169,10 @@ def apply_scheduled_change(subscription: Subscription) -> bool:
             campaign.status = Campaign.Status.PAUSED
             campaign.auto_paused = False  # don't auto-resume over the limit
             campaign.save(update_fields=["status", "auto_paused", "updated_at"])
+            from Apps.notifications import events
+
+            events.campaign_paused(campaign, reason=f"your plan changed to {plan.name}, which allows "
+                                                    f"{plan.max_active_campaigns} active campaign(s).")
 
     brand.plan = plan
     brand.save(update_fields=["plan", "updated_at"])

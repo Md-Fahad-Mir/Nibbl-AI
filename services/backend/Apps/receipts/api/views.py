@@ -56,6 +56,8 @@ def _run(func, *args, **kwargs):
         raise Unprocessable(str(exc))
     except services.OCRUnavailable as exc:
         raise ServiceUnavailable(str(exc))
+    except services.ReceiptRejected as exc:
+        raise ValidationError({"detail": str(exc), "code": exc.code})
     except DomainError as exc:
         raise ValidationError({"detail": str(exc)})
 

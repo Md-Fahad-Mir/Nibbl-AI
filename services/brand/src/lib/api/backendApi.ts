@@ -49,6 +49,8 @@ export const backendApi = {
   auth: {
     register: { method: "POST", path: "/auth/register/", auth: false },
     login: { method: "POST", path: "/auth/login/", auth: false },
+    magicLink: { method: "POST", path: "/auth/magic-link/", auth: false },
+    magicLinkSignIn: { method: "POST", path: "/auth/magic-link/sign-in/", auth: false },
     logout: { method: "POST", path: "/auth/logout/", auth: true },
     refresh: { method: "POST", path: "/auth/token/refresh/", auth: false },
     verifyEmail: { method: "POST", path: "/auth/verify-email/", auth: false },
@@ -420,6 +422,11 @@ export const backendApi = {
       path: `/brands/${brandId}/campaigns/${campaignId}/reviews/`,
       auth: true,
     }),
+    launchReadiness: (brandId: string, campaignId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/campaigns/${campaignId}/launch-readiness/`,
+      auth: true,
+    }),
     submitCampaign: (brandId: string, campaignId: string): ApiEndpoint => ({
       method: "POST",
       path: `/brands/${brandId}/campaigns/${campaignId}/submit/`,
@@ -590,6 +597,11 @@ export const backendApi = {
     checkout: (applicationId: string): ApiEndpoint => ({
       method: "POST",
       path: `/brand-applications/${applicationId}/checkout/`,
+      auth: true,
+    }),
+    checkoutConfirm: (applicationId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brand-applications/${applicationId}/checkout/confirm/`,
       auth: true,
     }),
     brandPlan: (brandId: string): ApiEndpoint => ({
@@ -990,13 +1002,18 @@ export const nibblApi = {
   register: (body: {
     full_name: string;
     email: string;
-    password: string;
+    // Omitted for the passwordless brand signup (verify_via "link").
+    password?: string;
     role?: "consumer" | "brand" | "admin";
     accept_terms: boolean;
     referral_code?: string;
     verify_via?: "code" | "link";
     brand_application?: ApiRecord;
   }) => requestEndpoint<ApiRecord>(backendApi.auth.register, body),
+  requestMagicLink: (email: string) =>
+    requestEndpoint<ApiRecord>(backendApi.auth.magicLink, { email }),
+  signInWithMagicLink: (token: string) =>
+    requestEndpoint<{ access: string; refresh: string; user?: ApiRecord }>(backendApi.auth.magicLinkSignIn, { token }),
   verifyEmail: (body: { email: string; code?: string; token?: string }) =>
     requestEndpoint<ApiRecord>(backendApi.auth.verifyEmail, body),
   resendEmailVerification: (email: string, verifyVia: "code" | "link" = "code") =>

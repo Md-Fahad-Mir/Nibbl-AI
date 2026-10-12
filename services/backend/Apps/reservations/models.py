@@ -92,6 +92,10 @@ class Reservation(BaseModel):
     consent_nibbl_marketing = models.BooleanField(default=False)
     consent_brand_marketing = models.BooleanField(default=False)
     redeemed_at = models.DateTimeField(null=True, blank=True)
+    # Master Receipt Outcomes: a clear date/retailer rejection allows ONE
+    # resubmission before the original deadline (which never restarts).
+    receipt_rejections = models.PositiveSmallIntegerField(default=0)
+    last_receipt_rejection = models.CharField(max_length=255, blank=True)
     expired_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
 

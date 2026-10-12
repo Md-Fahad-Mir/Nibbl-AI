@@ -23,15 +23,25 @@ from Apps.notifications.models import BrandNotificationPreference, NotificationT
 logger = logging.getLogger(__name__)
 
 # The brand notifications, in display order. Defaults: email on, SMS off.
+# Master Settings §3 list first, then two operational alerts the Master
+# requires elsewhere (campaign approval decisions; the 7-day receipt deadline).
 BRAND_NOTIFICATIONS = [
+    (NotificationType.WALLET_LOW, "Wallet below 25%",
+     "Get notified when your wallet balance is below 25% of your 7-day requirement."),
+    (NotificationType.AUTO_REFILL_FAILED, "Auto-refill failed",
+     "Get notified if an automatic wallet refill fails."),
+    (NotificationType.CAMPAIGN_PAUSED, "Campaign paused",
+     "Get notified when a campaign is paused."),
+    (NotificationType.CAMPAIGN_EXHAUSTED, "Campaign exhausted early",
+     "Get notified when a campaign reaches its redemption limit early."),
+    (NotificationType.LOW_RATING_REVIEW, "New negative review",
+     "Get notified when a shopper leaves a 1–2 star review."),
+    (NotificationType.WEEKLY_SUMMARY, "Weekly performance summary",
+     "Receive a weekly summary of campaign performance."),
     (NotificationType.CAMPAIGN_REVIEW, "Campaign approval updates",
      "Nibbl approved, rejected or asked for changes to a campaign."),
     (NotificationType.RECEIPT_REVIEW_NEEDED, "Receipts waiting for your review",
      "A receipt needs your decision before its 7-day deadline."),
-    (NotificationType.LOW_RATING_REVIEW, "Low-rating reviews to respond to",
-     "A 1–3★ review is held for 7 days so you can respond or flag it."),
-    (NotificationType.AUTO_REFILL_FAILED, "Wallet refill failed",
-     "Your automatic refill payment didn't go through."),
 ]
 BRAND_TYPES = {t for t, _l, _d in BRAND_NOTIFICATIONS}
 

@@ -43,7 +43,7 @@ class RegisterView(APIView):
             services.register_user,
             full_name=data["full_name"],
             email=data["email"],
-            password=data["password"],
+            password=data.get("password"),
             role=data["role"],
             referral_code=data.get("referral_code") or None,
             verify_via=data.get("verify_via", "code"),
@@ -98,6 +98,49 @@ class LoginView(APIView):
         )
 
 
+def _client(request) -> dict:
+    return {
+        "ip": request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip() or request.META.get("REMOTE_ADDR"),
+        "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+    }
+
+
+@extend_schema(tags=["auth"])
+class MagicLinkRequestView(APIView):
+    """Brand app passwordless sign-in: email a 15-minute one-time link.
+    Always 202 (never reveals whether the email exists)."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    @extend_schema(request=s.MagicLinkRequestSerializer, responses={202: None})
+    def post(self, request):
+        serializer = s.MagicLinkRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        services.request_magic_link(email=serializer.validated_data["email"])
+        return Response({"detail": "If that email has a Nibbl account, a sign-in link is on its way."},
+                        status=status.HTTP_202_ACCEPTED)
+
+
+@extend_schema(tags=["auth"])
+class MagicLinkSignInView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    @extend_schema(request=s.MagicLinkSignInSerializer, responses={200: s.TokenPairSerializer})
+    def post(self, request):
+        serializer = s.MagicLinkSignInSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = _run(services.sign_in_with_magic_link, token=serializer.validated_data["token"],
+                      client=_client(request))
+        risk.record(request, result["user"], "login")
+        return Response({**result["tokens"], "user": s.UserSerializer(result["user"], context={"request": request}).data})
+
+
 @extend_schema(tags=["auth"])
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
@@ -126,7 +169,11 @@ class VerifyEmailView(APIView):
         serializer.is_valid(raise_exception=True)
         user = _run(services.verify_email, **serializer.validated_data)
         risk.record(request, user, "signup")
-        return Response(s.UserSerializer(user).data)
+        data = s.UserSerializer(user).data
+        if serializer.validated_data.get("token"):
+            # Master: the secure link signs the brand straight in (additive).
+            data = {**data, **services.issue_tokens(user, client=_client(request))}
+        return Response(data)
 
 
 @extend_schema(tags=["auth"])
@@ -379,8 +426,9 @@ class SessionListView(APIView):
         current = _current_sid(request)
         sessions = services.active_sessions(request.user)
         return Response({
-            "passwordless_enabled": False,
-            "sign_in_method": "Email and password",
+            # Magic-link sign-in is available to every account (Master: Active).
+            "passwordless_enabled": True,
+            "sign_in_method": "Passwordless sign-in (secure email link)",
             "last_sign_in": request.user.last_login,
             "sessions": [
                 {

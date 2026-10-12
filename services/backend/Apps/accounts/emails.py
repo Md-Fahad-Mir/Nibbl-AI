@@ -44,7 +44,7 @@ def send_email_link(*, to_email: str, url: str) -> None:
     body = (
         "Confirm your work email to finish setting up your brand account:\n\n"
         f"{url}\n\n"
-        "This link works once and expires in 24 hours. "
+        "This link works once and expires in 15 minutes. "
         "If you didn't sign up, you can ignore this email."
     )
     try:
@@ -93,3 +93,18 @@ def send_referral_invite(
             exc_info=True,
         )
 
+
+def send_magic_link(*, to_email: str, url: str) -> None:
+    """Passwordless brand sign-in link (works once, 15 minutes)."""
+    try:
+        send_mail(
+            "Nibbl: your secure sign-in link",
+            "Use this secure link to sign in to your Nibbl brand workspace:\n\n"
+            f"{url}\n\nThe link works once and expires in 15 minutes. "
+            "If you didn't ask to sign in, you can ignore this email.",
+            getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"),
+            [to_email],
+            fail_silently=False,
+        )
+    except Exception as exc:
+        logger.error("Failed to send sign-in link to %s: %s", to_email, exc, exc_info=True)

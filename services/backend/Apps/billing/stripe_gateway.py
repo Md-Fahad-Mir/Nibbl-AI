@@ -52,17 +52,46 @@ def create_payment_intent(*, brand, amount_cents: int, purpose: str):
     )
 
 
+def ensure_checkout_customer(application) -> str:
+    """Stripe customer for a brand application (the brand doesn't exist until
+    checkout completes); linked to the brand on activation."""
+    if application.checkout_customer_id:
+        return application.checkout_customer_id
+    customer = _client().Customer.create(
+        name=application.brand_name, email=application.contact_email or None,
+        metadata={"application_id": str(application.id)},
+    )
+    application.checkout_customer_id = customer.id
+    application.save(update_fields=["checkout_customer_id", "updated_at"])
+    return customer.id
+
+
 def create_checkout_intent(*, application, amount_cents: int, purpose: str):
-    """PaymentIntent for a brand's activation checkout. The brand (and its
-    Stripe customer) doesn't exist until payment succeeds, so it's tagged with
-    the application instead."""
+    """PaymentIntent for a brand's activation checkout, tagged with the
+    application. The card is saved for renewals and future Nibbl charges."""
     return _client().PaymentIntent.create(
         amount=amount_cents,
         currency="usd",
+        customer=ensure_checkout_customer(application),
+        setup_future_usage="off_session",
         receipt_email=application.contact_email,
         metadata={"application_id": str(application.id), "purpose": purpose},
         automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
     )
+
+
+def create_checkout_setup_intent(*, application, purpose: str):
+    """Nothing due today (credits cover it): still collect and save a card."""
+    return _client().SetupIntent.create(
+        customer=ensure_checkout_customer(application),
+        usage="off_session",
+        metadata={"application_id": str(application.id), "purpose": purpose},
+        automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
+    )
+
+
+def retrieve_setup_intent(setup_intent_id: str):
+    return _client().SetupIntent.retrieve(setup_intent_id)
 
 
 def create_setup_intent(*, brand):

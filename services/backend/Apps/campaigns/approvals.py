@@ -41,6 +41,11 @@ def submit_for_review(campaign: Campaign, *, user=None) -> CampaignReview:
         raise CampaignError("This campaign can no longer be submitted.")
     # Every required field must be complete before submission.
     services.validate_ready(campaign)
+    # Master: the wallet must be funded (7-day requirement) with
+    # auto-replenishment on before the campaign can launch.
+    from Apps.campaigns.launch import require_ready
+
+    require_ready(campaign)
 
     # Each (re)submission is its own entry, so the review history keeps every
     # Nibbl decision and comment.

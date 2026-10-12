@@ -17,7 +17,19 @@ class NotificationType(models.TextChoices):
     AUTO_REFILL_FAILED = "auto_refill_failed", "Automatic refill failed"
     CAMPAIGN_REVIEW = "campaign_review", "Campaign review update"
     RECEIPT_REVIEW_NEEDED = "receipt_review_needed", "Receipt waiting for your review"
-    LOW_RATING_REVIEW = "low_rating_review", "Low-rating review to respond to"
+    LOW_RATING_REVIEW = "low_rating_review", "New negative review"
+    # Brand (Master Settings §3).
+    WALLET_LOW = "wallet_low", "Wallet below 25%"
+    CAMPAIGN_PAUSED = "campaign_paused", "Campaign paused"
+    CAMPAIGN_EXHAUSTED = "campaign_exhausted", "Campaign exhausted early"
+    WEEKLY_SUMMARY = "weekly_summary", "Weekly performance summary"
+    # Shopper claim / receipt events (Master Notifications and Reminders) —
+    # transactional, so not gated by the marketing-style preferences.
+    CLAIM_RESERVED = "claim_reserved", "Offer reserved"
+    RECEIPT_SUBMITTED = "receipt_submitted", "Receipt submitted"
+    RECEIPT_APPROVED = "receipt_approved", "Receipt approved"
+    RECEIPT_REJECTED = "receipt_rejected", "Receipt not approved"
+    CLAIM_EXPIRED = "claim_expired", "Claim expired"
 
 
 # Maps a notification type to the preference flag that gates it.

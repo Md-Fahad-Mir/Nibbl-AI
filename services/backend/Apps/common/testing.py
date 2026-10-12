@@ -14,10 +14,11 @@ import datetime as dt
 
 from django.utils import timezone
 
-# A fixed instant inside any campaign window used by the suite.
-RECEIPT_PURCHASED_AT = timezone.make_aware(
-    dt.datetime(2026, 1, 15, 14, 30), timezone.get_current_timezone()
-)
+# One instant for the whole test run, inside any campaign window used by the
+# suite. It's "now" (to the minute) because a receipt must be dated on or after
+# the claim it's submitted for (Master Receipt Validation), and tests create
+# their claims at run time.
+RECEIPT_PURCHASED_AT = timezone.now().replace(second=0, microsecond=0)
 
 # Identity fields for a single, consistent physical receipt. Two calls sharing
 # this fixture describe the *same* receipt and so are duplicates by design —

@@ -214,6 +214,22 @@ def handle_stripe_event(event) -> str:
 
             return activate_from_intent(intent)
         return _credit_wallet_from_payment(intent)
+    if event["type"] == "setup_intent.succeeded":
+        # $0-due checkout card saved (the browser also confirms it directly).
+        setup = event["data"]["object"]
+        data = setup.to_dict() if hasattr(setup, "to_dict") else setup
+        metadata = data.get("metadata") or {}
+        if metadata.get("purpose") == "brand_activation":
+            from Apps.brands import checkout
+            from Apps.brands.models import BrandApplication
+
+            application = BrandApplication.objects.filter(id=metadata.get("application_id")).first()
+            if application is not None and application.status != BrandApplication.Status.REJECTED:
+                try:
+                    checkout.confirm_setup(application)
+                    return "activated"
+                except checkout.CheckoutError:
+                    return "ignored"
     return "ignored"
 
 

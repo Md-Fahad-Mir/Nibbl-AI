@@ -88,6 +88,9 @@ LOCAL_APPS = [
 REFERRAL_BONUS_AMOUNT = env("REFERRAL_BONUS_AMOUNT", default="5.00")
 # Master Refer a Friend: the new shopper must finish every step within this window.
 REFERRAL_WINDOW_DAYS = env.int("REFERRAL_WINDOW_DAYS", default=90)
+# Master: a campaign can't be submitted until the wallet covers its 7-day
+# requirement and auto-replenishment is on (off in tests unless enabled).
+LAUNCH_FUNDING_REQUIRED = env.bool("LAUNCH_FUNDING_REQUIRED", default=True)
 # Estimated PayPal/Venmo fee per payout, for the admin batch summary.
 PAYOUT_FEE_ESTIMATE = env("PAYOUT_FEE_ESTIMATE", default="0.25")
 

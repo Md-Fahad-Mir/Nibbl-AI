@@ -94,9 +94,15 @@ def start(application: BrandApplication, *, plan_slug: str | None = None, promo_
     application.checkout_promo_code = summary["promo_code"]
     due = Decimal(summary["due_today"])
     if due <= ZERO:
-        application.save(update_fields=["requested_plan", "checkout_promo_code", "updated_at"])
-        brand = activate(application, amount_paid=ZERO)
-        return {**summary, "activated": True, "brand": str(brand.id), "client_secret": None}
+        # Master: a payment card is required even when credits cover today's
+        # charge — save it with a SetupIntent, then /checkout/confirm/.
+        setup = stripe_gateway.create_checkout_setup_intent(application=application, purpose=ACTIVATION)
+        application.checkout_setup_intent_id = setup.id
+        application.save(update_fields=[
+            "requested_plan", "checkout_promo_code", "checkout_setup_intent_id", "updated_at",
+        ])
+        return {**summary, "activated": False, "brand": None, "client_secret": setup.client_secret,
+                "intent_type": "setup"}
 
     intent = stripe_gateway.create_checkout_intent(
         application=application, amount_cents=int(due * 100), purpose=ACTIVATION,
@@ -105,11 +111,26 @@ def start(application: BrandApplication, *, plan_slug: str | None = None, promo_
     application.save(update_fields=[
         "requested_plan", "checkout_promo_code", "checkout_payment_intent_id", "updated_at",
     ])
-    return {**summary, "activated": False, "brand": None, "client_secret": intent.client_secret}
+    return {**summary, "activated": False, "brand": None, "client_secret": intent.client_secret,
+            "intent_type": "payment"}
+
+
+def confirm_setup(application: BrandApplication) -> Brand:
+    """$0-due checkout: verify the saved card with Stripe, then activate."""
+    if application.status == BrandApplication.Status.APPROVED and application.brand_id:
+        return application.brand
+    _require_open(application)
+    if not application.checkout_setup_intent_id:
+        raise CheckoutError("Start checkout first.")
+    setup = stripe_gateway.retrieve_setup_intent(application.checkout_setup_intent_id)
+    data = setup.to_dict() if hasattr(setup, "to_dict") else setup
+    if data.get("status") != "succeeded" or (data.get("metadata") or {}).get("application_id") != str(application.id):
+        raise CheckoutError("Add a payment card to activate your plan.")
+    return activate(application, amount_paid=ZERO, payment_method=data.get("payment_method") or "")
 
 
 @transaction.atomic
-def activate(application: BrandApplication, *, amount_paid, payment_ref: str = "") -> Brand:
+def activate(application: BrandApplication, *, amount_paid, payment_ref: str = "", payment_method: str = "") -> Brand:
     """Create and activate the brand, fund its wallet with the payment, apply
     the promo code and take the first plan charge. Idempotent."""
     application = BrandApplication.objects.select_for_update().get(pk=application.pk)
@@ -122,6 +143,7 @@ def activate(application: BrandApplication, *, amount_paid, payment_ref: str = "
     _require_open(application)
 
     brand = services.approve_application(application=application, reviewer=None)
+    _save_card(brand, application, payment_method)
     _record_payment(brand, amount_paid, payment_ref)
     if application.checkout_promo_code:
         try:
@@ -134,6 +156,20 @@ def activate(application: BrandApplication, *, amount_paid, payment_ref: str = "
     subscription = billing.ensure_subscription(brand)
     billing._charge_one(subscription, timezone.now())
     return brand
+
+
+def _save_card(brand, application, payment_method: str) -> None:
+    """Link the checkout's Stripe customer to the brand and keep its card as
+    the saved payment method (renewals, auto-replenishment)."""
+    from Apps.billing.models import AutoRefill, StripeCustomer
+
+    if application.checkout_customer_id and not StripeCustomer.objects.filter(brand=brand).exists():
+        StripeCustomer.objects.create(brand=brand, stripe_customer_id=application.checkout_customer_id)
+    if payment_method:
+        refill, _ = AutoRefill.objects.get_or_create(brand=brand)
+        if not refill.stripe_payment_method_id:
+            refill.stripe_payment_method_id = payment_method
+            refill.save(update_fields=["stripe_payment_method_id", "updated_at"])
 
 
 def _record_payment(brand, amount_paid, payment_ref) -> None:
@@ -161,5 +197,6 @@ def activate_from_intent(intent) -> str:
         logger.error("Paid checkout for rejected application %s (intent %s)", application.id, intent["id"])
         return "ignored"
     amount = to_money(Decimal(intent["amount_received"]) / 100)
-    activate(application, amount_paid=amount, payment_ref=intent["id"])
+    activate(application, amount_paid=amount, payment_ref=intent["id"],
+             payment_method=str(intent.get("payment_method") or ""))
     return "activated"

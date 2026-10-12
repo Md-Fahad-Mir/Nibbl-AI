@@ -8,8 +8,18 @@ export interface NotificationItem {
   iconColor: string;
 }
 
+/** Master Receipt Matching row: receipt text, optional retailer + item code. */
+export interface AliasRow {
+  id?: string;
+  alias_text: string;
+  retailer: string;
+  item_code: string;
+}
+
 export interface Product {
   id: string;
+  /** Permanent Product ID (PRD-001), assigned on save. */
+  code?: string;
   name: string;
   description?: string;
   brand?: string;
@@ -18,10 +28,14 @@ export interface Product {
   flavor: string;
   format: string;
   size: string;
+  unit?: string;
+  packCount?: number;
+  /** "12 oz" / "6 × 12 oz" */
+  sizeLabel?: string;
   sku?: string;
   aliases: string[];
   aliasCount?: number;
-  aliasRecords?: { id: string; alias_text: string }[];
+  aliasRecords?: AliasRow[];
   activeCampaigns: number;
   avgRating?: number | null;
   reviewCount?: number;

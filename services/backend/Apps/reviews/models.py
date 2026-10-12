@@ -23,6 +23,9 @@ class ReviewCampaign(BaseModel):
 
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
+        PENDING_REVIEW = "pending_review", "Pending Nibbl Review"
+        CHANGES_REQUESTED = "changes_requested", "Changes Requested"
+        REJECTED = "rejected", "Rejected"
         ACTIVE = "active", "Active"
         PAUSED = "paused", "Paused"
         ENDED = "ended", "Ended"
@@ -36,7 +39,11 @@ class ReviewCampaign(BaseModel):
     products = models.ManyToManyField("products.Product", related_name="review_campaigns", blank=True)
     # Extra context for the AI questions (optional; product data is used too).
     product_context = models.TextField(blank=True)
-    status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    # Master: "Campaign will be published after Nibbl review."
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    review_comment = models.TextField(blank=True)
     start_at = models.DateTimeField(null=True, blank=True)
     end_at = models.DateTimeField(null=True, blank=True)
     # Desired number of review opportunities per day.
@@ -108,6 +115,10 @@ class ReviewSession(BaseModel):
     brand_question = models.CharField(max_length=500, blank=True)
     # Chat transcript: [{"role": "assistant"|"user", "content": "..."}].
     messages = models.JSONField(default=list, blank=True)
+    # Master Shopper Review Opportunity: receipt wording that fits several
+    # products (one per flavor / size) lists them here for the shopper to pick.
+    candidate_product_ids = models.JSONField(default=list, blank=True)
+    product_confirmed_at = models.DateTimeField(null=True, blank=True)
     ai_review_title = models.CharField(max_length=255, blank=True)
     ai_review_content = models.TextField(blank=True)
 
@@ -171,6 +182,7 @@ class Review(BaseModel):
     )
     # Captured in the conversation (Master: recommendation / repurchase intent).
     would_recommend = models.BooleanField(null=True, blank=True)
+    would_buy_again = models.BooleanField(null=True, blank=True)
     # Brand's public response (shown with the review).
     brand_response = models.TextField(blank=True)
     brand_response_at = models.DateTimeField(null=True, blank=True)

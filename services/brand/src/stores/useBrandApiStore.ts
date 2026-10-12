@@ -13,7 +13,7 @@ import {
   nibblApi,
   tokenStorage,
 } from "@/lib/api/backendApi";
-import { NotificationItem, Product } from "@/features/onboarding/utils/mockData";
+import { AliasRow, NotificationItem, Product } from "@/features/onboarding/utils/mockData";
 
 type LoadState = "idle" | "loading" | "success" | "error";
 
@@ -91,6 +91,13 @@ const submitSavedApplicationDraft = async () => {
   return true;
 };
 
+const toAliasRow = (alias: ApiRecord): AliasRow => ({
+  id: String(alias.id ?? alias.alias_text),
+  alias_text: String(alias.alias_text ?? ""),
+  retailer: String(alias.retailer ?? ""),
+  item_code: String(alias.item_code ?? ""),
+});
+
 const mapProduct = (item: ApiRecord, index: number, fallbackBrandName = ""): Product => ({
   id: String(item.id ?? index),
   name: String(item.name ?? "Untitled product"),
@@ -106,7 +113,7 @@ const mapProduct = (item: ApiRecord, index: number, fallbackBrandName = ""): Pro
         : undefined)
   ),
   imageSrc: backendAssetUrl(item.image_url ?? item.image, "/Auth/rebateImage.svg"),
-  category: String(item.category ?? "UNCATEGORIZED").toUpperCase(),
+  category: String(item.category ?? ""),
   flavor: String(
     item.flavor ??
       (item.attributes &&
@@ -114,9 +121,13 @@ const mapProduct = (item: ApiRecord, index: number, fallbackBrandName = ""): Pro
       "flavor" in item.attributes
         ? (item.attributes as Record<string, unknown>).flavor
         : "")
-  ).toUpperCase(),
+  ),
   format: String(item.format ?? item.sku ?? "").toUpperCase(),
   size: String(item.size_volume ?? item.size ?? ""),
+  unit: String(item.unit ?? ""),
+  packCount: Number(item.pack_count ?? 1),
+  sizeLabel: String(item.size_label ?? ""),
+  code: String(item.code ?? ""),
   sku: String(item.sku ?? ""),
   aliases: Array.isArray(item.aliases)
     ? item.aliases.map((alias) =>
@@ -129,10 +140,7 @@ const mapProduct = (item: ApiRecord, index: number, fallbackBrandName = ""): Pro
   aliasRecords: Array.isArray(item.aliases)
     ? item.aliases
         .filter((alias): alias is ApiRecord => Boolean(alias) && typeof alias === "object")
-        .map((alias) => ({
-          id: String(alias.id ?? alias.alias_text),
-          alias_text: String(alias.alias_text ?? ""),
-        }))
+        .map(toAliasRow)
     : [],
   activeCampaigns: Number(item.active_campaigns ?? item.campaign_count ?? 0),
   avgRating: item.avg_rating == null ? null : Number(item.avg_rating),
@@ -320,7 +328,8 @@ interface BrandApiState {
   loadProductAliases: (productId: string) => Promise<void>;
   createProduct: (body: ApiRecord | FormData) => Promise<Product>;
   updateProduct: (productId: string, body: ApiRecord | FormData) => Promise<void>;
-  updateProductAliases: (productId: string, aliases: string[]) => Promise<void>;
+  /** Sync the Receipt Matching rows (text + optional retailer / item code). */
+  updateProductAliases: (productId: string, aliases: AliasRow[]) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
   /** Create (campaignId null) or edit a deal-model rebate campaign; optionally
    *  upload its image and submit it for Nibbl review. Returns the campaign. */
@@ -338,7 +347,9 @@ interface BrandApiState {
   addRetailer: (name: string) => Promise<RetailerOption>;
   /** Create (id null) or update a review campaign; returns it. */
   saveReviewCampaign: (campaignId: string | null, body: ReviewCampaignInput) => Promise<ApiRecord>;
-  reviewCampaignAction: (campaignId: string, action: "activate" | "pause" | "archive") => Promise<void>;
+  reviewCampaignAction: (campaignId: string, action: "submit" | "activate" | "pause" | "archive") => Promise<void>;
+  /** Test Review Chat: questions (no answers) or the AI draft (answers). */
+  testReviewChat: (campaignId: string, body: ApiRecord) => Promise<ApiRecord>;
   addReviewPrompt: (campaignId: string, text: string) => Promise<void>;
   deleteReviewPrompt: (campaignId: string, promptId: string) => Promise<void>;
   suggestReviewPrompts: (campaignId: string, count?: number) => Promise<string[]>;
@@ -695,10 +706,7 @@ export const useBrandApiStore = create<BrandApiState>()(
         const response = await apiClient.request<unknown>(
           backendApi.brand.productAliases(brandId, productId)
         );
-        const aliasRecords = listResults(response).map((alias) => ({
-          id: String(alias.id ?? alias.alias_text),
-          alias_text: String(alias.alias_text ?? ""),
-        }));
+        const aliasRecords = listResults(response).map(toAliasRow);
         set({
           products: get().products.map((product) =>
             product.id === productId
@@ -706,6 +714,7 @@ export const useBrandApiStore = create<BrandApiState>()(
                   ...product,
                   aliases: aliasRecords.map((alias) => alias.alias_text),
                   aliasRecords,
+                  aliasCount: aliasRecords.length,
                 }
               : product
           ),
@@ -732,32 +741,21 @@ export const useBrandApiStore = create<BrandApiState>()(
         if (!brandId) throw new Error("Select a brand before editing aliases.");
         const product = get().products.find((item) => item.id === productId);
         const existing = product?.aliasRecords || [];
-        const normalized = new Set(aliases.map((alias) => alias.trim()).filter(Boolean));
-        const existingByText = new Map(
-          existing.map((alias) => [alias.alias_text.trim().toLowerCase(), alias])
-        );
-
-        await Promise.all(
-          aliases
-            .map((alias) => alias.trim())
-            .filter((alias) => alias && !existingByText.has(alias.toLowerCase()))
-            .map((alias) =>
-              apiClient.request(backendApi.brand.createProductAlias(brandId, productId), {
-                body: { alias_text: alias },
-              })
-            )
-        );
-
-        await Promise.all(
-          existing
-            .filter((alias) => !normalized.has(alias.alias_text))
-            .map((alias) =>
-              apiClient.request(
-                backendApi.brand.deleteProductAlias(brandId, productId, alias.id)
-              )
-            )
-        );
-
+        const key = (a: AliasRow) =>
+          [a.alias_text, a.retailer, a.item_code].map((v) => (v || "").trim().toLowerCase()).join("|");
+        const wanted = aliases.filter((a) => a.alias_text.trim());
+        const wantedKeys = new Set(wanted.map(key));
+        const existingKeys = new Set(existing.map(key));
+        // Remove first: the receipt text is unique per brand, so an edited
+        // row is a delete + create.
+        for (const alias of existing.filter((a) => !wantedKeys.has(key(a)))) {
+          await apiClient.request(backendApi.brand.deleteProductAlias(brandId, productId, String(alias.id)));
+        }
+        for (const alias of wanted.filter((a) => !existingKeys.has(key(a)))) {
+          await apiClient.request(backendApi.brand.createProductAlias(brandId, productId), {
+            body: { alias_text: alias.alias_text.trim(), retailer: alias.retailer.trim(), item_code: alias.item_code.trim() },
+          });
+        }
         await get().loadProductAliases(productId);
       },
       deleteProduct: async (productId) => {
@@ -858,13 +856,20 @@ export const useBrandApiStore = create<BrandApiState>()(
         const brandId = get().selectedBrandId;
         if (!brandId) throw new Error("Select a brand first.");
         const endpoint =
-          action === "activate"
+          action === "submit"
+            ? backendApi.brand.submitReviewCampaign(brandId, campaignId)
+            : action === "activate"
             ? backendApi.brand.activateReviewCampaign(brandId, campaignId)
             : action === "pause"
               ? backendApi.brand.pauseReviewCampaign(brandId, campaignId)
               : backendApi.brand.deleteReviewCampaign(brandId, campaignId);
         await apiClient.request(endpoint);
         await get().refreshReviewCampaigns();
+      },
+      testReviewChat: async (campaignId, body) => {
+        const brandId = get().selectedBrandId;
+        if (!brandId) throw new Error("Select a brand first.");
+        return apiClient.request<ApiRecord>(backendApi.brand.testReviewChat(brandId, campaignId), { body });
       },
       addReviewPrompt: async (campaignId, text) => {
         const brandId = get().selectedBrandId;

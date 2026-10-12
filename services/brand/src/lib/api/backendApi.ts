@@ -292,6 +292,16 @@ export const backendApi = {
       path: `/brands/${brandId}/members/${membershipId}/`,
       auth: true,
     }),
+    productCategories: (brandId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/product-categories/`,
+      auth: true,
+    }),
+    requestCategory: (brandId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/category-requests/`,
+      auth: true,
+    }),
     customerProfile: (brandId: string, customerId: string): ApiEndpoint => ({
       method: "GET",
       path: `/brands/${brandId}/customers/${customerId}/profile/`,
@@ -627,6 +637,16 @@ export const backendApi = {
     cancelPlanChange: (brandId: string): ApiEndpoint => ({
       method: "DELETE",
       path: `/brands/${brandId}/billing/plan/change/`,
+      auth: true,
+    }),
+    submitReviewCampaign: (brandId: string, campaignId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/review-campaigns/${campaignId}/submit/`,
+      auth: true,
+    }),
+    testReviewChat: (brandId: string, campaignId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/review-campaigns/${campaignId}/test-chat/`,
       auth: true,
     }),
     reviewCampaignImage: (brandId: string, campaignId: string): ApiEndpoint => ({

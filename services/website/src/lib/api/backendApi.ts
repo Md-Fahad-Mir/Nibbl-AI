@@ -152,6 +152,16 @@ export const backendApi = {
       path: `/reviews/sessions/${sessionId}/`,
       auth: true,
     }),
+    reviewOverview: (sessionId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/reviews/sessions/${sessionId}/overview/`,
+      auth: true,
+    }),
+    reviewStep: (sessionId: string, step: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/reviews/sessions/${sessionId}/${step}/`,
+      auth: true,
+    }),
     answerReview: (sessionId: string): ApiEndpoint => ({
       method: "POST",
       path: `/reviews/sessions/${sessionId}/answer/`,
@@ -893,13 +903,18 @@ export const nibblApi = {
     requestEndpoint<ApiRecord[]>(backendApi.consumer.reviewOpportunities),
   reviewSession: (sessionId: string) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.reviewSession(sessionId)),
+  reviewOverview: (sessionId: string) =>
+    requestEndpoint<ApiRecord>(backendApi.consumer.reviewOverview(sessionId)),
+  reviewStep: (sessionId: string, step: "confirm" | "decline" | "consent", body: ApiRecord = {}) =>
+    requestEndpoint<ApiRecord>(backendApi.consumer.reviewStep(sessionId, step), body),
   answerReview: (sessionId: string, text: string) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.answerReview(sessionId), { text }),
   regenerateReview: (sessionId: string) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.regenerateReview(sessionId)),
   submitReview: (
     sessionId: string,
-    body: { rating: number; title?: string; content?: string; would_recommend?: boolean | null }
+    body: { rating: number; title?: string; content?: string; would_recommend?: boolean | null;
+      would_buy_again?: boolean | null }
   ) => requestEndpoint<ApiRecord>(backendApi.consumer.submitReview(sessionId), body),
   productReviews: (productId: string, sort = "newest") =>
     requestEndpoint<PaginatedResponse<ApiRecord>>(

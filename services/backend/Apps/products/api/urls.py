@@ -31,6 +31,16 @@ urlpatterns = [
         name="alias-delete",
     ),
     path(
+        "brands/<uuid:brand_id>/product-categories/",
+        views.ProductCategoryListView.as_view(),
+        name="product-categories",
+    ),
+    path(
+        "brands/<uuid:brand_id>/category-requests/",
+        views.CategoryRequestCreateView.as_view(),
+        name="category-request",
+    ),
+    path(
         "brands/<uuid:brand_id>/tags/",
         views.TagListView.as_view(),
         name="tag-list",

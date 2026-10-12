@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { AdminUsersPanel } from "./AdminUsersPanel";
+import { ProductCategoriesPanel } from "./ProductCategoriesPanel";
 
 interface PlatformSettingsViewProps {
   onBack: () => void;
@@ -225,6 +226,7 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
         </div>
       </div>
 
+      <ProductCategoriesPanel />
       <AdminUsersPanel />
     </div>
   );

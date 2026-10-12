@@ -20,7 +20,7 @@ const menuItems = [
   { name: "Reviews", icon: "/sidebarIcon/Reviews.svg" },
   { name: "Redemptions", icon: "/sidebarIcon/redemption.svg" },
   { name: "Analytics", icon: "/sidebarIcon/Analytics.svg" },
-  { name: "Customers", icon: "/sidebarIcon/customers.svg" },
+  { name: "Customers", icon: "/sidebarIcon/Customers.svg" },
   { name: "Wallet", icon: "/sidebarIcon/wallets.svg" },
   { name: "Plans", icon: "/sidebarIcon/Rebate.svg" },
   { name: "Settings", icon: "/sidebarIcon/settings.svg" },

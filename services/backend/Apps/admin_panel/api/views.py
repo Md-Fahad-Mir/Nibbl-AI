@@ -726,3 +726,112 @@ class AdminStaffDetailView(APIView):
 
         _run(master.remove_admin_user, admin=request.user, user=self._staff(user_id))
         return Response({"results": master.admin_users()})
+
+
+# ---------------------------------------------------------------------------
+# Product categories (Master Product Library #6: admin-managed)
+# ---------------------------------------------------------------------------
+def _category_payload():
+    from django.db.models import Count
+
+    from Apps.products.models import CategoryRequest, Product, ProductCategory
+
+    counts = dict(Product.objects.filter(is_active=True).values_list("category").annotate(n=Count("id")))
+    return {
+        "categories": [{"id": str(c.id), "name": c.name, "is_active": c.is_active, "products": counts.get(c.name, 0)}
+                       for c in ProductCategory.objects.all()],
+        "requests": [{"id": str(r.id), "brand": r.brand.name, "name": r.name, "note": r.note, "status": r.status,
+                      "decision_note": r.decision_note, "created_at": r.created_at}
+                     for r in CategoryRequest.objects.select_related("brand").order_by("status", "-created_at")[:100]],
+    }
+
+
+@extend_schema(tags=["admin"])
+class AdminProductCategoryView(APIView):
+    """GET categories + brand requests; POST {name} adds a category."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        return Response(_category_payload())
+
+    @extend_schema(request=None, responses={201: None})
+    def post(self, request):
+        from Apps.common.models import AuditLog
+        from Apps.products.models import ProductCategory
+
+        name = str(request.data.get("name", "")).strip()[:100]
+        if not name:
+            raise ValidationError({"detail": "Enter a category name."})
+        category = ProductCategory.objects.filter(name__iexact=name).first()
+        if category is None:
+            category = ProductCategory.objects.create(name=name)
+        elif not category.is_active:
+            category.is_active = True
+            category.save(update_fields=["is_active", "updated_at"])
+        services._audit(admin=request.user, action=AuditLog.Action.CREATE, target_type="product_category",
+                        target_id=category.id, metadata={"event": "category_added", "name": category.name})
+        return Response(_category_payload(), status=201)
+
+
+@extend_schema(tags=["admin"])
+class AdminProductCategoryDetailView(APIView):
+    """PATCH {is_active}: hide or restore a category (products keep it)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(request=None, responses={200: None})
+    def patch(self, request, category_id):
+        from Apps.common.models import AuditLog
+        from Apps.products.models import ProductCategory
+
+        category = ProductCategory.objects.filter(id=category_id).first()
+        if category is None:
+            raise NotFound("Category not found.")
+        category.is_active = bool(request.data.get("is_active"))
+        category.save(update_fields=["is_active", "updated_at"])
+        services._audit(admin=request.user, action=AuditLog.Action.UPDATE, target_type="product_category",
+                        target_id=category.id, metadata={"event": "category_updated", "name": category.name,
+                                                         "is_active": category.is_active})
+        return Response(_category_payload())
+
+
+@extend_schema(tags=["admin"])
+class AdminCategoryRequestDecisionView(APIView):
+    """POST approve | reject {note}. Approving adds the category."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request, request_id, action):
+        from django.utils import timezone
+
+        from Apps.common.models import AuditLog
+        from Apps.products.models import CategoryRequest, ProductCategory
+
+        req = CategoryRequest.objects.filter(id=request_id).first()
+        if req is None:
+            raise NotFound("Request not found.")
+        if action not in ("approve", "reject"):
+            raise NotFound()
+        if req.status != CategoryRequest.Status.PENDING:
+            raise ValidationError({"detail": "This request was already decided."})
+        note = str(request.data.get("note", "")).strip()[:255]
+        if action == "reject" and not note:
+            raise ValidationError({"detail": "Tell the brand why (required)."})
+        if action == "approve":
+            category = ProductCategory.objects.filter(name__iexact=req.name).first()
+            if category is None:
+                ProductCategory.objects.create(name=req.name)
+            elif not category.is_active:
+                category.is_active = True
+                category.save(update_fields=["is_active", "updated_at"])
+        req.status = CategoryRequest.Status.APPROVED if action == "approve" else CategoryRequest.Status.REJECTED
+        req.decision_note, req.decided_at = note, timezone.now()
+        req.save(update_fields=["status", "decision_note", "decided_at", "updated_at"])
+        services._audit(admin=request.user, action=AuditLog.Action.APPROVE if action == "approve" else AuditLog.Action.REJECT,
+                        target_type="category_request", target_id=req.id,
+                        metadata={"event": f"category_request_{action}d", "name": req.name, "brand": str(req.brand_id),
+                                  "note": note})
+        return Response(_category_payload())

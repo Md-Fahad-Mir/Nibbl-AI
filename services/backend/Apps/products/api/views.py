@@ -108,6 +108,8 @@ class AliasListCreateView(APIView):
             services.add_alias,
             product=product,
             alias_text=serializer.validated_data["alias_text"],
+            retailer=serializer.validated_data.get("retailer", ""),
+            item_code=serializer.validated_data.get("item_code", ""),
         )
         return Response(
             s.ProductAliasSerializer(alias).data, status=status.HTTP_201_CREATED
@@ -181,3 +183,55 @@ class GenerateTagsView(APIView):
         return Response(
             s.TagSerializer(tags, many=True).data, status=status.HTTP_201_CREATED
         )
+
+
+# ---------------------------------------------------------------------------
+# Standardized categories (Master Product Library #6)
+# ---------------------------------------------------------------------------
+@extend_schema(tags=["products"])
+class ProductCategoryListView(APIView):
+    """GET: Nibbl's active categories plus this brand's pending requests and
+    any older free-text category its products still use."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id):
+        from Apps.products.models import CategoryRequest, Product, ProductCategory
+
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand)
+        standard = list(ProductCategory.objects.filter(is_active=True).values_list("name", flat=True))
+        in_use = sorted({c for c in Product.objects.filter(brand=brand).exclude(category="")
+                         .values_list("category", flat=True)} - set(standard))
+        requests = CategoryRequest.objects.filter(brand=brand).order_by("-created_at")[:20]
+        return Response({
+            "categories": standard,
+            "legacy": in_use,
+            "requests": [{"id": str(r.id), "name": r.name, "status": r.status, "decision_note": r.decision_note,
+                          "created_at": r.created_at} for r in requests],
+        })
+
+
+@extend_schema(tags=["products"])
+class CategoryRequestCreateView(APIView):
+    """POST {name, note}: ask Nibbl to add a category."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses={201: None})
+    def post(self, request, brand_id):
+        from Apps.products.models import CategoryRequest, ProductCategory
+
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand, manager=True, active=True)
+        name = str(request.data.get("name", "")).strip()[:100]
+        if not name:
+            raise ValidationError({"detail": "Enter the category name."})
+        if ProductCategory.objects.filter(name__iexact=name, is_active=True).exists():
+            raise ValidationError({"detail": "That category already exists — pick it from the list."})
+        if CategoryRequest.objects.filter(brand=brand, name__iexact=name, status=CategoryRequest.Status.PENDING).exists():
+            raise ValidationError({"detail": "You've already requested this category."})
+        r = CategoryRequest.objects.create(brand=brand, requested_by=request.user, name=name,
+                                           note=str(request.data.get("note", ""))[:255])
+        return Response({"id": str(r.id), "name": r.name, "status": r.status}, status=status.HTTP_201_CREATED)

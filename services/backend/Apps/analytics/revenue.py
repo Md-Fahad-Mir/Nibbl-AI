@@ -75,7 +75,7 @@ def needs_attention() -> dict:
     from Apps.accounts.models import User
     from Apps.campaigns.models import CampaignReview
     from Apps.payouts.models import WithdrawalRequest
-    from Apps.reviews.models import Review
+    from Apps.reviews.models import Review, ReviewCampaign
 
     W = WithdrawalRequest.Status
     return {
@@ -83,6 +83,7 @@ def needs_attention() -> dict:
             Q(status=W.FLAGGED) | Q(status=W.PENDING, needs_review=True)
         ).count(),
         "campaign_approvals": CampaignReview.objects.filter(status=CampaignReview.Status.PENDING).count(),
+        "review_campaign_approvals": ReviewCampaign.objects.filter(status=ReviewCampaign.Status.PENDING_REVIEW).count(),
         "failed_payouts": WithdrawalRequest.objects.filter(status=WithdrawalRequest.Status.FAILED).count(),
         "suspended_shoppers": User.objects.filter(role=User.Role.CONSUMER, is_active=False, is_deleted=False).count(),
         "brand_suspensions": BrandCustomerSuspension.objects.filter(is_active=True).count(),

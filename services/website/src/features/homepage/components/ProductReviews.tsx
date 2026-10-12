@@ -93,10 +93,15 @@ export default function ProductReviews({ productId }: { productId: string }) {
               })}
             </div>
           </div>
-          {overview?.recommendation_rate != null && (
-            <p className="text-sm text-[#4D4D4D]">
-              <b>{Number(overview.recommendation_rate).toFixed(0)}%</b> would buy again or recommend it.
-            </p>
+          {(overview?.recommendation_rate != null || overview?.buy_again_rate != null) && (
+            <div className="grid grid-cols-2 gap-3">
+              {[["recommend", overview?.recommendation_rate], ["would buy again", overview?.buy_again_rate]].map(([label, value]) => (
+                <div key={String(label)} className="border border-gray-200 rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold text-[#1F1D1D]">{value == null ? "—" : `${Number(value).toFixed(0)}%`}</div>
+                  <div className="text-xs text-[#4D4D4D]">{String(label)}</div>
+                </div>
+              ))}
+            </div>
           )}
           {aiSummary?.summary ? (
             <div className="bg-[#F0F8FB] rounded-lg p-3 text-sm text-[#1F1D1D]">

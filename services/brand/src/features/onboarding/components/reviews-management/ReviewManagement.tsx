@@ -323,7 +323,7 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
   const [region, setRegion] = useState("");
   const [q, setQ] = useState("");
   const [product, setProduct] = useState(
-    () => products.find((p) => p.name === initialProductFilter)?.id ?? ""
+    () => products.find((p) => p.id === initialProductFilter || p.name === initialProductFilter)?.id ?? ""
   );
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -360,6 +360,11 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
   const retailers = (Array.isArray(options.retailers) ? options.retailers : []) as string[];
   const regions = (Array.isArray(options.regions) ? options.regions : []) as string[];
   const reviews = Array.isArray(data?.reviews) ? (data.reviews as ApiRecord[]) : [];
+  // Flavor / size so variants that share a name can be told apart.
+  const productVariant = (id: string) => {
+    const p = products.find((item) => item.id === id);
+    return p ? [p.flavor, p.sizeLabel].filter(Boolean).join(" · ") : "";
+  };
   const selected = reviews.find((r) => String(r.id) === selectedId) ?? null;
   const changed = () => setReloadKey((k) => k + 1);
 
@@ -452,7 +457,9 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
           </select>
           <select value={product} onChange={(e) => setProduct(e.target.value)} className={selectClass} aria-label="Product">
             <option value="">All Products</option>
-            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>{[p.name, p.flavor, p.sizeLabel].filter(Boolean).join(" · ")}</option>
+            ))}
           </select>
           <select value={region} onChange={(e) => setRegion(e.target.value)} className={selectClass} aria-label="Region">
             <option value="">All Regions</option>
@@ -488,7 +495,10 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
                       <div className="font-bold text-[#131B2E]">{String(review.shopper_name ?? "Customer")}</div>
                       {review.verified_purchase ? <VerifiedBadge /> : null}
                     </td>
-                    <td className="p-4 font-semibold text-[#131B2E] max-w-[180px] truncate">{String(review.product_name ?? "")}</td>
+                    <td className="p-4 max-w-[200px]">
+                      <div className="font-semibold text-[#131B2E] truncate">{String(review.product_name ?? "")}</div>
+                      <div className="text-xs text-[#64748B] truncate">{productVariant(String(review.product ?? ""))}</div>
+                    </td>
                     <td className="p-4"><Stars rating={Number(review.rating ?? 0)} /></td>
                     <td className="p-4 max-w-[200px] truncate">{String(review.title ?? "")}</td>
                     <td className="p-4">

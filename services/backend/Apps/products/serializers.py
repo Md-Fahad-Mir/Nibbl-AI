@@ -8,11 +8,13 @@ class ProductSerializer(serializers.ModelSerializer):
     alias_count = serializers.IntegerField(source="aliases.count", read_only=True)
     review_count = serializers.IntegerField(source="reviews.count", read_only=True)
     avg_rating = serializers.SerializerMethodField()
+    size_label = serializers.CharField(read_only=True)
 
     class Meta:
         model = Product
         fields = [
             "id",
+            "code",
             "name",
             "sku",
             "description",
@@ -21,6 +23,9 @@ class ProductSerializer(serializers.ModelSerializer):
             "flavor",
             "format",
             "size_volume",
+            "unit",
+            "pack_count",
+            "size_label",
             "is_active",
             "alias_count",
             "review_count",
@@ -28,7 +33,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = [
-            "id", "is_active", "alias_count", "review_count", "avg_rating", "created_at"
+            "id", "code", "size_label", "is_active", "alias_count", "review_count", "avg_rating", "created_at"
         ]
 
     def get_avg_rating(self, obj):
@@ -39,18 +44,21 @@ class ProductSerializer(serializers.ModelSerializer):
 class ProductWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields = ["name", "sku", "description", "image_url", "category", "flavor", "format", "size_volume"]
+        fields = ["name", "sku", "description", "image_url", "category", "flavor", "format", "size_volume",
+                  "unit", "pack_count"]
 
 
 class ProductAliasSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductAlias
-        fields = ["id", "alias_text", "normalized", "created_at"]
+        fields = ["id", "alias_text", "normalized", "retailer", "item_code", "created_at"]
         read_only_fields = ["id", "normalized", "created_at"]
 
 
 class AddAliasSerializer(serializers.Serializer):
     alias_text = serializers.CharField(max_length=255)
+    retailer = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    item_code = serializers.CharField(max_length=64, required=False, allow_blank=True)
 
 
 class TagSerializer(serializers.ModelSerializer):

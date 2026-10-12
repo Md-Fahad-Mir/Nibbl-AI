@@ -30,7 +30,7 @@ interface ProductDetailsProps {
   onEditAliases: (prod: Product) => void | Promise<void>;
   onDelete: (prodId: string) => void;
   onViewAllCampaigns: (type: "REBATE" | "REVIEW") => void;
-  onViewReviews: (productName: string) => void;
+  onViewReviews: (productId: string) => void;
 }
 
 const campaignId = (campaign: ApiRecord) =>
@@ -138,7 +138,7 @@ export default function ProductDetailsView({
           {typeof product.reviewCount === "number" && product.reviewCount > 0 ? (
             <button
               type="button"
-              onClick={() => onViewReviews(product.name)}
+              onClick={() => onViewReviews(product.id)}
               title="View this product's reviews"
               className="group flex items-center gap-1.5 text-sm font-bold text-[#131B2E] hover:text-[#001BD2] transition-colors cursor-pointer"
             >

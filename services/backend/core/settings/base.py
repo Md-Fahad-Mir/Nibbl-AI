@@ -91,6 +91,9 @@ REFERRAL_WINDOW_DAYS = env.int("REFERRAL_WINDOW_DAYS", default=90)
 # Master: a campaign can't be submitted until the wallet covers its 7-day
 # requirement and auto-replenishment is on (off in tests unless enabled).
 LAUNCH_FUNDING_REQUIRED = env.bool("LAUNCH_FUNDING_REQUIRED", default=True)
+# Master 30-day receipt retention: delete receipt photos after 30 days. Off
+# until switched on per environment (it permanently deletes images).
+RECEIPT_IMAGE_PURGE_ENABLED = env.bool("RECEIPT_IMAGE_PURGE_ENABLED", default=False)
 # Estimated PayPal/Venmo fee per payout, for the admin batch summary.
 PAYOUT_FEE_ESTIMATE = env("PAYOUT_FEE_ESTIMATE", default="0.25")
 

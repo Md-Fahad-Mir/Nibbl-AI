@@ -15,7 +15,7 @@ const readString = (...values: unknown[]) => {
   return typeof value === "string" ? value.trim() : "";
 };
 
-const FILTER_TABS = ["All", "Open claim", "Cooldown", "Completed rebate", "Suspended", "Inactive"] as const;
+const FILTER_TABS = ["All", "Open Claim", "Active Cooldown", "Completed Rebate", "Banned", "Inactive"] as const;
 type FilterTab = (typeof FILTER_TABS)[number];
 
 const mapCustomer = (customer: ApiRecord): CustomerData => {
@@ -31,19 +31,7 @@ const mapCustomer = (customer: ApiRecord): CustomerData => {
     String(customer.status ?? customer.suspension_status ?? "").toLowerCase() === "suspended"
       ? false
       : true;
-  const recentReceipts = Array.isArray(customer.recent_receipts)
-    ? customer.recent_receipts.map((receipt) => {
-        const item = receipt as ApiRecord;
-        return {
-          merchant: readString(item.merchant, item.store, item.campaign_name) || "Receipt submission",
-          date: formatDate(item.created_at ?? item.purchased_at) || "Recent",
-          id: readString(item.id, item.receipt_id) || "Receipt",
-          value: formatMoney(item.total ?? item.amount ?? 0),
-          points: readString(item.points, item.reward_label) || `${formatMoney(item.reward_amount ?? 0)} reward`,
-          status: readString(item.status) || "Submitted",
-        };
-      })
-    : undefined;
+  const site = (customer.site_activity ?? {}) as ApiRecord;
 
   return {
     id: userId || customerRef,
@@ -56,6 +44,14 @@ const mapCustomer = (customer: ApiRecord): CustomerData => {
     reviews: toNumber(customer.reviews),
     rewards: formatMoney(customer.total_earned),
     status: isActive ? "Active" : "Suspended",
+    brandClaims: toNumber(customer.brand_claims),
+    openClaims: toNumber(customer.open_claims),
+    cooldownDaysLeft: customer.cooldown_days_left == null ? null : toNumber(customer.cooldown_days_left),
+    siteActivity: {
+      claims: toNumber(site.claims),
+      completionRate: site.completion_rate == null ? null : toNumber(site.completion_rate),
+      reviews: toNumber(site.reviews),
+    },
     consent:
       customer.consent_status === "opted_in"
         ? "Opted In"
@@ -73,11 +69,7 @@ const mapCustomer = (customer: ApiRecord): CustomerData => {
       customer.avatar_url ?? customer.user_avatar_url ?? customer.avatar,
       ""
     ),
-    memberSince: formatDate(customer.created_at ?? customer.member_since) || "Unavailable",
     canSuspend: Boolean(userId),
-    fraudScore: readString(customer.fraud_score, customer.risk_score) || "Unavailable",
-    trustLabel: readString(customer.trust_label, customer.risk_label) || "Not scored",
-    recentReceipts,
   };
 };
 
@@ -95,6 +87,8 @@ export default function CustomersView() {
   const [actionError, setActionError] = useState("");
   const [isActioning, setIsActioning] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const brandName = String(useBrandApiStore((state) => state.brand)?.name ?? "");
 
   const handleExport = async () => {
     if (!selectedBrandId || exporting) return;
@@ -127,7 +121,7 @@ export default function CustomersView() {
     return { ...mapped, status: localStatuses[mapped.id] || mapped.status };
   });
 
-  const handleConfirmToggle = async () => {
+  const handleConfirmToggle = async (reason: string) => {
     if (!modalCust) return;
     if (!modalCust.userId) {
       setActionError("Backend must return user_id for this customer before account actions can run.");
@@ -139,7 +133,7 @@ export default function CustomersView() {
       const nextStatus: CustomerData["status"] =
         modalCust.status === "Active" ? "Suspended" : "Active";
       if (modalCust.status === "Active") {
-        await suspendCustomer(modalCust.userId, "Suspended from brand dashboard.");
+        await suspendCustomer(modalCust.userId, reason);
       } else {
         await reactivateCustomer(modalCust.userId);
       }
@@ -151,6 +145,7 @@ export default function CustomersView() {
         setSelectedCust((prev) => prev ? { ...prev, status: nextStatus } : null);
       }
       setModalCust(null);
+      setReloadKey((k) => k + 1);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not update customer status.");
     } finally {
@@ -162,10 +157,10 @@ export default function CustomersView() {
   const inactiveBefore = now - 90 * 24 * 60 * 60 * 1000;
   const matches: Record<FilterTab, (c: CustomerData) => boolean> = {
     All: () => true,
-    "Open claim": (c) => c.openClaim,
-    Cooldown: (c) => c.inCooldown,
-    "Completed rebate": (c) => c.claims > 0,
-    Suspended: (c) => c.status === "Suspended",
+    "Open Claim": (c) => c.openClaim,
+    "Active Cooldown": (c) => c.inCooldown,
+    "Completed Rebate": (c) => c.claims > 0,
+    Banned: (c) => c.status === "Suspended",
     Inactive: (c) => !c.lastActivityAt || new Date(c.lastActivityAt).getTime() < inactiveBefore,
   };
   const needle = search.trim().toLowerCase();
@@ -184,8 +179,8 @@ export default function CustomersView() {
       {/* Upper header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end w-full gap-4 pb-2">
         <div className="flex flex-col gap-1 text-left">
-          <h2 className="text-3xl font-extrabold font-jakarta text-[#131B2E] tracking-tight leading-none">Customer Management</h2>
-          <p className="text-xs text-[#454656] font-medium mt-1">Manage institutional ledgers and member status.</p>
+          <h2 className="text-3xl font-extrabold font-jakarta text-[#131B2E] tracking-tight leading-none">Customers</h2>
+          <p className="text-xs text-[#454656] font-medium mt-1">Understand and manage shoppers who opted in to your brand.</p>
         </div>
         <button
           type="button"
@@ -201,7 +196,11 @@ export default function CustomersView() {
         <CustomerProfileView
           customer={selectedCust}
           onBack={() => setSelectedCust(null)}
-          onToggleSuspend={setModalCust}
+          onToggleSuspend={(customer) => {
+            setActionError("");
+            setModalCust(customer);
+          }}
+          reloadKey={reloadKey}
         />
       ) : (
         <div className="flex flex-col gap-8 w-full">
@@ -238,10 +237,6 @@ export default function CustomersView() {
           <CustomerLedger
             customers={filtered}
             onSelectCustomer={setSelectedCust}
-            onToggleSuspend={(customer) => {
-              setActionError("");
-              setModalCust(customer);
-            }}
           />
           <ComingSoonIntegrations />
         </div>
@@ -259,6 +254,7 @@ export default function CustomersView() {
         }}
         isLoading={isActioning}
         error={actionError}
+        brandName={brandName}
       />
 
     </div>

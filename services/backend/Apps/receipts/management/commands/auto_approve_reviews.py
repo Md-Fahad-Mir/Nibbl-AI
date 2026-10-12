@@ -18,3 +18,13 @@ class Command(BaseCommand):
             f"Auto-approved {result['approved']}, rejected {result['rejected']} "
             f"(duplicates), skipped {result['skipped']}."
         ))
+        # Master: full receipts are kept 30 days, then only the matching line.
+        from django.conf import settings
+
+        from Apps.receipts.retention import purge_expired_images
+
+        if not settings.RECEIPT_IMAGE_PURGE_ENABLED:
+            return
+        purged = purge_expired_images()
+        if purged:
+            self.stdout.write(self.style.SUCCESS(f"Removed {purged} receipt photo(s) older than 30 days."))

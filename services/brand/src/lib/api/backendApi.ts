@@ -292,6 +292,16 @@ export const backendApi = {
       path: `/brands/${brandId}/members/${membershipId}/`,
       auth: true,
     }),
+    customerProfile: (brandId: string, customerId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/brands/${brandId}/customers/${customerId}/profile/`,
+      auth: true,
+    }),
+    removeCustomerCooldown: (brandId: string, customerId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/brands/${brandId}/customers/${customerId}/cooldowns/remove/`,
+      auth: true,
+    }),
     customers: (brandId: string): ApiEndpoint => ({
       method: "GET",
       path: `/brands/${brandId}/customers/`,

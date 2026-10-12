@@ -168,6 +168,11 @@ def _in_cooldown(user, product, campaign: ReviewCampaign, now) -> bool:
     if ReviewSession.objects.filter(user=user, product=product, status=ReviewSession.Status.ACTIVE).exists():
         return True
     reviews = Review.objects.filter(user=user, product=product).exclude(status=Review.Status.REMOVED)
+    from Apps.reviews.models import ReviewCooldownWaiver
+
+    waiver = ReviewCooldownWaiver.objects.filter(user=user, product=product).first()
+    if waiver:  # the brand removed this cooldown
+        reviews = reviews.filter(created_at__gt=waiver.waived_at)
     if campaign.one_time_only:
         return reviews.exists()
     if not campaign.product_cooldown_days:
@@ -207,6 +212,10 @@ def create_opportunities(receipt) -> list[ReviewSession]:
             break
         campaign = next((c for c in product.review_campaigns.all() if c.is_live and not c.auto_paused), None)
         if campaign is None or _in_cooldown(user, product, campaign, now):
+            continue
+        from Apps.brands.customers import is_suspended_from_brand
+
+        if is_suspended_from_brand(user, campaign.brand):  # banned: no new opportunities
             continue
         today = timezone.localdate()
         if ReviewSession.objects.filter(review_campaign=campaign, created_at__date=today).count() >= campaign.daily_opportunities:

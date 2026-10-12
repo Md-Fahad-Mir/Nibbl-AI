@@ -9,6 +9,7 @@ import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
 import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
+import { ReviewCampaignCard } from "../components/ReviewCampaignCard";
 
 type Kind = "new" | "revision";
 type Action = "approve" | "request-changes" | "reject";
@@ -269,7 +270,8 @@ export const CampaignApprovalsView = () => {
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { profile, loadProfile, logout } = useAdminApiStore();
-  const [kind, setKind] = useState<Kind>("new");
+  const [kind, setKind] = useState<Kind | "review">("new");
+  const [reviewCampaigns, setReviewCampaigns] = useState<ApiRecord[] | null>(null);
   const {
     campaignApprovals: reviews,
     campaignApprovalsLoaded: loaded,
@@ -280,9 +282,10 @@ export const CampaignApprovalsView = () => {
 
   const load = useCallback(
     () =>
-      loadCampaignApprovals().catch((err: Error) =>
-        setError(err.message || "Could not load the approval queue."),
-      ),
+      Promise.all([
+        loadCampaignApprovals(),
+        nibblApi.reviewCampaignQueue().then(setReviewCampaigns),
+      ]).catch((err: Error) => setError(err.message || "Could not load the approval queue.")),
     [loadCampaignApprovals],
   );
 
@@ -291,9 +294,10 @@ export const CampaignApprovalsView = () => {
     void load();
   }, [loadProfile, load]);
 
-  const counts: Record<Kind, number> = {
+  const counts: Record<Kind | "review", number> = {
     new: reviews.filter((r) => r.kind === "new").length,
     revision: reviews.filter((r) => r.kind === "revision").length,
+    review: reviewCampaigns?.length ?? 0,
   };
 
   const handleNavSelect = (item: SidebarNavItem) => {
@@ -305,7 +309,7 @@ export const CampaignApprovalsView = () => {
     router.push(`/${item}`);
   };
 
-  const visible = reviews.filter((r) => r.kind === kind);
+  const visible = kind === "review" ? (reviewCampaigns ?? []) : reviews.filter((r) => r.kind === kind);
   const visiblePage = usePaged(visible, 10, kind);
 
   return (
@@ -336,7 +340,7 @@ export const CampaignApprovalsView = () => {
         </div>
 
         <div className="flex gap-2">
-          {(["new", "revision"] as Kind[]).map((tab) => (
+          {(["new", "revision", "review"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setKind(tab)}
@@ -344,7 +348,7 @@ export const CampaignApprovalsView = () => {
                 kind === tab ? "bg-[#3E3EDF] text-white" : "bg-[#F6F6FB] text-[#454656]"
               }`}
             >
-              {tab === "new" ? "New campaigns" : "Revisions"} ({counts[tab]})
+              {tab === "new" ? "New campaigns" : tab === "revision" ? "Revisions" : "Review campaigns"} ({counts[tab]})
             </button>
           ))}
         </div>
@@ -367,7 +371,10 @@ export const CampaignApprovalsView = () => {
             Nothing waiting for review.
           </div>
         ) : (
-          visiblePage.items.map((review) => (
+          visiblePage.items.map((review) => kind === "review" ? (
+            <ReviewCampaignCard key={String(review.id)} campaign={review}
+              onDecided={(message) => { setSuccess(message); void load(); }} />
+          ) : (
             <ReviewCard
               key={String(review.id)}
               review={review}

@@ -15,21 +15,29 @@ class ProductError(Exception):
 # ---------------------------------------------------------------------------
 # Products
 # ---------------------------------------------------------------------------
+VARIANT_FIELDS = ("flavor", "size_volume", "unit", "pack_count")
+DUPLICATE = "A product with this name, flavor and size already exists."
+
+
+def _variant(name, fields, product=None) -> dict:
+    """Product identity (Master: separate record per flavor / size)."""
+    identity = {"name": name}
+    for key in VARIANT_FIELDS:
+        default = 1 if key == "pack_count" else ""
+        identity[key] = fields.get(key, getattr(product, key, default) if product else default)
+    return identity
+
+
 def create_product(*, brand, name, **fields) -> Product:
-    if Product.objects.filter(brand=brand, name=name).exists():
-        raise ProductError("A product with this name already exists.")
+    if Product.objects.filter(brand=brand, **_variant(name, fields)).exists():
+        raise ProductError(DUPLICATE)
     return Product.objects.create(brand=brand, name=name, **fields)
 
 
 def update_product(product: Product, **fields) -> Product:
-    new_name = fields.get("name")
-    if new_name and new_name != product.name:
-        if (
-            Product.objects.filter(brand=product.brand, name=new_name)
-            .exclude(pk=product.pk)
-            .exists()
-        ):
-            raise ProductError("A product with this name already exists.")
+    identity = _variant(fields.get("name", product.name), fields, product)
+    if Product.objects.filter(brand=product.brand, **identity).exclude(pk=product.pk).exists():
+        raise ProductError(DUPLICATE)
     for key, value in fields.items():
         setattr(product, key, value)
     product.save()
@@ -46,7 +54,7 @@ def archive_product(product: Product) -> Product:
 # ---------------------------------------------------------------------------
 # Aliases
 # ---------------------------------------------------------------------------
-def add_alias(*, product: Product, alias_text: str) -> ProductAlias:
+def add_alias(*, product: Product, alias_text: str, retailer: str = "", item_code: str = "") -> ProductAlias:
     normalized = normalize_text(alias_text)
     if not normalized:
         raise ProductError("Alias text cannot be empty.")
@@ -54,7 +62,8 @@ def add_alias(*, product: Product, alias_text: str) -> ProductAlias:
         raise ProductError("That alias is already in use for this brand.")
     try:
         return ProductAlias.objects.create(
-            product=product, brand=product.brand, alias_text=alias_text
+            product=product, brand=product.brand, alias_text=alias_text,
+            retailer=(retailer or "").strip()[:100], item_code=(item_code or "").strip()[:64],
         )
     except IntegrityError:
         raise ProductError("That alias is already in use for this brand.")

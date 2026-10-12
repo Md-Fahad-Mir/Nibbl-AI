@@ -267,14 +267,15 @@ class ReviewCampaignSuggestPromptsView(APIView):
 
 @extend_schema(tags=["review-campaigns"])
 class ReviewCampaignActionView(APIView):
-    """POST …/activate/ or …/pause/."""
+    """POST …/submit/ (for Nibbl review), …/activate/ (resume an approved
+    campaign) or …/pause/."""
 
     permission_classes = [IsAuthenticated]
 
     @extend_schema(request=None, responses={200: s.ReviewCampaignSerializer})
     def post(self, request, brand_id, campaign_id, action):
         campaign = _campaign(request, brand_id, campaign_id, manager=True)
-        handler = {"activate": rc.activate, "pause": rc.pause}.get(action)
+        handler = {"submit": rc.submit_for_review, "activate": rc.activate, "pause": rc.pause}.get(action)
         if handler is None:
             raise NotFound()
         return Response(s.ReviewCampaignSerializer(_run(handler, campaign), context=_ctx(request)).data)
@@ -352,6 +353,7 @@ class ReviewSessionSubmitView(APIView):
         review = _run(
             rc.submit, _session(request, session_id), rating=data["rating"], content=data["content"],
             title=data["title"], would_recommend=data["would_recommend"],
+            would_buy_again=data["would_buy_again"],
         )
         return Response(s.ReviewSerializer(review).data, status=status.HTTP_201_CREATED)
 
@@ -592,3 +594,93 @@ class AdminFlagDecisionView(APIView):
         review = _run(rc.decide_flag, review, remove=action == "remove", admin=request.user,
                       note=serializer.validated_data["note"])
         return Response({"id": str(review.id), "status": review.status})
+
+
+# --- Brand: Test Review Chat ------------------------------------------------
+@extend_schema(tags=["review-campaigns"])
+class ReviewCampaignTestChatView(APIView):
+    """POST {product_id?} → the planned questions; POST {product_id, answers:
+    [{question, answer}]} → the AI draft. Nothing is saved or paid."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request, brand_id, campaign_id):
+        campaign = _campaign(request, brand_id, campaign_id)
+        answers = request.data.get("answers") or []
+        if not isinstance(answers, list):
+            raise ValidationError({"detail": "answers must be a list."})
+        return Response(_run(rc.test_chat, campaign, product_id=request.data.get("product_id") or None,
+                             answers=[a for a in answers if isinstance(a, dict)]))
+
+
+# --- Shopper: screens before the chat --------------------------------------
+@extend_schema(tags=["reviews"])
+class ReviewSessionOverviewView(APIView):
+    """Product Confirmed / Multiple Matches / Missing Consent / Share Your
+    Voice data. Doesn't start the chat."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, session_id):
+        return Response(rc.overview(_session(request, session_id), request))
+
+
+@extend_schema(tags=["reviews"])
+class ReviewSessionStepView(APIView):
+    """POST confirm {product_id?} | decline | consent {nibbl, brand}."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request, session_id, step):
+        session = _session(request, session_id)
+        if step == "confirm":
+            session = _run(rc.confirm_product, session, product_id=request.data.get("product_id"))
+        elif step == "decline":
+            session = _run(rc.decline, session)
+        elif step == "consent":
+            _run(rc.give_consent, session, nibbl=bool(request.data.get("nibbl")), brand=bool(request.data.get("brand")))
+        else:
+            raise NotFound()
+        return Response(rc.overview(session, request))
+
+
+# --- Admin: review campaign approvals --------------------------------------
+@extend_schema(tags=["admin"])
+class AdminReviewCampaignQueueView(APIView):
+    """Review campaigns waiting for Nibbl review (Master: published after review)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        qs = (ReviewCampaign.objects.filter(status=ReviewCampaign.Status.PENDING_REVIEW)
+              .select_related("brand__plan").prefetch_related("prompts").order_by("submitted_at"))
+        rows = []
+        for c in qs:
+            data = s.ReviewCampaignSerializer(c, context=_ctx(request)).data
+            data["brand_name"] = c.brand.name
+            data["plan"] = c.brand.plan.name if c.brand.plan else None
+            data["review_fee"] = str(rc._fee(c))
+            rows.append(data)
+        return Response(rows)
+
+
+@extend_schema(tags=["admin"])
+class AdminReviewCampaignDecisionView(APIView):
+    """POST approve | request_changes | reject {comment}."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request, campaign_id, action):
+        if action not in ("approve", "request_changes", "reject"):
+            raise NotFound()
+        campaign = ReviewCampaign.objects.filter(id=campaign_id).first()
+        if campaign is None:
+            raise NotFound("Review campaign not found.")
+        campaign = _run(rc.decide, campaign, action=action, admin=request.user,
+                        comment=str(request.data.get("comment", "")))
+        return Response(s.ReviewCampaignSerializer(campaign, context=_ctx(request)).data)

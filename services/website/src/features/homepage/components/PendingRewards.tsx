@@ -16,6 +16,13 @@ const readSaved = (): string[] => {
 };
 
 /** Exact time left until a claim's receipt deadline, e.g. "2d 4h left". */
+/** "12 days left" for a review opportunity (30-day window). */
+const daysLeftText = (value: unknown) => {
+  if (!value) return "";
+  const days = Math.max(0, Math.ceil((new Date(String(value)).getTime() - Date.now()) / 86400000));
+  return `${days} day${days === 1 ? "" : "s"} left`;
+};
+
 export const timeRemaining = (value: unknown) => {
   const deadline = Date.parse(String(value ?? ""));
   if (Number.isNaN(deadline)) return "";
@@ -139,7 +146,9 @@ function PendingRewardCard({
   );
   const brand = String(item.brand_name || "Brand");
   const expires = String(item.expires_at || item.end_at || "").slice(0, 10);
-  const remaining = type === "receipt" ? timeRemaining(item.expires_at) : "";
+  const remaining = type === "receipt"
+    ? timeRemaining(item.expires_at)
+    : type === "review" ? daysLeftText(item.expires_at) : "";
   const reward = formatRewardAmount(item.reward_amount, type === "review" ? "1.00" : "0.00");
   const isReview = type === "review";
   const isVerification = type === "verification";
@@ -177,7 +186,7 @@ function PendingRewardCard({
             </h3>
             <span className="text-[14px] font-medium leading-[17px] text-[#2D2D2D] truncate">
               {isReview
-                ? `Review invitation · earn ${reward}`
+                ? `Share your voice · ${reward} reward`
                 : isVerification
                   ? `${reward} verification pending`
                   : `${reward} reward`}
@@ -197,7 +206,7 @@ function PendingRewardCard({
           } hover:opacity-90 active:scale-[0.98] disabled:cursor-default disabled:active:scale-100 text-[18px] font-medium leading-[22px] rounded-lg shadow-[0_4px_4px_rgba(0,0,0,0.12),inset_0_4px_4px_rgba(255,255,255,0.12)] flex items-center justify-center cursor-pointer focus:outline-none min-w-0`}
         >
           {isReview
-            ? "View Details"
+            ? `Claim ${reward}`
             : isVerification
               ? "Verification Pending"
               : "Submit Receipt"}

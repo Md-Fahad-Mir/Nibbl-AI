@@ -7,8 +7,7 @@ import Header from "./layout/Header";
 import DashboardView from "./dashboard/DashboardView";
 import ProductLibraryView from "./product-library/ProductLibraryView";
 import ProductDetailsView from "./product-library/ProductDetailsView";
-import AddProductView from "./product-library/AddProductView";
-import EditAliasesModal from "./product-library/EditAliasesModal";
+import AddProductView, { ProductFormValues } from "./product-library/AddProductView";
 import RebatesView from "./rebates/RebatesView";
 import ReviewsView from "./reviews/ReviewsView";
 import RedemptionsView from "./redemptions/RedemptionsView";
@@ -22,18 +21,6 @@ import BrandCheckout from "./checkout/BrandCheckout";
 import { Product } from "../utils/mockData";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
-type ProductFormValues = {
-  name: string;
-  description: string;
-  brand: string;
-  imageSrc: string;
-  category: string;
-  flavor: string;
-  format: string;
-  size: string;
-  aliases: string[];
-  imageFile?: File | null;
-};
 
 type ProductViewMode = "list" | "details" | "add" | "edit";
 
@@ -73,9 +60,10 @@ const productPayload = (product: ProductFormValues) => {
     description: product.description,
     category: product.category,
     flavor: product.flavor,
-    format: product.format,
     size_volume: product.size,
-    sku: product.format || product.size || product.name,
+    unit: product.unit,
+    pack_count: String(product.packCount),
+    sku: product.sku,
   };
 
   if (!product.imageFile) return body;
@@ -112,7 +100,6 @@ export default function OnboardingView() {
   const [activeTab, setActiveTabState] = useState(readStoredTab);
   const [viewMode, setViewModeState] = useState<ProductViewMode>(readStoredProductViewMode);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [reviewProductFilter, setReviewProductFilter] = useState("");
   const {
@@ -159,12 +146,12 @@ export default function OnboardingView() {
     selectedProduct || (viewMode !== "details" && viewMode !== "edit") ? viewMode : "list";
   const selectedBrand = brands.find((item) => String(item.id ?? "") === selectedBrandId);
   const workspaceBrandName = String(
-    brand?.legal_name ??
-      brand?.name ??
-      brand?.brand_name ??
-      selectedBrand?.legal_name ??
-      selectedBrand?.name ??
-      selectedBrand?.brand_name ??
+    brand?.legal_name ||
+      brand?.name ||
+      brand?.brand_name ||
+      selectedBrand?.legal_name ||
+      selectedBrand?.name ||
+      selectedBrand?.brand_name ||
       ""
   );
   const productsWithCampaignCounts = useMemo(() => {
@@ -214,17 +201,6 @@ export default function OnboardingView() {
     setViewMode("details");
   };
 
-  const handleEditAliases = async (prod: Product) => {
-    await loadProductAliases(prod.id);
-    const latest = useBrandApiStore.getState().products.find((item) => item.id === prod.id);
-    const product = latest || prod;
-    setSelectedProduct({
-      ...product,
-      activeCampaigns: activeCampaignCountForProduct(product.id),
-    });
-    setShowEditModal(true);
-  };
-
   const handleEditProduct = async (prod: Product) => {
     await loadProductAliases(prod.id);
     const latest = useBrandApiStore.getState().products.find((item) => item.id === prod.id);
@@ -248,8 +224,8 @@ export default function OnboardingView() {
     setSelectedProduct(null);
   };
 
-  const handleViewProductReviews = (productName: string) => {
-    setReviewProductFilter(productName);
+  const handleViewProductReviews = (productId: string) => {
+    setReviewProductFilter(productId);
     setActiveTab("Reviews");
     setViewMode("list");
     setSelectedProduct(null);
@@ -269,16 +245,8 @@ export default function OnboardingView() {
     await loadProductAliases(selectedProduct.id);
     await updateProductAliases(selectedProduct.id, updatedProduct.aliases);
     const latest = useBrandApiStore.getState().products.find((product) => product.id === selectedProduct.id);
-    setSelectedProduct(latest || { ...selectedProduct, ...updatedProduct });
+    setSelectedProduct(latest || selectedProduct);
     setViewMode("details");
-  };
-
-  const handleSaveAliases = async (updatedAliases: string[]) => {
-    if (!selectedProduct) return;
-    await updateProductAliases(selectedProduct.id, updatedAliases);
-    const latest = useBrandApiStore.getState().products.find((product) => product.id === selectedProduct.id);
-    setSelectedProduct(latest || { ...selectedProduct, aliases: updatedAliases });
-    setShowEditModal(false);
   };
 
   return (
@@ -381,6 +349,7 @@ export default function OnboardingView() {
                   products={productsWithCampaignCounts}
                   onViewDetails={handleViewDetails}
                   onEditProduct={handleEditProduct}
+                  onViewReviews={(prod) => handleViewProductReviews(prod.id)}
                   onAddNew={handleAddNew}
                   isLoading={status === "loading"}
                 />
@@ -391,7 +360,7 @@ export default function OnboardingView() {
                   product={selectedProduct}
                   onBack={() => setViewMode("list")}
                   onEditProduct={handleEditProduct}
-                  onEditAliases={handleEditAliases}
+                  onEditAliases={handleEditProduct}
                   onDelete={handleDeleteProduct}
                   onViewAllCampaigns={handleViewAllProductCampaigns}
                   onViewReviews={handleViewProductReviews}
@@ -412,6 +381,7 @@ export default function OnboardingView() {
                   initialProduct={selectedProduct}
                   onCancel={() => setViewMode("details")}
                   onSave={handleUpdateProduct}
+                  onDelete={() => handleDeleteProduct(selectedProduct.id)}
                   workspaceBrandName={workspaceBrandName}
                 />
               )}
@@ -419,14 +389,6 @@ export default function OnboardingView() {
           )}
         </main>
       </div>
-
-      {showEditModal && selectedProduct && (
-        <EditAliasesModal
-          product={selectedProduct}
-          onClose={() => setShowEditModal(false)}
-          onSave={handleSaveAliases}
-        />
-      )}
     </div>
   );
 }

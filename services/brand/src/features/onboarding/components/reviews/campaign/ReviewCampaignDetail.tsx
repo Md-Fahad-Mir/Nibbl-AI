@@ -3,6 +3,7 @@ import { Trash2 } from "lucide-react";
 import { ApiRecord } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { COOLDOWN_OPTIONS } from "./ReviewCampaignBuilder";
+import TestReviewChatModal from "./TestReviewChatModal";
 
 interface ReviewCampaignDetailProps {
   campaignId: string;
@@ -12,7 +13,8 @@ interface ReviewCampaignDetailProps {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  draft: "Draft", active: "Active", paused: "Paused", scheduled: "Scheduled", ended: "Ended", archived: "Archived",
+  draft: "Draft", pending_review: "Pending Nibbl Review", changes_requested: "Changes Requested", rejected: "Not Approved",
+  active: "Active", paused: "Paused", scheduled: "Scheduled", ended: "Ended", archived: "Archived",
 };
 
 const formatDate = (value: unknown) =>
@@ -39,6 +41,7 @@ export default function ReviewCampaignDetail({ campaignId, onBack, onEdit, onRev
   const [question, setQuestion] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [busy, setBusy] = useState("");
+  const [testing, setTesting] = useState(false);
   const [error, setError] = useState("");
 
   const run = async (key: string, task: () => Promise<unknown>) => {
@@ -66,8 +69,12 @@ export default function ReviewCampaignDetail({ campaignId, onBack, onEdit, onRev
   const prompts = Array.isArray(campaign.prompts) ? (campaign.prompts as ApiRecord[]) : [];
   const products = Array.isArray(campaign.products) ? (campaign.products as ApiRecord[]) : [];
   const cooldown = campaign.one_time_only ? "one_time" : String(campaign.product_cooldown_days);
-  const canActivate = ["draft", "paused"].includes(String(campaign.status));
-  const canPause = String(campaign.status) === "active";
+  const raw = String(campaign.status);
+  const canSubmit = ["draft", "changes_requested", "rejected"].includes(raw);
+  // Master: published after Nibbl review; an approved campaign can be resumed.
+  const canActivate = raw === "paused" && Boolean(campaign.approved_at);
+  const canPause = raw === "active";
+  const canEdit = raw !== "pending_review";
 
   const addQuestion = (text: string) =>
     run("add", async () => {
@@ -95,13 +102,24 @@ export default function ReviewCampaignDetail({ campaignId, onBack, onEdit, onRev
           <button onClick={onReviewManagement} className="h-10 px-4 rounded-full bg-[#E2E7FF] text-[#001BD2] font-bold text-sm cursor-pointer">
             Review Management
           </button>
-          <button onClick={() => onEdit(campaign)} className="h-10 px-4 rounded-full border border-[#E0E3F5] text-[#131B2E] font-bold text-sm cursor-pointer">
-            Edit
+          <button onClick={() => setTesting(true)} className="h-10 px-4 rounded-full border border-[#E0E3F5] text-[#131B2E] font-bold text-sm cursor-pointer">
+            Test Review Chat
           </button>
+          {canEdit && (
+            <button onClick={() => onEdit(campaign)} className="h-10 px-4 rounded-full border border-[#E0E3F5] text-[#131B2E] font-bold text-sm cursor-pointer">
+              Edit
+            </button>
+          )}
+          {canSubmit && (
+            <button disabled={!!busy} onClick={() => run("submit", () => reviewCampaignAction(campaignId, "submit"))}
+              className="h-10 px-4 rounded-full bg-[#001BD2] text-white font-bold text-sm disabled:opacity-50 cursor-pointer">
+              {busy === "submit" ? "Submitting…" : "Submit for Nibbl Review"}
+            </button>
+          )}
           {canActivate && (
             <button disabled={!!busy} onClick={() => run("activate", () => reviewCampaignAction(campaignId, "activate"))}
               className="h-10 px-4 rounded-full bg-[#001BD2] text-white font-bold text-sm disabled:opacity-50 cursor-pointer">
-              {busy === "activate" ? "Activating…" : "Activate"}
+              {busy === "activate" ? "Resuming…" : "Resume"}
             </button>
           )}
           {canPause && (
@@ -120,6 +138,18 @@ export default function ReviewCampaignDetail({ campaignId, onBack, onEdit, onRev
       </div>
 
       {error && <div className="bg-red-50 border border-red-100 text-red-700 text-sm font-semibold rounded-xl px-4 py-3">{error}</div>}
+      {raw === "pending_review" && (
+        <div className="bg-[#F2F3FF] border border-[#E2E7FF] text-[#131B2E] text-sm rounded-xl px-4 py-3">
+          Submitted for Nibbl review. We typically review and publish campaigns within 1–3 business days; it goes live on its start date once approved.
+        </div>
+      )}
+      {(raw === "changes_requested" || raw === "rejected") && Boolean(campaign.review_comment) && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-xl px-4 py-3">
+          <b>{raw === "rejected" ? "Not approved" : "Nibbl requested changes"}:</b> {String(campaign.review_comment)}
+          {raw === "changes_requested" && " — edit the campaign, then submit it again."}
+        </div>
+      )}
+      {testing && <TestReviewChatModal campaignId={campaignId} products={products} onClose={() => setTesting(false)} />}
 
       <Card title="Campaign settings">
         <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
@@ -141,7 +171,9 @@ export default function ReviewCampaignDetail({ campaignId, onBack, onEdit, onRev
           <div className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider">Eligible products</div>
           <div className="flex flex-wrap gap-2 mt-2">
             {products.map((p) => (
-              <span key={String(p.id)} className="bg-[#F2F3FF] text-[#131B2E] text-xs font-semibold px-3 py-1 rounded-full">{String(p.name)}</span>
+              <span key={String(p.id)} className="bg-[#F2F3FF] text-[#131B2E] text-xs font-semibold px-3 py-1 rounded-full">
+                {[p.name, p.flavor, p.size_label].filter(Boolean).map(String).join(" · ")}
+              </span>
             ))}
           </div>
         </div>
@@ -157,15 +189,16 @@ export default function ReviewCampaignDetail({ campaignId, onBack, onEdit, onRev
             <li key={String(p.id)} className="flex items-center gap-3 px-4 py-3">
               <span className="text-sm text-[#131B2E] flex-1">{String(p.text)}</span>
               <span className="text-xs text-[#94A3B8]">Used {String(p.times_used ?? 0)}×</span>
-              <button aria-label="Delete question" disabled={!!busy}
+              {canEdit && <button aria-label="Delete question" disabled={!!busy}
                 onClick={() => run(`del-${p.id}`, () => deleteReviewPrompt(campaignId, String(p.id)))}
                 className="text-[#94A3B8] hover:text-red-600 cursor-pointer disabled:opacity-50">
                 <Trash2 className="w-4 h-4" />
-              </button>
+              </button>}
             </li>
           ))}
         </ul>
-        <div className="flex gap-2">
+        {!canEdit && <p className="text-xs text-[#64748B]">Questions are locked while Nibbl reviews this campaign.</p>}
+        {canEdit && <div className="flex gap-2">
           <input value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300}
             placeholder="e.g. Which flavor should we make next?"
             className="flex-1 h-11 px-3 rounded-xl border border-[#E0E3F5] text-sm outline-none focus:border-[#001BD2]" />
@@ -173,8 +206,8 @@ export default function ReviewCampaignDetail({ campaignId, onBack, onEdit, onRev
             className="h-11 px-5 rounded-full bg-[#001BD2] text-white font-bold text-sm disabled:opacity-50 cursor-pointer">
             Add
           </button>
-        </div>
-        <div className="flex flex-col gap-2">
+        </div>}
+        {canEdit && <div className="flex flex-col gap-2">
           <button disabled={!!busy}
             onClick={() => run("suggest", async () => setSuggestions(await suggestReviewPrompts(campaignId, 4)))}
             className="self-start text-sm font-bold text-[#001BD2] disabled:opacity-50 cursor-pointer">
@@ -186,7 +219,7 @@ export default function ReviewCampaignDetail({ campaignId, onBack, onEdit, onRev
               <button disabled={!!busy} onClick={() => addQuestion(s)} className="text-xs font-bold text-[#001BD2] cursor-pointer">Add</button>
             </div>
           ))}
-        </div>
+        </div>}
       </Card>
     </div>
   );

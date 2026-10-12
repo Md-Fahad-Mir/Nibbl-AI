@@ -13,7 +13,7 @@ from Apps.common.exceptions import DomainError
 from Apps.common.text import normalize_text
 from Apps.products import services as product_services
 from Apps.products.models import Product, ProductAlias
-from Apps.products.selectors import match_product
+from Apps.products.selectors import match_product, name_candidates
 from Apps.receipts import identity as receipt_identity
 from Apps.receipts import ocr
 from Apps.receipts.signals import receipt_rejected, receipt_verified
@@ -443,10 +443,20 @@ def _match_eligible_product(extracted, *, campaign, reservation=None):
     eligible_description = ""
     matched_any = False
 
+    merchant = getattr(extracted, "merchant_name", "")
     for item in extracted.items:
-        product = _match_item(item, brand=campaign.brand)
+        product = _match_item(item, brand=campaign.brand, merchant=merchant)
         if product is None:
             continue
+        if product.id not in targets:
+            # A name shared by several variants (Master: one record per flavor /
+            # size) counts if any of them is the campaign's product.
+            for text in (item.description, item.description_with_size):
+                variant = next((c for c in name_candidates(brand=campaign.brand, text=text or "")
+                                if c.id in targets), None)
+                if variant is not None:
+                    product = variant
+                    break
         matched_any = True
         if product.id in targets:
             matched_units += item.quantity
@@ -461,7 +471,7 @@ def _match_eligible_product(extracted, *, campaign, reservation=None):
     return eligible, matched_units, eligible_description
 
 
-def _match_item(item, *, brand):
+def _match_item(item, *, brand, merchant=""):
     """Resolve one receipt line to a product.
 
     Preferred order: SKU/product code first (unambiguous when the provider
@@ -470,13 +480,13 @@ def _match_item(item, *, brand):
     normalized/alias lookups, so no fuzzy false positives are introduced.
     """
     if item.sku:
-        product = match_product(brand=brand, sku=item.sku)
+        product = match_product(brand=brand, sku=item.sku, merchant=merchant)
         if product is not None:
             return product
     for candidate in (item.description, item.description_with_size):
         if not candidate:
             continue
-        product = match_product(brand=brand, text=candidate)
+        product = match_product(brand=brand, text=candidate, merchant=merchant)
         if product is not None:
             return product
     return None
@@ -491,7 +501,7 @@ def _create_line_items(receipt: Receipt, extracted) -> None:
             description_hash=ocr.hash_text(item.description),
             quantity=item.quantity,
             unit_price=item.unit_price,
-            matched_product=_match_item(item, brand=receipt.brand),
+            matched_product=_match_item(item, brand=receipt.brand, merchant=receipt.merchant),
         )
 
 
@@ -842,7 +852,7 @@ def reprocess_open_reviews(brand, *, exclude=None) -> int:
         if receipt.fraud_flags.filter(resolved=False, reason=FraudFlag.Reason.VELOCITY).exists():
             continue
         for line in receipt.line_items.filter(matched_product__isnull=True):
-            product = match_product(brand=brand, text=line.description)
+            product = match_product(brand=brand, text=line.description, merchant=receipt.merchant)
             if product is not None:
                 line.matched_product = product
                 line.save(update_fields=["matched_product", "updated_at"])

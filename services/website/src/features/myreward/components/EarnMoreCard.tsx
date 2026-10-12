@@ -47,7 +47,7 @@ export default function EarnMoreCard({ opportunities = [], onStartReviewClick }:
               onClick={() => onStartReviewClick(item.opportunity)}
               className="min-w-[112px] h-[27px] bg-[#3E3EDF] text-white text-[12px] font-medium rounded-[4px] hover:bg-[#3232c7] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center px-3"
             >
-              Review for {item.reward}
+              Claim {item.reward}
             </button>
           </div>
         )) : (

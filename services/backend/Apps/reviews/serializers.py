@@ -99,6 +99,7 @@ class ProductReviewSummarySerializer(serializers.Serializer):
     # Master: overview + AI summary (additive)
     star_distribution = serializers.DictField(child=serializers.IntegerField(), required=False)
     recommendation_rate = serializers.FloatField(allow_null=True, required=False)
+    buy_again_rate = serializers.FloatField(allow_null=True, required=False)
     ai_summary = serializers.DictField(allow_null=True, required=False)
 
 
@@ -126,12 +127,24 @@ class ReviewCampaignSerializer(serializers.ModelSerializer):
             "id", "name", "status", "display_status", "image_url", "products", "prompts",
             "product_context", "start_at", "end_at", "daily_opportunities",
             "product_cooldown_days", "one_time_only", "auto_paused", "reward_amount",
-            "opportunities_today", "created_at",
+            "opportunities_today", "created_at", "submitted_at", "approved_at", "review_comment",
         ]
         read_only_fields = fields
 
     def get_products(self, obj) -> list[dict]:
-        return [{"id": str(p.id), "name": p.name} for p in obj.products.all()]
+        from django.db.models import Avg, Count, Q
+
+        request = self.context.get("request")
+        rows = []
+        for p in obj.products.annotate(
+            n=Count("reviews", filter=Q(reviews__status="published")),
+            avg=Avg("reviews__rating", filter=Q(reviews__status="published")),
+        ):
+            image = (request.build_absolute_uri(p.image_url.url) if request else p.image_url.url) if p.image_url else None
+            rows.append({"id": str(p.id), "name": p.name, "code": p.code, "flavor": p.flavor,
+                         "size_label": p.size_label, "category": p.category, "image_url": image,
+                         "avg_rating": round(p.avg, 1) if p.avg is not None else None, "review_count": p.n})
+        return rows
 
     def get_reward_amount(self, obj) -> str:
         from Apps.reviews.campaigns import reward_amount
@@ -193,12 +206,38 @@ class ReviewSessionSerializer(serializers.ModelSerializer):
         fields = [
             "id", "product", "product_name", "product_image", "brand_name", "campaign_image",
             "reward_amount", "status", "expires_at", "messages", "prompts",
-            "ai_review_title", "ai_review_content", "created_at",
+            "ai_review_title", "ai_review_content", "created_at", "suggestions", "title_max", "body_max",
+            "product_confirmed",
         ]
         read_only_fields = fields
 
+    suggestions = serializers.SerializerMethodField()
+    title_max = serializers.SerializerMethodField()
+    body_max = serializers.SerializerMethodField()
+    product_confirmed = serializers.SerializerMethodField()
+
     def get_prompts(self, obj) -> list[str]:
         return list(obj.questions or [])
+
+    def get_suggestions(self, obj) -> list[str]:
+        """Suggested answers for the question currently being asked."""
+        from Apps.reviews.campaigns import suggestions_for
+
+        last = next((m for m in reversed(obj.messages or []) if m.get("role") == "assistant"), None)
+        return suggestions_for(last["content"]) if last else []
+
+    def get_title_max(self, obj) -> int:
+        from Apps.reviews.campaigns import TITLE_MAX
+
+        return TITLE_MAX
+
+    def get_body_max(self, obj) -> int:
+        from Apps.reviews.campaigns import BODY_MAX
+
+        return BODY_MAX
+
+    def get_product_confirmed(self, obj) -> bool:
+        return obj.product_confirmed_at is not None
 
     def _url(self, field):
         if not field:
@@ -222,6 +261,7 @@ class SubmitSessionSerializer(serializers.Serializer):
     content = serializers.CharField(required=False, allow_blank=True, default="")
     title = serializers.CharField(required=False, allow_blank=True, default="", max_length=255)
     would_recommend = serializers.BooleanField(required=False, allow_null=True, default=None)
+    would_buy_again = serializers.BooleanField(required=False, allow_null=True, default=None)
     # Shopper confirms the review accurately reflects their experience.
     confirm_accurate = serializers.BooleanField(required=False, default=True)
 

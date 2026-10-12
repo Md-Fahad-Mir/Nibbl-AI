@@ -59,7 +59,12 @@ export const AdminOverview = () => {
 
   const attentionItems = [
     { label: "Withdrawals needing review", value: attention.withdrawals_to_review, href: "/payout-reviews" },
-    { label: "Campaign approvals", value: attention.campaign_approvals, href: "/campaign-approvals" },
+    {
+      label: "Campaign approvals",
+      value: attention.campaign_approvals === undefined ? undefined
+        : Number(attention.campaign_approvals) + Number(attention.review_campaign_approvals ?? 0),
+      href: "/campaign-approvals",
+    },
     { label: "Failed payouts", value: attention.failed_payouts, href: "/withdraw-request" },
     { label: "Suspended shoppers", value: attention.suspended_shoppers, href: "/users" },
     { label: "Brand suspensions", value: attention.brand_suspensions, href: "/suspensions" },

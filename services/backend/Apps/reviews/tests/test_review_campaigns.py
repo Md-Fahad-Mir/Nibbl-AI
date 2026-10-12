@@ -51,7 +51,10 @@ class ReviewCampaignTests(APITestCase):
             brand=self.brand, name="Chip reviews", product_ids=[self.chips.id], daily_opportunities=10,
         )
         rc.add_prompt(self.review_campaign, text="Which flavor should we make next?")
-        rc.activate(self.review_campaign)
+        self.review_campaign.start_at = timezone.now() - dt.timedelta(minutes=1)
+        self.review_campaign.save()
+        rc.submit_for_review(self.review_campaign)
+        rc.decide(self.review_campaign, action="approve", admin=self.owner)
         self.n = 0
 
     def verified_receipt(self, user=None, quantity=1):
@@ -98,23 +101,30 @@ class ReviewCampaignTests(APITestCase):
         with q_patch, w_patch:
             opened = self.client.get(reverse("v1:reviews:session-detail", args=[session.id])).data
             self.assertEqual(opened["prompts"][2], "Which flavor should we make next?")  # rotated brand question
-            self.assertEqual(opened["prompts"][-1], rc.RECOMMEND_QUESTION)
-            self.assertEqual(len(opened["prompts"]), 6)
+            self.assertEqual(opened["prompts"][-2:], [rc.RECOMMEND_QUESTION, rc.REPURCHASE_QUESTION])
+            self.assertEqual(len(opened["prompts"]), 7)
             url = reverse("v1:reviews:session-answer", args=[session.id])
             for i in range(5):
                 step = self.client.post(url, {"text": f"answer {i}"}, format="json").data
                 self.assertFalse(step["done"])
-            done = self.client.post(url, {"text": "Yes, I'd buy again"}, format="json").data
+            self.assertEqual(step["suggestions"], ["Yes, definitely", "Maybe", "No"])  # recommend question
+            self.client.post(url, {"text": "Yes, definitely"}, format="json")
+            done = self.client.post(url, {"text": "No"}, format="json").data
             self.assertEqual((done["done"], done["title"], done["review"]), (True, "Crunchy and fresh", "Loved the crunch."))
             again = self.client.post(reverse("v1:reviews:session-regenerate", args=[session.id])).data
             self.assertEqual(again["title"], "Crunchy and fresh")
 
         before = wallet_services.get_or_create_customer_wallet(user).available()
         resp = self.client.post(reverse("v1:reviews:session-submit", args=[session.id]),
-                                {"rating": 5, "content": "Edited: loved it", "would_recommend": True}, format="json")
+                                {"rating": 5, "content": "x" * 501}, format="json")
+        self.assertEqual(resp.status_code, 400)  # Master: body ≤ 500 characters
+        resp = self.client.post(reverse("v1:reviews:session-submit", args=[session.id]),
+                                {"rating": 5, "content": "Edited: loved it"}, format="json")
         self.assertEqual(resp.status_code, 201)
         review = Review.objects.get()
-        self.assertEqual((review.status, review.content, review.would_recommend), ("published", "Edited: loved it", True))
+        # Recommend and buy-again come from the two chat answers.
+        self.assertEqual((review.status, review.content, review.would_recommend, review.would_buy_again),
+                         ("published", "Edited: loved it", True, False))
         self.assertEqual(wallet_services.get_or_create_customer_wallet(user).available() - before, Decimal("1.00"))
         self.assertTrue(LedgerEntry.objects.filter(category=LedgerEntry.Category.REVIEW_FEE).exists())
         session.refresh_from_db()
@@ -124,7 +134,8 @@ class ReviewCampaignTests(APITestCase):
         self.assertEqual((public["display_name"], public["verified_purchase"]), ("Sam S.", True))
         self.assertIn("$1 reward", public["disclosure"])
         summary = self.client.get(reverse("v1:reviews:product-review-summary", args=[self.chips.id])).data
-        self.assertEqual((summary["review_count"], summary["star_distribution"]["5"], summary["recommendation_rate"]), (1, 1, 100.0))
+        self.assertEqual((summary["review_count"], summary["star_distribution"]["5"], summary["recommendation_rate"],
+                          summary["buy_again_rate"]), (1, 1, 100.0, 0.0))
         self.assertIsNone(summary["ai_summary"])  # pending the AI service endpoint
 
     def _low_review(self):
@@ -260,8 +271,31 @@ class ReviewCampaignTests(APITestCase):
             sugg = self.client.post(reverse("v1:reviews:campaign-suggest-prompts", args=[self.brand.id, created["id"]]),
                                     {"count": 1}, format="json").data
         self.assertEqual(sugg["suggestions"], ["What flavor next?"])
-        act = self.client.post(reverse("v1:reviews:campaign-action", args=[self.brand.id, created["id"], "activate"]))
-        self.assertEqual(act.data["status"], "active")
+        action = lambda name: self.client.post(  # noqa: E731
+            reverse("v1:reviews:campaign-action", args=[self.brand.id, created["id"], name]))
+        self.assertEqual(action("activate").status_code, 400)  # Master: published after Nibbl review
+        self.assertEqual(action("submit").status_code, 400)  # needs a start date first
+        self.client.patch(reverse("v1:reviews:campaign-detail", args=[self.brand.id, created["id"]]),
+                          {"start_at": timezone.now().isoformat()}, format="json")
+        self.assertEqual(action("submit").data["status"], "pending_review")
+
+        admin = User.objects.create_user(email="ops@x.com", password="x", full_name="Ops", role=User.Role.ADMIN)
+        self.client.force_authenticate(admin)
+        queue = self.client.get(reverse("v1:reviews:admin-campaign-queue")).data
+        self.assertEqual([c["id"] for c in queue], [created["id"]])
+        decide = reverse("v1:reviews:admin-campaign-decision", args=[created["id"], "request_changes"])
+        self.assertEqual(self.client.post(decide, {"comment": ""}, format="json").status_code, 400)  # comment required
+        changed = self.client.post(decide, {"comment": "Use a product photo"}, format="json").data
+        self.assertEqual((changed["status"], changed["review_comment"]), ("changes_requested", "Use a product photo"))
+
+        self.client.force_authenticate(self.owner)
+        action("submit")
+        self.client.force_authenticate(admin)
+        approved = self.client.post(reverse("v1:reviews:admin-campaign-decision", args=[created["id"], "approve"])).data
+        self.assertEqual(approved["status"], "active")
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(action("pause").data["status"], "paused")
+        self.assertEqual(action("activate").data["status"], "active")  # resuming needs no new review
 
     def test_campaign_image_upload(self):
         import io
@@ -277,3 +311,64 @@ class ReviewCampaignTests(APITestCase):
                                format="multipart")
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data["image_url"])
+
+
+class ReviewOpportunityScreensTests(ReviewCampaignTests):
+    """Master Shopper Review Opportunity: Multiple Matches, consent, decline,
+    and the brand's Test Review Chat. (Runs the parent setUp only.)"""
+
+    def setUp(self):
+        super().setUp()
+        self.vanilla = create_product(brand=self.brand, name="Acme Granola", flavor="Vanilla", size_volume="12",
+                                      unit="oz")
+        self.choc = create_product(brand=self.brand, name="Acme Granola", flavor="Chocolate", size_volume="12",
+                                   unit="oz")
+        rc.update_campaign(self.review_campaign, product_ids=[self.chips.id, self.vanilla.id, self.choc.id])
+
+    def test_multiple_matches_confirm_consent_and_decline(self):
+        self.assertEqual((self.vanilla.code, self.choc.code), ("PRD-002", "PRD-003"))  # chips = PRD-001
+        self.n += 1
+        user = User.objects.create_user(email="m@x.com", password="x", full_name="Mia Shopper")
+        reservation = reservation_services.create_reservation(user=user, campaign_id=self.rebate.id)
+        receipt_services.upload_receipt(
+            user=user, reservation_id=reservation.id, **receipt_meta("INV-MM"),
+            items=[{"description": "Sea Salt Chips", "quantity": 1, "unit_price": "3.00"},
+                   {"description": "Acme Granola", "quantity": 1, "unit_price": "5.00"}],
+        )
+        granola = ReviewSession.objects.get(user=user, product__name="Acme Granola")
+        self.assertEqual(sorted(granola.candidate_product_ids), sorted([str(self.vanilla.id), str(self.choc.id)]))
+        self.client.force_authenticate(user)
+        base = reverse("v1:reviews:session-overview", args=[granola.id])
+        data = self.client.get(base).data
+        self.assertEqual(([c["name"] for c in data["candidates"]], data["product_confirmed"]),
+                         (["Acme Granola", "Acme Granola"], False))
+        step = lambda name, body=None: self.client.post(  # noqa: E731
+            reverse("v1:reviews:session-step", args=[granola.id, name]), body or {}, format="json")
+        picked = step("confirm", {"product_id": str(self.choc.id)}).data
+        self.assertEqual((picked["product"]["flavor"], picked["product_confirmed"]), ("Chocolate", True))
+
+        user.accepted_terms_at = None
+        user.save()
+        self.assertTrue(self.client.get(base).data["needs_consent"]["nibbl"])
+        self.assertEqual(step("consent", {"nibbl": False, "brand": True}).status_code, 400)
+        self.assertEqual(step("consent", {"nibbl": True, "brand": True}).data["needs_consent"],
+                         {"nibbl": False, "brand": False})
+
+        chips = ReviewSession.objects.get(user=user, product=self.chips)
+        self.client.post(reverse("v1:reviews:session-step", args=[chips.id, "decline"]))
+        chips.refresh_from_db()
+        self.assertEqual((chips.status, chips.hold.status), ("expired", Hold.Status.RELEASED))
+
+    def test_brand_test_review_chat(self):
+        self.client.force_authenticate(self.owner)
+        url = reverse("v1:reviews:campaign-test-chat", args=[self.brand.id, self.review_campaign.id])
+        q_patch, w_patch = ai_mocks()
+        with q_patch, w_patch:
+            plan = self.client.post(url, {"product_id": str(self.chips.id)}, format="json").data
+            self.assertEqual(plan["questions"][-1]["suggestions"], ["Yes, definitely", "Maybe", "No"])
+            self.assertIn("Which flavor should we make next?", [q["text"] for q in plan["questions"]])
+            draft = self.client.post(url, {"product_id": str(self.chips.id), "answers": [
+                {"question": plan["questions"][0]["text"], "answer": "Very crunchy"}]}, format="json").data
+        self.assertEqual(draft["title"], "Crunchy and fresh")
+        self.assertEqual(ReviewSession.objects.count(), 0)  # nothing saved or paid
+        self.assertEqual(self.review_campaign.prompts.get().times_used, 0)

@@ -59,6 +59,11 @@ def product_review_overview(product_id) -> dict:
         round(answered.filter(would_recommend=True).count() * 100 / answered.count(), 1)
         if answered.exists() else None
     )
+    again = published.exclude(would_buy_again__isnull=True)
+    buy_again = (
+        round(again.filter(would_buy_again=True).count() * 100 / again.count(), 1)
+        if again.exists() else None
+    )
     product = Product.objects.filter(id=product_id).first()
     summary = None
     if product is not None and published.exists():
@@ -80,6 +85,7 @@ def product_review_overview(product_id) -> dict:
         **product_rating_summary(product_id),
         "star_distribution": distribution,
         "recommendation_rate": recommend,
+        "buy_again_rate": buy_again,
         "ai_summary": summary,
     }
 

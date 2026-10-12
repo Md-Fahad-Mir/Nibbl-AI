@@ -614,6 +614,24 @@ export const backendApi = {
       auth: true,
     },
     revenueDashboard: { method: "GET", path: "/admin/analytics/revenue/", auth: true },
+    reviewCampaignQueue: { method: "GET", path: "/admin/review-campaigns/", auth: true },
+    reviewCampaignDecision: (campaignId: string, action: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/review-campaigns/${campaignId}/${action}/`,
+      auth: true,
+    }),
+    productCategories: { method: "GET", path: "/admin/product-categories/", auth: true },
+    addProductCategory: { method: "POST", path: "/admin/product-categories/", auth: true },
+    productCategory: (categoryId: string): ApiEndpoint => ({
+      method: "PATCH",
+      path: `/admin/product-categories/${categoryId}/`,
+      auth: true,
+    }),
+    categoryRequestDecision: (requestId: string, action: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/category-requests/${requestId}/${action}/`,
+      auth: true,
+    }),
     brandBoard: { method: "GET", path: "/admin/brands/board/", auth: true },
     brandSummary: (brandId: string): ApiEndpoint => ({
       method: "GET",
@@ -970,6 +988,15 @@ export const nibblApi = {
   adminRemoveStaff: (userId: string) =>
     apiClient.request<ApiRecord>(backendApi.admin.staffDetail(userId), { method: "DELETE" }),
   adminAuditLogs: () => requestEndpoint<ApiRecord[]>(backendApi.admin.auditLogs),
+  reviewCampaignQueue: () => requestEndpoint<ApiRecord[]>(backendApi.admin.reviewCampaignQueue),
+  decideReviewCampaign: (campaignId: string, action: string, comment: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.reviewCampaignDecision(campaignId, action), { comment }),
+  adminProductCategories: () => requestEndpoint<ApiRecord>(backendApi.admin.productCategories),
+  adminAddProductCategory: (name: string) => requestEndpoint<ApiRecord>(backendApi.admin.addProductCategory, { name }),
+  adminSetCategoryActive: (categoryId: string, isActive: boolean) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.productCategory(categoryId), { is_active: isActive }),
+  adminDecideCategoryRequest: (requestId: string, action: "approve" | "reject", note: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.categoryRequestDecision(requestId, action), { note }),
   adminBrandDiscovery: (query: RequestOptions["query"]) =>
     requestEndpoint<ApiRecord>(backendApi.admin.brandDiscovery, undefined, query),
   adminBrandDiscoveryInsight: (brand: string, query: RequestOptions["query"]) =>

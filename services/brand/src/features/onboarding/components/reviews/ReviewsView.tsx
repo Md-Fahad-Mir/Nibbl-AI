@@ -8,7 +8,8 @@ import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { toNumber } from "../../utils/backendMappers";
 
 const STATUS_LABEL: Record<string, string> = {
-  draft: "Draft", active: "Active", paused: "Paused", scheduled: "Scheduled", ended: "Ended",
+  draft: "Draft", pending_review: "Pending Review", changes_requested: "Changes Requested", rejected: "Not Approved",
+  active: "Active", paused: "Paused", scheduled: "Scheduled", ended: "Ended",
 };
 
 const mapCampaign = (campaign: ApiRecord) => {

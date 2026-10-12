@@ -934,6 +934,10 @@ const readResponseBody = async (response: Response) => {
   return text ? { detail: text } : null;
 };
 
+/** Nibbl Admin Mode: set while a platform admin views a brand; every
+ *  request carries it so the backend logs the admin's actions. */
+export const adminMode = { brandId: "" };
+
 export const apiClient = {
   async request<T>(endpoint: ApiEndpoint, options: RequestOptions = {}): Promise<T> {
     const method = options.method || endpoint.method;
@@ -949,6 +953,7 @@ export const apiClient = {
       const access = tokenStorage.getAccess();
       if (access) headers.set("Authorization", `Bearer ${access}`);
     }
+    if (adminMode.brandId) headers.set("X-Nibbl-Admin-Brand", adminMode.brandId);
 
     const response = await fetch(buildUrl(endpoint.path, options.query), {
       method,

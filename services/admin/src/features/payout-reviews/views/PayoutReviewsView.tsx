@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/features/dashboard/components/Sidebar";
 import { Header } from "@/features/dashboard/components/Header";
+import { SectionTabs } from "@/features/dashboard/components/SectionTabs";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 
@@ -109,6 +110,7 @@ export const PayoutReviewsView = () => {
           onToggleMobileMenu={() => setIsMobileMenuOpen(true)}
           onProfileClick={() => router.push("/settings")}
         />
+        <SectionTabs current="payout-reviews" />
 
         <div>
           <h1 className="text-2xl font-bold text-[#1A1A2E]">Payout Reviews</h1>

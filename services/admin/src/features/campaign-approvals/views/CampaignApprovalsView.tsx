@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/features/dashboard/components/Sidebar";
 import { Header } from "@/features/dashboard/components/Header";
+import { SectionTabs } from "@/features/dashboard/components/SectionTabs";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
@@ -322,6 +323,7 @@ export const CampaignApprovalsView = () => {
           onToggleMobileMenu={() => setIsMobileMenuOpen(true)}
           onProfileClick={() => router.push("/settings")}
         />
+        <SectionTabs current="campaign-approvals" />
 
         <div>
           <h1 className="text-2xl font-bold text-[#1A1A2E]">Campaign Approvals</h1>

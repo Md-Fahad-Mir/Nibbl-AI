@@ -1,5 +1,5 @@
-import { BrandView } from "@/features/brand/views/BrandView";
+import { BrandsBoardView } from "@/features/brand/views/BrandsBoardView";
 
 export default function BrandPage() {
-  return <BrandView />;
+  return <BrandsBoardView />;
 }

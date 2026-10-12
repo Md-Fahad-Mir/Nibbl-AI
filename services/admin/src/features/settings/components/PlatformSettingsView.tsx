@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
+import { AdminUsersPanel } from "./AdminUsersPanel";
 
 interface PlatformSettingsViewProps {
   onBack: () => void;
@@ -48,6 +49,10 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
         referral_flag_shared_device: bool("referral_flag_shared_device"),
         referral_flag_shared_network: bool("referral_flag_shared_network"),
         referral_flag_fraud_signals: bool("referral_flag_fraud_signals"),
+        referral_flag_duplicate_payout: bool("referral_flag_duplicate_payout"),
+        referral_flag_self_referral: bool("referral_flag_self_referral"),
+        referral_flag_unusual_volume: bool("referral_flag_unusual_volume"),
+        referral_volume_limit: Number(text("referral_volume_limit")),
       });
       setDraft({});
       setMessage("Settings saved.");
@@ -130,9 +135,12 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
           <p className="text-sm font-semibold text-[#454656] mt-3">Referral Flag Rules</p>
           <p className="text-xs text-[#6B6B80]">A qualified referral matching an enabled rule goes to Referrals for review instead of paying.</p>
           {[
-            { field: "referral_flag_shared_device", label: "Flag when the new shopper and the referrer used the same device" },
-            { field: "referral_flag_shared_network", label: "Flag when they used the same network" },
-            { field: "referral_flag_fraud_signals", label: "Flag when either account has fraud signals" },
+            { field: "referral_flag_duplicate_payout", label: "Duplicate payout identity" },
+            { field: "referral_flag_shared_device", label: "Same device" },
+            { field: "referral_flag_self_referral", label: "Self-referral (same name, email or phone)" },
+            { field: "referral_flag_unusual_volume", label: "Unusual referral volume" },
+            { field: "referral_flag_shared_network", label: "Same network (additional check)" },
+            { field: "referral_flag_fraud_signals", label: "Fraud signals on either account (additional check)" },
           ].map((f) => (
             <label key={f.field} className="flex items-center gap-2 text-sm font-medium text-[#454656] mt-2">
               <input type="checkbox" checked={bool(f.field)}
@@ -140,6 +148,11 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
               {f.label}
             </label>
           ))}
+          <label className="flex flex-col gap-1 text-sm font-semibold text-[#454656] mt-3">
+            Unusual volume: more than this many referrals in 7 days
+            <input className={inputClass} type="number" min="1" step="1" value={text("referral_volume_limit")}
+              onChange={(e) => setDraft({ ...draft, referral_volume_limit: e.target.value })} />
+          </label>
         </div>
 
         <div className="border-t border-[#F0F0F7] pt-4 flex flex-col gap-3">
@@ -211,6 +224,8 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
           </button>
         </div>
       </div>
+
+      <AdminUsersPanel />
     </div>
   );
 };

@@ -199,14 +199,11 @@ interface AdminApiState {
   loadDashboard: () => Promise<void>;
   loadUsers: () => Promise<void>;
   loadBrands: () => Promise<void>;
-  loadBrandDetail: (brand: BrandDetail) => Promise<BrandDetail>;
   loadTransactions: () => Promise<void>;
   updateProfile: (body: ApiRecord | FormData) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
-  suspendBrand: (brandId: string) => Promise<void>;
-  reactivateBrand: (brandId: string) => Promise<void>;
   approveBrand: (brand: BrandDetail) => Promise<void>;
   rejectBrandApplication: (applicationId: string) => Promise<void>;
   campaignApprovals: ApiRecord[];
@@ -407,14 +404,6 @@ export const useAdminApiStore = create<AdminApiState>()(
         ]);
         set({ brands: mergeBrandRows(listResults(brands), listResults(applications)) });
       },
-      loadBrandDetail: async (brand) => {
-        if (brand.source !== "brand") return brand;
-        const response = await apiClient.request<ApiRecord>(backendApi.brand.brandDetail(brand.id));
-        return {
-          ...mapBrand(response, Number(brand.sl) - 1),
-          sl: brand.sl,
-        };
-      },
       loadTransactions: async () => {
         const response = await apiClient.request<unknown>(backendApi.admin.transactions);
         const transactionList = listResults(response);
@@ -469,14 +458,6 @@ export const useAdminApiStore = create<AdminApiState>()(
           set({ status: "error", error: readError(error) });
           throw error;
         }
-      },
-      suspendBrand: async (brandId) => {
-        await apiClient.request(backendApi.admin.suspendBrand(brandId));
-        await get().loadBrands();
-      },
-      reactivateBrand: async (brandId) => {
-        await apiClient.request(backendApi.admin.reactivateBrand(brandId));
-        await get().loadBrands();
       },
       approveBrand: async (brand) => {
         if (brand.source === "brand-application") {

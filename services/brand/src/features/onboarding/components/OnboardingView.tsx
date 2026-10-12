@@ -137,6 +137,8 @@ export default function OnboardingView() {
     profile,
     status,
     error,
+    adminBrandId,
+    logout,
   } = useBrandApiStore();
 
   useEffect(() => {
@@ -314,6 +316,15 @@ export default function OnboardingView() {
           }}
         />
 
+        {adminBrandId && (
+          <div className="bg-[#001BD2] text-white text-sm px-4 md:px-8 py-2.5 flex flex-wrap items-center justify-between gap-2">
+            <span>
+              ⓘ <b>Nibbl Admin Mode</b> — Viewing {String(brand?.name ?? "this brand")}. Every action is logged.
+            </span>
+            <button onClick={() => void logout().then(() => window.close())}
+              className="text-xs font-bold underline cursor-pointer bg-transparent border-none text-white">Exit Admin Mode</button>
+          </div>
+        )}
         <main className="flex-1 p-4 md:p-8 flex flex-col gap-12 w-full">
           {status === "error" && error && (
             <div className="bg-red-50 border border-red-100 text-red-700 text-sm font-semibold rounded-xl px-4 py-3">

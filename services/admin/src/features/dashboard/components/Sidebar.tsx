@@ -4,6 +4,16 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { SidebarNavItem } from "@/types/dashboard.types";
 
+/** Pages shown as tabs under a Master sidebar item (see SectionTabs). */
+const NAV_PARENT: Partial<Record<SidebarNavItem, SidebarNavItem>> = {
+  "payout-reviews": "withdraw-request",
+  "brand-discovery": "brand",
+  refunds: "brand",
+  "review-flags": "campaign-approvals",
+  suspensions: "users",
+  earnings: "analytics",
+};
+
 interface SidebarProps {
   activeNav?: SidebarNavItem;
   onNavSelect?: (item: SidebarNavItem) => void;
@@ -17,7 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpenMobile = false,
   onCloseMobile,
 }) => {
-  const [selected, setSelected] = useState<SidebarNavItem>(activeNav);
+  const [selected, setSelected] = useState<SidebarNavItem>(NAV_PARENT[activeNav] ?? activeNav);
 
   const handleSelect = (item: SidebarNavItem) => {
     setSelected(item);
@@ -78,8 +88,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ),
     },
     {
-      id: "earnings",
-      label: "Earnings",
+      id: "withdraw-request",
+      label: "Withdrawals",
       icon: (isActive) => (
         <svg
           width="24"
@@ -91,36 +101,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <rect x="2" y="6" width="20" height="12" rx="2" />
-          <circle cx="12" cy="12" r="3" />
-          <path d="M6 12h.01M18 12h.01" />
-        </svg>
-      ),
-    },
-    {
-      id: "users",
-      label: "Users",
-      icon: (isActive) => (
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={isActive ? "#FEFEFE" : "#3E3EDF"}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          <line x1="12" y1="1" x2="12" y2="23" />
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
         </svg>
       ),
     },
     {
       id: "brand",
-      label: "Brand",
+      label: "Brands",
       icon: (isActive) => (
         <svg
           width="24"
@@ -134,26 +122,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
           <line x1="7" y1="7" x2="7.01" y2="7" />
-        </svg>
-      ),
-    },
-    {
-      id: "promo-codes",
-      label: "Promo Codes",
-      icon: (isActive) => (
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={isActive ? "#FEFEFE" : "#3E3EDF"}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-          <line x1="7" y1="7" x2="7.01" y2="7" />
-          <path d="M11 8l5 5" />
         </svg>
       ),
     },
@@ -177,8 +145,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ),
     },
     {
-      id: "review-flags",
-      label: "Flagged Reviews",
+      id: "users",
+      label: "Shoppers",
       icon: (isActive) => (
         <svg
           width="24"
@@ -190,8 +158,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-          <line x1="4" y1="22" x2="4" y2="15" />
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
       ),
     },
@@ -216,8 +186,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ),
     },
     {
-      id: "refunds",
-      label: "Refunds",
+      id: "promo-codes",
+      label: "Promo Codes",
       icon: (isActive) => (
         <svg
           width="24"
@@ -229,14 +199,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <path d="M3 7v6h6" />
-          <path d="M21 17a9 9 0 0 0-15-6.7L3 13" />
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+          <line x1="7" y1="7" x2="7.01" y2="7" />
+          <path d="M11 8l5 5" />
         </svg>
       ),
     },
     {
-      id: "brand-discovery",
-      label: "Brand Discovery",
+      id: "analytics",
+      label: "Analytics",
       icon: (isActive) => (
         <svg
           width="24"
@@ -248,46 +219,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <circle cx="11" cy="11" r="7" />
-          <path d="M21 21l-4.35-4.35" />
-        </svg>
-      ),
-    },
-    {
-      id: "payout-reviews",
-      label: "Payout Reviews",
-      icon: (isActive) => (
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={isActive ? "#FEFEFE" : "#3E3EDF"}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M9 12l2 2 4-4" />
-          <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
-        </svg>
-      ),
-    },
-    {
-      id: "withdraw-request",
-      label: "Withdrawals",
-      icon: (isActive) => (
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={isActive ? "#FEFEFE" : "#3E3EDF"}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <line x1="12" y1="1" x2="12" y2="23" />
-          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+          <path d="M3 3v18h18" />
+          <path d="M7 15l4-4 3 3 5-6" />
         </svg>
       ),
     },

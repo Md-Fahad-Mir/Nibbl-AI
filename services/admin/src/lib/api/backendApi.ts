@@ -614,6 +614,51 @@ export const backendApi = {
       auth: true,
     },
     revenueDashboard: { method: "GET", path: "/admin/analytics/revenue/", auth: true },
+    brandBoard: { method: "GET", path: "/admin/brands/board/", auth: true },
+    brandSummary: (brandId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/admin/brands/${brandId}/summary/`,
+      auth: true,
+    }),
+    brandAccess: (brandId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/brands/${brandId}/access/`,
+      auth: true,
+    }),
+    shoppers: { method: "GET", path: "/admin/shoppers/", auth: true },
+    shopperDetail: (userId: string): ApiEndpoint => ({
+      method: "GET",
+      path: `/admin/shoppers/${userId}/`,
+      auth: true,
+    }),
+    shopperNote: (userId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/shoppers/${userId}/notes/`,
+      auth: true,
+    }),
+    shopperWalletAdjust: (userId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/shoppers/${userId}/wallet/adjust/`,
+      auth: true,
+    }),
+    cancelReservation: (reservationId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/reservations/${reservationId}/cancel/`,
+      auth: true,
+    }),
+    suspensions: { method: "GET", path: "/admin/suspensions/", auth: true },
+    removeSuspension: (suspensionId: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/suspensions/${suspensionId}/remove/`,
+      auth: true,
+    }),
+    staff: { method: "GET", path: "/admin/staff/", auth: true },
+    addStaff: { method: "POST", path: "/admin/staff/", auth: true },
+    staffDetail: (userId: string): ApiEndpoint => ({
+      method: "PATCH",
+      path: `/admin/staff/${userId}/`,
+      auth: true,
+    }),
     linkedAccounts: (userId: string): ApiEndpoint => ({
       method: "GET",
       path: `/admin/users/${userId}/linked-accounts/`,
@@ -886,6 +931,45 @@ export const nibblApi = {
     }),
   adminRevenueDashboard: (query: RequestOptions["query"]) =>
     requestEndpoint<ApiRecord>(backendApi.admin.revenueDashboard, undefined, query),
+  adminBrandBoard: (query: RequestOptions["query"]) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.brandBoard, undefined, query),
+  adminBrandSummary: (brandId: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.brandSummary(brandId)),
+  adminBrandAccess: (brandId: string) =>
+    requestEndpoint<{ url: string }>(backendApi.admin.brandAccess(brandId)),
+  adminBrandAction: (brandId: string, action: "suspend" | "reactivate") =>
+    requestEndpoint<ApiRecord>(
+      action === "suspend" ? backendApi.admin.suspendBrand(brandId) : backendApi.admin.reactivateBrand(brandId)
+    ),
+  adminBrandCredit: (brandId: string, amount: string, note: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.creditBrandWallet(brandId), { amount, note }),
+  adminShoppers: (query: RequestOptions["query"]) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.shoppers, undefined, query),
+  adminShopper: (userId: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.shopperDetail(userId)),
+  adminShopperNote: (userId: string, body: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.shopperNote(userId), { body }),
+  adminShopperWalletAdjust: (userId: string, body: { direction: string; amount: string; reason: string }) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.shopperWalletAdjust(userId), body),
+  adminShopperSuspend: (userId: string, suspend: boolean, reason = "") =>
+    requestEndpoint<ApiRecord>(
+      suspend ? backendApi.admin.suspendUser(userId) : backendApi.admin.reactivateUser(userId),
+      suspend ? { reason } : undefined
+    ),
+  adminCancelReservation: (reservationId: string, reason: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.cancelReservation(reservationId), { reason }),
+  adminSuspensions: (query: RequestOptions["query"]) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.suspensions, undefined, query),
+  adminRemoveSuspension: (suspensionId: string, reason: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.removeSuspension(suspensionId), { reason }),
+  adminStaff: () => requestEndpoint<ApiRecord>(backendApi.admin.staff),
+  adminAddStaff: (body: { email: string; full_name: string; role: string }) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.addStaff, body),
+  adminChangeStaffRole: (userId: string, role: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.staffDetail(userId), { role }),
+  adminRemoveStaff: (userId: string) =>
+    apiClient.request<ApiRecord>(backendApi.admin.staffDetail(userId), { method: "DELETE" }),
+  adminAuditLogs: () => requestEndpoint<ApiRecord[]>(backendApi.admin.auditLogs),
   adminBrandDiscovery: (query: RequestOptions["query"]) =>
     requestEndpoint<ApiRecord>(backendApi.admin.brandDiscovery, undefined, query),
   adminBrandDiscoveryInsight: (brand: string, query: RequestOptions["query"]) =>

@@ -43,6 +43,15 @@ class User(UUIDModel, AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
+    class StaffRole(models.TextChoices):
+        ADMINISTRATOR = "administrator", "Administrator"
+        OPERATIONS = "operations", "Operations"
+        ANALYTICS = "analytics", "Analytics"
+
+    # Master Admin Users: staff access level for platform admins. Blank on an
+    # admin means Administrator (accounts created before roles existed).
+    staff_role = models.CharField(max_length=20, choices=StaffRole.choices, blank=True)
+
     # Brand accounts require admin approval before they can log in.
     # Consumers and admins are auto-approved (default=True).
     is_approved = models.BooleanField(default=True)
@@ -109,6 +118,13 @@ class User(UUIDModel, AbstractBaseUser, PermissionsMixin):
     def is_platform_admin(self) -> bool:
         """True for NibblAI platform admins (superuser, staff, or admin role)."""
         return bool(self.is_superuser or self.is_staff or self.role == self.Role.ADMIN)
+
+    @property
+    def admin_staff_role(self) -> str:
+        """Effective staff role of a platform admin ('' for everyone else)."""
+        if not self.is_platform_admin:
+            return ""
+        return self.staff_role or self.StaffRole.ADMINISTRATOR
 
 
 class VerificationCode(BaseModel):

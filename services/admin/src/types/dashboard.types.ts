@@ -24,6 +24,8 @@ export type SidebarNavItem =
   | "dashboard"
   | "earnings"
   | "users"
+  | "suspensions"
+  | "analytics"
   | "brand"
   | "promo-codes"
   | "campaign-approvals"

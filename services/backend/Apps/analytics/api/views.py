@@ -161,7 +161,8 @@ def _discovery_filters(params) -> dict:
 class AdminRevenueDashboardView(APIView):
     """Revenue summary, brand-funded rewards, needs-attention counts and
     revenue per brand. ?from=YYYY-MM-DD&to=YYYY-MM-DD (default last 30 days),
-    &status=active|suspended &plan=starter|pro|scale &sort=lowest|highest."""
+    &status=active|suspended &plan=starter|pro|scale &category= &sort=lowest|highest;
+    &export=csv downloads the Brand Revenue Contribution table."""
 
     permission_classes = [IsPlatformAdmin]
 
@@ -169,10 +170,29 @@ class AdminRevenueDashboardView(APIView):
     def get(self, request):
         params = request.query_params
         end = _day(params.get("to"))
-        return Response(revenue_dashboard(
+        data = revenue_dashboard(
             start=_day(params.get("from")), end=end + dt.timedelta(days=1) if end else None,
             status=params.get("status", ""), plan=params.get("plan", ""), sort=params.get("sort", "lowest"),
-        ))
+            category=params.get("category", ""),
+        )
+        if params.get("export") != "csv":
+            return Response(data)
+        import csv
+        import io
+
+        from django.http import HttpResponse
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(["brand", "category", "plan", "status", "subscription", "rebate_fees", "review_fees",
+                         "credits", "processing_costs", "net_revenue_contribution"])
+        for row in data["brands"]:
+            writer.writerow([row["name"], row["category"], row["plan"] or "", row["status"], row["subscriptions"],
+                             row["rebate_fees"], row["review_fees"], row["credits"], row["processing_costs"],
+                             row["net_revenue"]])
+        response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="brand-revenue.csv"'
+        return response
 
 
 @extend_schema(tags=["admin-analytics"])

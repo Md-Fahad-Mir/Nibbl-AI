@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
-import { AdminPage, Kpi, Notice, btn, money, selectCls, shortDate } from "@/features/dashboard/components/AdminPage";
+import { AdminPage, Kpi, Notice, Pager, btn, money, selectCls, shortDate, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const PAYMENT: Record<string, [string, string]> = {
   connected: ["Connected", "bg-emerald-500"],
@@ -87,6 +87,7 @@ export const BrandsBoardView = () => {
 
   const kpis = (data?.kpis ?? {}) as ApiRecord;
   const rows = (Array.isArray(data?.results) ? data.results : []) as ApiRecord[];
+  const brandsPage = usePaged(rows);
   const categories = (Array.isArray(data?.categories) ? data.categories : []) as string[];
   const pending = legacyRows.filter((b) => b.source === "brand-application" && b.canApprove);
   const set = (key: keyof typeof filters) => (e: { target: { value: string } }) =>
@@ -156,7 +157,7 @@ export const BrandsBoardView = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((b) => {
+                {brandsPage.items.map((b) => {
                   const [label, dot] = PAYMENT[String(b.payment_status)] ?? PAYMENT.not_connected;
                   return (
                     <tr key={String(b.id)} onClick={() => setSelected(String(b.id))}
@@ -181,6 +182,7 @@ export const BrandsBoardView = () => {
               </tbody>
             </table>
           </div>
+          <Pager paged={brandsPage} noun="brands" />
         </section>
 
         {selected && summary && (
@@ -207,7 +209,7 @@ export const BrandsBoardView = () => {
                   <div key={k} className="flex justify-between"><dt className="text-[#6B6B80]">{k}</dt><dd className="font-semibold">{v}</dd></div>
                 ))}
               </dl>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 [&>button]:h-auto [&>button]:min-h-12 [&>button]:py-2 [&>button]:leading-tight">
                 <button onClick={() => void openDashboard()} className={`${btn} bg-[#3E3EDF] text-white text-xs px-2`}>Open Brand Dashboard</button>
                 <button onClick={() => setCredit({ open: true, amount: "", note: "" })} className={`${btn} border border-[#3E3EDF]/40 text-[#3E3EDF] text-xs px-2`}>Add Promotional Credit</button>
                 <button disabled={busy}

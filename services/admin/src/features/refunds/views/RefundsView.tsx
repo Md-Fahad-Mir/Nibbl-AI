@@ -8,6 +8,7 @@ import { SectionTabs } from "@/features/dashboard/components/SectionTabs";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
+import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const TABS = [
   { value: "pending", label: "Pending" },
@@ -125,6 +126,7 @@ export const RefundsView = () => {
 
   const summary = (data?.summary ?? {}) as ApiRecord;
   const results = (Array.isArray(data?.results) ? data.results : []) as ApiRecord[];
+  const resultsPage = usePaged(results, 10, tab);
 
   return (
     <div className="flex min-h-screen w-full bg-[#FEFEFE]">
@@ -158,11 +160,12 @@ export const RefundsView = () => {
         {data && results.length === 0 ? (
           <div className="bg-white border border-[#ECECF5] rounded-2xl p-10 text-center text-[#9A9AB0]">Nothing here.</div>
         ) : (
-          results.map((refund) => (
+          resultsPage.items.map((refund) => (
             <RefundCard key={String(refund.id)} refund={refund}
               onChanged={(msg) => { setNotice(msg); setReloadKey((k) => k + 1); }} />
           ))
         )}
+        <Pager paged={resultsPage} noun="refund requests" />
       </main>
     </div>
   );

@@ -66,6 +66,12 @@ class MasterAdminTests(APITestCase):
         reservation = reservation_services.create_reservation(user=self.shopper, campaign_id=self.campaign.id)
         rows = self.client.get(reverse("v1:admin_panel:shopper-list"), {"q": "maya"}).data["results"]
         self.assertEqual([r["email"] for r in rows], ["maya@x.com"])
+        for i in range(3):
+            User.objects.create_user(email=f"s{i}@x.com", password="x", full_name=f"S{i}")
+        page = self.client.get(reverse("v1:admin_panel:shopper-list"), {"page": 2, "page_size": 3}).data
+        # 5 shoppers (owner, Maya, 3 new), most recent activity first: s2, s1, s0 | Maya (claimed), owner.
+        self.assertEqual((page["count"], page["page"]), (5, 2))
+        self.assertEqual([r["email"] for r in page["results"]], ["maya@x.com", "o@x.com"])
 
         base = reverse("v1:admin_panel:shopper-detail", args=[self.shopper.id])
         self.client.post(base + "notes/", {"body": "Called about a missing reward."})

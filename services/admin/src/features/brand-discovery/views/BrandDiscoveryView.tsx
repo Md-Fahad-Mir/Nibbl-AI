@@ -8,6 +8,7 @@ import { SectionTabs } from "@/features/dashboard/components/SectionTabs";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord, API_BASE_URL, nibblApi, tokenStorage } from "@/lib/api/backendApi";
+import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const inputClass = "h-10 px-3 rounded-lg border border-[#E0E0F0] text-sm text-[#1A1A2E] outline-none focus:border-[#3E3EDF]";
 
@@ -103,6 +104,7 @@ export const BrandDiscoveryView = () => {
 
   const summary = (data?.summary ?? {}) as ApiRecord;
   const leads = (Array.isArray(data?.leads) ? data.leads : []) as ApiRecord[];
+  const leadsPage = usePaged(leads, 10, "");
 
   return (
     <div className="flex min-h-screen w-full bg-[#FEFEFE]">
@@ -158,7 +160,7 @@ export const BrandDiscoveryView = () => {
                 </tr>
               </thead>
               <tbody>
-                {leads.map((lead) => (
+                {leadsPage.items.map((lead) => (
                   <tr key={String(lead.brand)} onClick={() => void openLead(lead)}
                     className={`border-b border-[#F6F6FB] cursor-pointer hover:bg-[#F6F6FB] ${selected?.brand === lead.brand ? "bg-[#F6F6FB]" : ""}`}>
                     <td className="p-3 font-semibold text-[#1A1A2E]">{String(lead.brand)}</td>
@@ -175,6 +177,7 @@ export const BrandDiscoveryView = () => {
                 )}
               </tbody>
             </table>
+            <div className="px-4 pb-3"><Pager paged={leadsPage} noun="brands" /></div>
           </div>
 
           {selected && (

@@ -7,6 +7,7 @@ import { Header } from "@/features/dashboard/components/Header";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
+import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const TABS = [
   { value: "flagged", label: "Flagged" },
@@ -155,6 +156,7 @@ export const ReferralsView = () => {
 
   const summary = (data?.summary ?? {}) as ApiRecord;
   const results = (Array.isArray(data?.results) ? data.results : []) as ApiRecord[];
+  const resultsPage = usePaged(results, 10, tab);
 
   return (
     <div className="flex min-h-screen w-full bg-[#FEFEFE]">
@@ -198,11 +200,12 @@ export const ReferralsView = () => {
         {data && results.length === 0 ? (
           <div className="bg-white border border-[#ECECF5] rounded-2xl p-10 text-center text-[#9A9AB0]">Nothing here.</div>
         ) : (
-          results.map((referral) => (
+          resultsPage.items.map((referral) => (
             <ReferralCard key={String(referral.id)} referral={referral}
               onChanged={(msg) => { setNotice(msg); setReloadKey((k) => k + 1); }} />
           ))
         )}
+        <Pager paged={resultsPage} noun="referrals" />
       </main>
     </div>
   );

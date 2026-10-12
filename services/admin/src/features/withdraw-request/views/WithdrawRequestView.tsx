@@ -8,6 +8,7 @@ import { SectionTabs } from "@/features/dashboard/components/SectionTabs";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { API_BASE_URL, ApiRecord, nibblApi, tokenStorage } from "@/lib/api/backendApi";
+import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
 
 // Master Admin Sheet 1 — Withdrawals.
 const TABS = [
@@ -132,6 +133,7 @@ export const WithdrawRequestView = () => {
   }, [tab, q, reloadKey]);
 
   const rows = useMemo(() => (Array.isArray(data?.results) ? data.results : []) as ApiRecord[], [data]);
+  const rowsPage = usePaged(rows, 10, tab);
   const counts = (data?.counts ?? {}) as ApiRecord;
   const fee = Number(data?.fee_per_payout ?? 0);
   const picked = rows.filter((r) => selected.includes(String(r.id)));
@@ -291,8 +293,12 @@ export const WithdrawRequestView = () => {
                 <tr className="text-xs text-[#6B6B80] border-b border-[#ECECF5]">
                   {tab === "ready" && (
                     <th className="p-3 w-8">
-                      <input type="checkbox" checked={rows.length > 0 && selected.length === rows.length}
-                        onChange={(e) => setSelected(e.target.checked ? rows.map((r) => String(r.id)) : [])} />
+                      <input type="checkbox" title="Select this page"
+                        checked={rowsPage.items.length > 0 && rowsPage.items.every((r) => selected.includes(String(r.id)))}
+                        onChange={(e) => {
+                          const ids = rowsPage.items.map((r) => String(r.id));
+                          setSelected((cur) => (e.target.checked ? [...new Set([...cur, ...ids])] : cur.filter((x) => !ids.includes(x))));
+                        }} />
                     </th>
                   )}
                   <th className="p-3 text-left">Withdrawal ID</th>
@@ -305,7 +311,7 @@ export const WithdrawRequestView = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {rowsPage.items.map((row) => {
                   const id = String(row.id);
                   return (
                     <tr key={id} onClick={() => tab === "review" && setReviewId(id)}
@@ -351,6 +357,7 @@ export const WithdrawRequestView = () => {
                 )}
               </tbody>
             </table>
+            <div className="px-3 pb-3"><Pager paged={rowsPage} noun="withdrawals" /></div>
           </div>
           {tab === "review" && reviewRow && (
             <ManualReviewPanel key={String(reviewRow.id)} row={reviewRow} onDone={(msg) => { setReviewId(null); reload(msg); }} />

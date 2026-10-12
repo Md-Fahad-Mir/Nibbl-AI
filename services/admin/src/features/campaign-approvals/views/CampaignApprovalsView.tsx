@@ -8,6 +8,7 @@ import { SectionTabs } from "@/features/dashboard/components/SectionTabs";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
+import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
 
 type Kind = "new" | "revision";
 type Action = "approve" | "request-changes" | "reject";
@@ -305,6 +306,7 @@ export const CampaignApprovalsView = () => {
   };
 
   const visible = reviews.filter((r) => r.kind === kind);
+  const visiblePage = usePaged(visible, 10, kind);
 
   return (
     <div className="flex min-h-screen w-full bg-[#FEFEFE]">
@@ -365,7 +367,7 @@ export const CampaignApprovalsView = () => {
             Nothing waiting for review.
           </div>
         ) : (
-          visible.map((review) => (
+          visiblePage.items.map((review) => (
             <ReviewCard
               key={String(review.id)}
               review={review}
@@ -376,6 +378,7 @@ export const CampaignApprovalsView = () => {
             />
           ))
         )}
+        <Pager paged={visiblePage} noun="campaigns" />
       </main>
     </div>
   );

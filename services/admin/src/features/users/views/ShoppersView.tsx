@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
-import { AdminPage, Notice, btn, money, selectCls, shortDate } from "@/features/dashboard/components/AdminPage";
+import { AdminPage, Notice, Pager, btn, money, selectCls, shortDate, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const TABS = ["Overview", "Wallet Ledger", "Claims & Reviews", "Referrals", "Suspensions"] as const;
 type Tab = (typeof TABS)[number];
@@ -23,6 +23,8 @@ export const ShoppersView = () => {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [rows, setRows] = useState<ApiRecord[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [count, setCount] = useState(0);
   const [selected, setSelected] = useState(initial);
   const [detail, setDetail] = useState<ApiRecord | null>(null);
   const [tab, setTab] = useState<Tab>("Overview");
@@ -37,15 +39,19 @@ export const ShoppersView = () => {
     let live = true;
     const timer = setTimeout(() => {
       nibblApi
-        .adminShoppers({ q, status })
-        .then((result) => live && setRows(list(result.results)))
+        .adminShoppers({ q, status, page: String(page), page_size: "10" })
+        .then((result) => {
+          if (!live) return;
+          setRows(list(result.results));
+          setCount(Number(result.count ?? 0));
+        })
         .catch((err: Error) => live && setError(err.message || "Could not load shoppers."));
     }, 250);
     return () => {
       live = false;
       clearTimeout(timer);
     };
-  }, [q, status, reloadKey]);
+  }, [q, status, page, reloadKey]);
 
   useEffect(() => {
     if (!selected) return;
@@ -94,6 +100,9 @@ export const ShoppersView = () => {
     }
   };
 
+  const ledgerPage = usePaged(list(detail?.ledger));
+  const claimsPage = usePaged(list(detail?.claims));
+  const reviewsPage = usePaged(list(detail?.reviews));
   const account = (detail?.account ?? {}) as ApiRecord;
   const wallet = (detail?.wallet ?? {}) as ApiRecord;
   const purchases = (detail?.purchase_activity ?? {}) as ApiRecord;
@@ -105,9 +114,9 @@ export const ShoppersView = () => {
       <div className="flex flex-col 2xl:flex-row gap-5 items-start">
         <section className="w-full 2xl:w-[52%] bg-white border border-[#ECECF5] rounded-2xl p-5 flex flex-col gap-4">
           <div className="flex flex-wrap gap-2">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shoppers by name, email or ID"
+            <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder="Search shoppers by name, email or ID"
               className="h-9 px-4 rounded-full border border-[#E0E0F0] text-xs flex-1 min-w-48" />
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
+            <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className={selectCls}>
               <option value="">All statuses</option>
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
@@ -140,6 +149,7 @@ export const ShoppersView = () => {
               </tbody>
             </table>
           </div>
+          <Pager paged={{ page, pages: Math.max(1, Math.ceil(count / 10)), total: count, size: 10, setPage }} noun="shoppers" />
         </section>
 
         {selected && detail && (
@@ -231,7 +241,7 @@ export const ShoppersView = () => {
                     <th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Type</th><th className="py-2 pr-3">Description</th>
                     <th className="py-2 pr-3 text-right">Amount</th><th className="py-2 text-right">Balance</th></tr></thead>
                   <tbody>
-                    {list(detail.ledger).map((e) => (
+                    {ledgerPage.items.map((e) => (
                       <tr key={String(e.id)} className="border-b border-[#F6F6FB]">
                         <td className="py-2 pr-3 text-xs">{shortDate(e.date)}</td><td className="py-2 pr-3">{String(e.category)}</td>
                         <td className="py-2 pr-3 text-xs text-[#6B6B80]">{String(e.description || "—")}</td>
@@ -243,6 +253,7 @@ export const ShoppersView = () => {
                     {list(detail.ledger).length === 0 && <tr><td colSpan={5} className="py-4 text-center text-[#9A9AB0]">No wallet activity.</td></tr>}
                   </tbody>
                 </table>
+                <Pager paged={ledgerPage} noun="entries" />
               </div>
             )}
 
@@ -255,7 +266,7 @@ export const ShoppersView = () => {
                       <th className="py-2 pr-3">Campaign</th><th className="py-2 pr-3">Brand</th><th className="py-2 pr-3">Status</th>
                       <th className="py-2 pr-3">Claimed</th><th className="py-2 pr-3">Expires</th><th className="py-2" /></tr></thead>
                     <tbody>
-                      {list(detail.claims).map((c) => (
+                      {claimsPage.items.map((c) => (
                         <tr key={String(c.id)} className="border-b border-[#F6F6FB]">
                           <td className="py-2 pr-3">{String(c.campaign)}</td><td className="py-2 pr-3">{String(c.brand)}</td>
                           <td className="py-2 pr-3 capitalize">{String(c.status)}</td>
@@ -270,12 +281,13 @@ export const ShoppersView = () => {
                       {list(detail.claims).length === 0 && <tr><td colSpan={6} className="py-4 text-center text-[#9A9AB0]">No claims.</td></tr>}
                     </tbody>
                   </table>
+                  <Pager paged={claimsPage} noun="claims" />
                 </div>
                 <div className={`${card} overflow-x-auto`}>
                   <h3 className="text-sm font-bold mb-2">Reviews</h3>
                   <table className="w-full text-sm">
                     <tbody>
-                      {list(detail.reviews).map((r) => (
+                      {reviewsPage.items.map((r) => (
                         <tr key={String(r.id)} className="border-b border-[#F6F6FB]">
                           <td className="py-2 pr-3">{String(r.product)}</td><td className="py-2 pr-3">{String(r.brand)}</td>
                           <td className="py-2 pr-3">{"★".repeat(Number(r.rating))}</td>
@@ -285,6 +297,7 @@ export const ShoppersView = () => {
                       {list(detail.reviews).length === 0 && <tr><td className="py-4 text-center text-[#9A9AB0]">No reviews.</td></tr>}
                     </tbody>
                   </table>
+                  <Pager paged={reviewsPage} noun="reviews" />
                 </div>
               </>
             )}

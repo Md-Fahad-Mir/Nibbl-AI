@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
+import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const ROLES = [
   { value: "administrator", label: "Administrator", hint: "Everything, including Admin Users and Settings" },
@@ -56,6 +57,7 @@ export const AdminUsersPanel = () => {
   };
 
   const users = (Array.isArray(data?.results) ? data.results : []) as ApiRecord[];
+  const logsPage = usePaged(logs ?? [], 25);
   const canManage = data?.my_role === "administrator";
 
   return (
@@ -136,7 +138,7 @@ export const AdminUsersPanel = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.map((log) => {
+                  {logsPage.items.map((log) => {
                     const meta = (log.metadata ?? {}) as ApiRecord;
                     const { event, ...rest } = meta;
                     return (
@@ -154,6 +156,7 @@ export const AdminUsersPanel = () => {
                 </tbody>
               </table>
             </div>
+            <Pager paged={logsPage} noun="entries" />
           </div>
         </div>
       )}

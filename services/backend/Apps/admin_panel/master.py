@@ -167,9 +167,11 @@ def _shopper_id(user) -> str:
     return f"SHP-{str(user.id)[:8].upper()}"
 
 
-def shoppers_list(*, q="", status="") -> list[dict]:
+def shoppers_list(*, q="", status="", page: int = 1, page_size: int = 10) -> dict:
     """Shopper List: account status, wallet, redemptions, referrals, brand
-    suspensions and last activity (most recent first)."""
+    suspensions and last activity (most recent first), one page at a time."""
+    from django.db.models.functions import Coalesce, Greatest
+
     from Apps.wallets.models import Wallet as W
 
     users = User.objects.filter(role=User.Role.CONSUMER, is_deleted=False)
@@ -186,7 +188,13 @@ def shoppers_list(*, q="", status="") -> list[dict]:
         n_referrals=Count("referrals_made", distinct=True),
         n_brand_suspensions=Count("brand_suspensions", filter=Q(brand_suspensions__is_active=True), distinct=True),
         last_reservation=Max("reservations__created_at"),
-    ).order_by("-created_at")[:500]
+    ).annotate(last_activity=Greatest(
+        Coalesce("last_reservation", "created_at"), Coalesce("last_login", "created_at"), "created_at",
+    )).order_by("-last_activity", "-created_at")
+    count = users.count()
+    page_size = max(1, min(page_size, 100))
+    page = max(1, min(page, (count + page_size - 1) // page_size or 1))
+    users = list(users[(page - 1) * page_size: page * page_size])
     wallets = {w.user_id: w for w in W.objects.filter(kind=W.Kind.CUSTOMER, user__in=[u.id for u in users])}
     rows = []
     for user in users:
@@ -197,10 +205,9 @@ def shoppers_list(*, q="", status="") -> list[dict]:
             "wallet": _money(wallet.available() if wallet else ZERO),
             "redemptions": user.n_redemptions, "referrals": user.n_referrals,
             "brand_suspensions": user.n_brand_suspensions,
-            "last_activity": max(filter(None, [user.last_reservation, user.last_login, user.created_at])),
+            "last_activity": user.last_activity,
         })
-    rows.sort(key=lambda r: r["last_activity"], reverse=True)
-    return rows
+    return {"results": rows, "count": count, "page": page, "page_size": page_size}
 
 
 def shopper_detail(user) -> dict:

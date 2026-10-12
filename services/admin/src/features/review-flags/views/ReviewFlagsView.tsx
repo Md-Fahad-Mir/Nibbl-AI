@@ -8,6 +8,7 @@ import { SectionTabs } from "@/features/dashboard/components/SectionTabs";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
+import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const dateTime = (value: unknown) =>
   typeof value === "string" && value ? new Date(value).toLocaleString() : "—";
@@ -140,6 +141,7 @@ export const ReviewFlagsView = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { profile, loadProfile, logout } = useAdminApiStore();
   const [reviews, setReviews] = useState<ApiRecord[] | null>(null);
+  const reviewsPage = usePaged(reviews ?? []);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -200,7 +202,7 @@ export const ReviewFlagsView = () => {
             No flagged reviews waiting.
           </div>
         ) : (
-          reviews.map((review) => (
+          reviewsPage.items.map((review) => (
             <FlagCard
               key={String(review.id)}
               review={review}
@@ -211,6 +213,7 @@ export const ReviewFlagsView = () => {
             />
           ))
         )}
+        <Pager paged={reviewsPage} noun="flagged reviews" />
       </main>
     </div>
   );

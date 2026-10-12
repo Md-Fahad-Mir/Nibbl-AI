@@ -188,6 +188,15 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE,
     reservation.hold = hold
     reservation.save(update_fields=["hold", "updated_at"])
     # Cooldown now starts at the approved redemption (Apps.rebates.services).
+    from Apps.campaigns import deals
+    from Apps.notifications import events
+
+    events.claim_reserved(reservation)
+    # Master "Exhausted Early": this claim filled the 25-hour cycle within 12 h.
+    if deals.capacity_remaining(campaign, now) == 0:
+        started = deals.cycle_start(campaign, now)
+        if started is not None and now - started < dt.timedelta(hours=12):
+            events.campaign_exhausted_early(campaign, hours=(now - started).total_seconds() / 3600)
     return reservation
 
 
@@ -235,5 +244,8 @@ def expire_due_reservations(now=None) -> int:
             # The daily-budget usage is NOT restored (EXPIRED still counts).
             if reservation.hold_id:
                 wallet_services.release_hold(hold=reservation.hold)
+            from Apps.notifications import events
+
+            events.claim_expired(reservation)
         count += 1
     return count

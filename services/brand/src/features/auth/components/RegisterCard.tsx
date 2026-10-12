@@ -5,8 +5,6 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
-import StrengthBar, { getPasswordStrength } from "./StrengthBar";
 import CategoryGrid, { categories } from "./CategoryGrid";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
@@ -31,13 +29,9 @@ export default function RegisterCard() {
   const [email, setEmail] = useState("");
   const [officeLocation, setOfficeLocation] = useState(officeLocations[0]);
   const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [formError, setFormError] = useState("");
-  const passwordStrength = getPasswordStrength(password);
   const selectedCategory = categories.find((category) => category.id === categoryId);
-  const isPasswordStrongEnough = passwordStrength.score >= 3;
 
   useEffect(() => {
     let live = true;
@@ -53,10 +47,6 @@ export default function RegisterCard() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError("");
-    if (!isPasswordStrongEnough) {
-      setFormError("Use a stronger password before creating your account.");
-      return;
-    }
     if (!accepted) {
       setFormError("Accept the terms and privacy policy to continue.");
       return;
@@ -65,7 +55,6 @@ export default function RegisterCard() {
       await registerAndApply({
         fullName,
         email,
-        password,
         brandName,
         website,
         phone,
@@ -187,38 +176,6 @@ export default function RegisterCard() {
             </select>
           </div>
 
-          {/* Row 6: Password */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-[#454656]">Password</label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="new-password"
-                minLength={8}
-                aria-describedby="password-strength"
-                required
-                className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 pr-12 text-sm focus:outline-none focus:border-[#001BD2] focus:ring-1 focus:ring-[#001BD2] font-manrope placeholder-slate-400"
-              />
-              <button
-                type="button"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                title={showPassword ? "Hide password" : "Show password"}
-                onClick={() => setShowPassword((current) => !current)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#757688] transition-colors hover:text-[#001BD2] focus:outline-none focus:text-[#001BD2]"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Password Strength */}
-          <div id="password-strength">
-            <StrengthBar password={password} />
-          </div>
-
           {/* Business Category Grid */}
           <CategoryGrid selected={categoryId} onSelect={setCategoryId} />
 
@@ -272,11 +229,16 @@ export default function RegisterCard() {
 
           <button
             type="submit"
-            disabled={!accepted || !isPasswordStrongEnough || status === "loading"}
+            disabled={!accepted || status === "loading"}
             className="flex items-center justify-center w-full h-[60px] rounded-full text-white font-bold text-lg bg-gradient-to-r from-[#001BD2] to-[#2D3FEA] hover:opacity-95 transition-all shadow-lg shadow-blue-600/25 active:scale-[0.98] disabled:opacity-60"
           >
-            {status === "loading" ? "Creating..." : "Create Account"}
+            {status === "loading" ? "Sending…" : "Send Magic Link"}
           </button>
+
+          <p className="-mt-3 text-center text-[12px] text-[#757688] font-manrope">
+            No password needed — we&apos;ll email you a secure sign-in link. We&apos;ll use your work email and company
+            website to confirm this is a brand account.
+          </p>
 
           {/* OR Divider */}
           <div className="flex items-center justify-center gap-4 py-1">

@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import BrandLandingView from "@/features/brand-landing/components/BrandLandingView";
 
 export default function BrandLandingPage() {
-  redirect("/");
+  return <BrandLandingView />;
 }

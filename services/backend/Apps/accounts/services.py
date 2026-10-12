@@ -34,7 +34,10 @@ from Apps.accounts.selectors import (
 from Apps.common.models import AuditLog
 
 CODE_TTL = dt.timedelta(minutes=15)
-LINK_TTL = dt.timedelta(hours=24)
+# Master brand onboarding: the secure sign-in / verification link expires in
+# 15 minutes.
+LINK_TTL = dt.timedelta(minutes=15)
+MAGIC_LINK_TTL = dt.timedelta(minutes=15)
 VERIFY_VIA_LINK = "link"
 
 _PURPOSE_LABEL = {
@@ -140,7 +143,7 @@ def register_user(
     *,
     full_name: str,
     email: str,
-    password: str,
+    password: str | None,
     role: str = User.Role.CONSUMER,
     referral_code: str | None = None,
     verify_via: str = "code",
@@ -160,7 +163,8 @@ def register_user(
 
     pending = PendingUser.objects.create(
         email=email.lower(),
-        password=make_password(password),
+        # Passwordless brand signup (Master): no usable password.
+        password=make_password(password or None),
         full_name=full_name,
         role=role,
         referral_code=referral_code,
@@ -418,6 +422,54 @@ def login(*, email: str, password: str, remember_me: bool = False, client: dict 
     tokens = issue_tokens(user, remember_me=remember_me, client=client)
     return {"user": user, "tokens": tokens}
 
+
+
+
+# ---------------------------------------------------------------------------
+# Passwordless sign-in (brand app magic link)
+# ---------------------------------------------------------------------------
+def _hash_token(token: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def request_magic_link(*, email: str) -> None:
+    """Email a one-time sign-in link (15 minutes). Silent for unknown or
+    unverified emails so it never reveals which accounts exist."""
+    from Apps.accounts.models import MagicLinkToken
+
+    user = get_active_user_by_email(email)
+    if user is None or not user.is_email_verified:
+        return
+    now = timezone.now()
+    MagicLinkToken.objects.filter(user=user, used_at__isnull=True).update(used_at=now)  # one live link
+    token = secrets.token_urlsafe(32)
+    MagicLinkToken.objects.create(user=user, token_hash=_hash_token(token), expires_at=now + MAGIC_LINK_TTL)
+    emails.send_magic_link(to_email=user.email, url=f"{settings.BRAND_APP_URL}/login/magic?{urlencode({'token': token})}")
+
+
+@transaction.atomic
+def sign_in_with_magic_link(*, token: str, client: dict | None = None) -> dict:
+    from Apps.accounts.models import MagicLinkToken
+
+    link = (
+        MagicLinkToken.objects.select_for_update().select_related("user")
+        .filter(token_hash=_hash_token(token or "")).first()
+    )
+    now = timezone.now()
+    if link is None or link.used_at is not None or link.expires_at <= now:
+        raise AccountError("This sign-in link is invalid or has expired. Request a new one.")
+    link.used_at = now
+    link.save(update_fields=["used_at", "updated_at"])
+    user = link.user
+    if not user.is_active or user.is_deleted:
+        raise AccountError("This sign-in link is invalid or has expired. Request a new one.")
+    AuditLog.objects.create(
+        action=AuditLog.Action.LOGIN, actor_type="user", actor_id=str(user.id),
+        target_type="user", target_id=str(user.id), metadata={"method": "magic_link"},
+    )
+    return {"user": user, "tokens": issue_tokens(user, client=client)}
 
 
 # ---------------------------------------------------------------------------

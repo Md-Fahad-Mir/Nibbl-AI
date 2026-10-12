@@ -11,7 +11,10 @@ import { useBrandApiStore } from "@/stores/useBrandApiStore";
 export default function LoginCard() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, error, status, accessToken, refreshToken } = useBrandApiStore();
+  const { login, requestMagicLink, error, status, accessToken, refreshToken } = useBrandApiStore();
+  // Master: passwordless sign-in by default; password stays available.
+  const [mode, setMode] = useState<"link" | "password">("link");
+  const [linkSent, setLinkSent] = useState(false);
   const [email, setEmail] = useState(searchParams.get("email") || "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -27,6 +30,11 @@ export default function LoginCard() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     try {
+      if (mode === "link") {
+        await requestMagicLink(email.trim());
+        setLinkSent(true);
+        return;
+      }
       await login(email.trim(), password, rememberMe);
       router.replace("/onboarding");
     } catch {
@@ -77,6 +85,14 @@ export default function LoginCard() {
             />
           </div>
 
+          {linkSent && mode === "link" && (
+            <div className="rounded-2xl bg-[#F2F3FF] p-4 font-manrope text-sm text-[#131B2E]">
+              <b>Check your email.</b> If <b>{email.trim().toLowerCase()}</b> has a Nibbl account, we sent a secure
+              sign-in link. It works once and expires in 15 minutes.
+            </div>
+          )}
+
+          {mode === "password" && (<>
           {/* Password Section */}
           <div className="flex flex-col gap-1.5 font-manrope">
             <div className="flex justify-between items-center text-xs">
@@ -119,6 +135,7 @@ export default function LoginCard() {
               Remember me for 30 days
             </label>
           </div>
+          </>)}
 
           {/* Sign In Button */}
           {error && (
@@ -139,7 +156,13 @@ export default function LoginCard() {
             disabled={status === "loading"}
             className="flex items-center justify-center w-full h-[56px] rounded-full text-white font-bold text-lg bg-gradient-to-r from-[#001BD2] to-[#2D3FEA] hover:opacity-95 transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98] disabled:opacity-60"
           >
-            {status === "loading" ? "Signing in..." : "Sign In"}
+            {status === "loading"
+              ? mode === "link" ? "Sending…" : "Signing in..."
+              : mode === "link" ? (linkSent ? "Resend sign-in link" : "Email me a sign-in link") : "Sign In"}
+          </button>
+          <button type="button" onClick={() => { setMode(mode === "link" ? "password" : "link"); setLinkSent(false); }}
+            className="-mt-2 text-xs font-bold text-[#454656] hover:underline font-manrope">
+            {mode === "link" ? "Sign in with a password instead" : "Email me a secure sign-in link instead"}
           </button>
 
           {/* OR Divider */}

@@ -150,6 +150,10 @@ class BrandApplication(BaseModel):
     # the brand; admin approval remains as a manual override.
     checkout_promo_code = models.CharField(max_length=40, blank=True)
     checkout_payment_intent_id = models.CharField(max_length=255, blank=True)
+    # Master: a card is required at checkout (even when credits cover today)
+    # and saved for renewals — the Stripe customer exists before the brand.
+    checkout_customer_id = models.CharField(max_length=255, blank=True)
+    checkout_setup_intent_id = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

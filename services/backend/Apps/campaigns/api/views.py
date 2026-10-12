@@ -163,6 +163,22 @@ class CampaignSubmitView(APIView):
 
 
 @extend_schema(tags=["campaigns"])
+class CampaignLaunchReadinessView(APIView):
+    """Master "Fund your campaign before launch": the 7-day requirement,
+    current balance, minimum needed and auto-replenishment state."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id, campaign_id):
+        from Apps.campaigns.launch import readiness
+
+        brand = get_brand_or_404(brand_id)
+        require_membership(request.user, brand)
+        return Response(readiness(_get_campaign(brand, campaign_id)))
+
+
+@extend_schema(tags=["campaigns"])
 class CampaignImageView(APIView):
     """Upload the campaign image (multipart, field ``image``)."""
 

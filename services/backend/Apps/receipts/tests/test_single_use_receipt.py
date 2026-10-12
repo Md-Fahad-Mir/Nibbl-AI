@@ -11,6 +11,7 @@ pass by returning a tidy-looking error.
 """
 
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TransactionTestCase
 from rest_framework.test import APITestCase
@@ -123,9 +124,10 @@ class SingleUseAcrossThePlatformTests(APITestCase):
             services.upload_receipt(user=a, reservation_id=r_a.id, image=image())
 
         # Same customer, brand-new claim on another campaign, same receipt.
-        second_claim = reservation_services.create_reservation(
-            user=a, campaign_id=campaign2.id
-        )
+        with patch("django.utils.timezone.now", return_value=r_a.created_at):
+            second_claim = reservation_services.create_reservation(
+                user=a, campaign_id=campaign2.id
+            )
         with ocr_returning(payload()):
             with self.assertRaises(services.DuplicateReceipt):
                 services.upload_receipt(

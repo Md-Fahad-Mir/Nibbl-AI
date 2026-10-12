@@ -36,12 +36,16 @@ def get_preference(user) -> NotificationPreference:
     return pref
 
 
-def notify(*, user, notification_type, context=None, reference_type="", reference_id="") -> Notification:
+def notify(*, user, notification_type, context=None, reference_type="", reference_id="",
+           title=None, body=None) -> Notification:
+    """``title`` / ``body`` (optional) override the type's template."""
     context = context or {}
     template = NotificationTemplate.objects.filter(
         type=notification_type, is_active=True
     ).first()
-    if template:
+    if title is not None:
+        body = body or ""
+    elif template:
         title = _render(template.title, context)
         body = _render(template.body, context)
     else:
@@ -196,8 +200,12 @@ def generate_new_offer_notifications() -> int:
 
 
 def run_all_generators() -> dict:
+    from Apps.notifications import events
+
     return {
         "receipt_reminders": generate_receipt_reminders(),
         "inactivity": generate_inactivity_reminders(),
         "new_offers": generate_new_offer_notifications(),
+        "wallet_low": events.generate_wallet_low_alerts(),
+        "weekly_summary": events.generate_weekly_summaries(),
     }

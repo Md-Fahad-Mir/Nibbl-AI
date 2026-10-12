@@ -36,6 +36,11 @@ urlpatterns = [
         name="campaign-submit",
     ),
     path(
+        f"{_base}/<uuid:campaign_id>/launch-readiness/",
+        views.CampaignLaunchReadinessView.as_view(),
+        name="campaign-launch-readiness",
+    ),
+    path(
         f"{_base}/<uuid:campaign_id>/image/",
         views.CampaignImageView.as_view(),
         name="campaign-image",

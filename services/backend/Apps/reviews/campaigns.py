@@ -398,7 +398,7 @@ def submit(session: ReviewSession, *, rating, content="", title="", would_recomm
     )
     session.status = ReviewSession.Status.COMPLETED
     session.save(update_fields=["status", "updated_at"])
-    if not publish:
+    if not publish and rating <= 2:
         from Apps.notifications.brand import notify_brand
 
         notify_brand(

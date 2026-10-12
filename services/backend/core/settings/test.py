@@ -6,6 +6,7 @@ from .base import *  # noqa: F401,F403
 from .base import REST_FRAMEWORK
 
 DEBUG = False
+LAUNCH_FUNDING_REQUIRED = False  # tests that cover it switch it on
 
 # Uploaded files (receipt photos, avatars) go to a throwaway directory so the
 # suite never writes into the real media/ tree.

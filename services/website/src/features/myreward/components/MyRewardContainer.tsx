@@ -8,7 +8,7 @@ import EarnMoreCard from "./EarnMoreCard";
 import ReceiptHistoryCard from "./ReceiptHistoryCard";
 import ActivityHistoryCard from "./ActivityHistoryCard";
 import InviteFriendsCard from "./InviteFriendsCard";
-import UploadReceiptCard from "./UploadReceiptCard";
+import ReceiptSubmitFlow from "./ReceiptSubmitFlow";
 import ReviewChatModal from "./ReviewChatModal";
 import InviteFriendsModal from "./InviteFriendsModal";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
@@ -65,18 +65,17 @@ export default function MyRewardContainer({
   const [focusedReservationId, setFocusedReservationId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  // Master Receipt Submission runs inside the claim it belongs to.
+  const [submitReservationId, setSubmitReservationId] = useState<string | null>(null);
   const {
     receipts: apiReceipts,
     activities: apiActivities,
     reservations,
     reviewOpportunities,
     unreadCount,
-    status,
     loadRewardsHub,
-    uploadReceipt,
     inviteFriend,
   } = useConsumerApiStore();
-  const latestError = useConsumerApiStore((state) => state.error);
 
   useEffect(() => {
     void loadRewardsHub();
@@ -115,7 +114,7 @@ export default function MyRewardContainer({
       setFocusedReservationId(autoUploadReservationId);
       setUploadError(null);
       setUploadMessage(null);
-      document.getElementById("upload-receipt-section")?.scrollIntoView({ behavior: "smooth" });
+      setSubmitReservationId(autoUploadReservationId);
       onClearAutoUploadReservation?.();
     }, 0);
 
@@ -217,28 +216,6 @@ export default function MyRewardContainer({
       }))
     : localActivities;
 
-  const handleUploadSuccess = async (file: File) => {
-    const reservationId = selectedReservationId || String(reservations[0]?.id || "");
-    if (!reservationId) {
-      setUploadError("Select a pending reward before uploading a receipt.");
-      setUploadMessage(null);
-      return;
-    }
-
-    try {
-      setUploadError(null);
-      setUploadMessage(null);
-      const receipt = await uploadReceipt(reservationId, file);
-      const responseMessage = String(receipt.detail || receipt.message || "");
-      setUploadMessage(responseMessage || "Receipt uploaded. Verification is in progress.");
-      setSelectedReservationId(null);
-    } catch (error) {
-      const backendMessage = useConsumerApiStore.getState().error;
-      setUploadError(backendMessage || (error instanceof Error ? error.message : "Receipt upload failed."));
-      setUploadMessage(null);
-    }
-  };
-
   const handleReviewSubmitted = (itemName: string, reward: string) => {
     setActiveReviewOpportunity(null);
     const newActivity: Activity = {
@@ -273,8 +250,7 @@ export default function MyRewardContainer({
             setFocusedReservationId(reservationId);
             setUploadError(null);
             setUploadMessage(null);
-            const el = document.getElementById("upload-receipt-section");
-            el?.scrollIntoView({ behavior: "smooth" });
+            setSubmitReservationId(reservationId);
           }}
           reservations={filteredReservations}
           receipts={filteredApiReceipts}
@@ -298,24 +274,21 @@ export default function MyRewardContainer({
           
           <InviteFriendsCard onInviteClick={() => setIsInviteModalOpen(true)} />
           
-          <div id="upload-receipt-section" className="w-full max-w-[667px]">
-            <UploadReceiptCard
-              onUploadStart={() => {
-                setUploadError(null);
-                setUploadMessage(null);
-              }}
-              onUploadSuccess={handleUploadSuccess}
-            />
-            {(uploadError || uploadMessage || (status === "error" && latestError && latestError !== uploadError)) && (
-              <p className={`mt-3 text-center text-sm font-medium ${uploadError || status === "error" ? "text-red-500" : "text-[#00A671]"}`}>
-                {uploadError || uploadMessage || latestError}
-              </p>
-            )}
-          </div>
         </div>
       </main>
 
       <Footer onTabChange={onTabChange} />
+
+      {submitReservationId && (
+        <ReceiptSubmitFlow
+          reservation={reservations.find((r) => String(r.id) === submitReservationId) ?? { id: submitReservationId }}
+          onClose={() => setSubmitReservationId(null)}
+          onNavigate={(tab) => {
+            setSubmitReservationId(null);
+            onTabChange(tab);
+          }}
+        />
+      )}
 
       {activeReviewOpportunity && (
         <ReviewChatModal

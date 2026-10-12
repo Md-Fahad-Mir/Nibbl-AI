@@ -6,6 +6,7 @@ import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import NibblReviewComment from "../NibblReviewComment";
 import OfferPreview from "./OfferPreview";
 import MetaPixelToggle from "./MetaPixelToggle";
+import LaunchFundingModal, { launchReady } from "./LaunchFundingModal";
 import { geographyText } from "./GeographyPicker";
 import { DealType, cooldownText, dealLabel, money, receiptWording } from "./dealRules";
 
@@ -89,6 +90,8 @@ export default function CampaignDetail({ campaignId, onBack, onEdit }: CampaignD
   const products = useBrandApiStore((s) => s.products);
   const loadCampaignExtras = useBrandApiStore((s) => s.loadCampaignExtras);
   const campaignAction = useBrandApiStore((s) => s.campaignAction);
+  const brandIdForGate = useBrandApiStore((s) => s.selectedBrandId) ?? "";
+  const [fundGate, setFundGate] = useState(false);
   const [reviews, setReviews] = useState<ApiRecord[]>([]);
   const [access, setAccess] = useState<ApiRecord>({});
   const [busy, setBusy] = useState(false);
@@ -145,6 +148,11 @@ export default function CampaignDetail({ campaignId, onBack, onEdit }: CampaignD
     setBusy(true);
     setError("");
     try {
+      // Master ⑪: wallet funded + auto-replenishment on before submitting.
+      if (action === "submit" && !(await launchReady(brandIdForGate, campaignId))) {
+        setFundGate(true);
+        return;
+      }
       await campaignAction(campaignId, action);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -162,6 +170,14 @@ export default function CampaignDetail({ campaignId, onBack, onEdit }: CampaignD
 
   return (
     <div className="w-full max-w-[1240px] mx-auto flex flex-col gap-6 font-manrope text-left animate-slide-up">
+      {fundGate && (
+        <LaunchFundingModal campaignId={campaignId} campaignName={String(campaign.name ?? "")}
+          onClose={() => setFundGate(false)}
+          onReady={async () => {
+            setFundGate(false);
+            await campaignAction(campaignId, "submit");
+          }} />
+      )}
       <button onClick={onBack} className="self-start flex items-center gap-1 text-sm font-bold text-[#454656] hover:text-[#001BD2] cursor-pointer">
         <ArrowLeft className="w-4 h-4" /> Rebate campaigns
       </button>

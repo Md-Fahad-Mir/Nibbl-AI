@@ -25,6 +25,11 @@ application_patterns = [
         views.BrandCheckoutView.as_view(),
         name="application-checkout",
     ),
+    path(
+        "<uuid:application_id>/checkout/confirm/",
+        views.BrandCheckoutConfirmView.as_view(),
+        name="application-checkout-confirm",
+    ),
 ]
 
 brand_patterns = [

@@ -491,6 +491,9 @@ def pause_campaign(campaign: Campaign) -> Campaign:
     campaign.status = Campaign.Status.PAUSED
     campaign.auto_paused = False  # manual pause
     campaign.save(update_fields=["status", "auto_paused", "updated_at"])
+    from Apps.notifications import events
+
+    events.campaign_paused(campaign, reason="a team member paused it.")
     return campaign
 
 
@@ -507,6 +510,11 @@ def sync_funding_state(brand) -> dict:
             campaign.auto_paused = True
             campaign.save(update_fields=["status", "auto_paused", "updated_at"])
             summary["paused"] += 1
+            from Apps.notifications import events
+
+            events.campaign_paused(
+                campaign, reason="Available Funds can't cover new claims. It resumes automatically once you add funds.",
+            )
 
     for campaign in brand.campaigns.filter(
         status=Campaign.Status.PAUSED, auto_paused=True

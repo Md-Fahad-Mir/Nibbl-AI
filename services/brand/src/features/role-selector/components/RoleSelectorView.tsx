@@ -1,84 +1,58 @@
+"use client";
+
 import Image from "next/image";
-import RoleCard from "./RoleCard";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
+export const ROLE_KEY = "nibbl-role-choice";
+const SHOPPER_SITE = "https://www.joinnibbl.com";
+
+const remember = (role: "brand" | "shopper") => {
+  try {
+    localStorage.setItem(ROLE_KEY, role);
+  } catch {
+    // Private mode: the gate simply shows again next time.
+  }
+};
+
+/** Master onboarding ① "Role Gate": What brings you to Nibbl? */
 export default function RoleSelectorView() {
+  const router = useRouter();
+  const cards = [
+    {
+      role: "brand" as const, title: "I'm a Brand", image: "/Auth/brandImage.svg", cta: "Explore Nibbl for Brands",
+      text: "Acquire new shoppers, reconnect with customers, build loyalty, and generate verified reviews.",
+      className: "bg-[#001BD2]", go: () => router.push("/brand-landing"),
+    },
+    {
+      role: "shopper" as const, title: "I'm a Shopper", image: "/Auth/shopperImage.svg", cta: "View Deals",
+      text: "Discover deals, submit receipts, and earn rewards.",
+      className: "bg-[#6C38E0]", go: () => window.location.assign(SHOPPER_SITE),
+    },
+  ];
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-slate-200/50 backdrop-blur-sm">
-      {/* Main Modal Container */}
-      <div className="relative w-full max-w-[1000px] bg-white border border-slate-100 rounded-[40px] shadow-2xl p-6 md:p-16 flex flex-col items-center gap-12 transition-all duration-300 animate-slide-up">
-        {/* Close Button */}
-        <button
-          type="button"
-          className="absolute right-8 top-8 w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 border border-slate-100 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors duration-200"
-          aria-label="Close modal"
-        >
-          <svg
-            className="w-5 h-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-
-        {/* Header Section */}
-        <div className="text-center flex flex-col items-center gap-4 font-sans">
-          <h1 className="text-3xl md:text-[44px] font-extrabold text-slate-900 tracking-tight leading-tight">
-            Choose your <span className="text-blue-600">NibblAi</span> experience.
-          </h1>
-          <p className="text-slate-500 font-semibold text-lg md:text-xl">
-            Pick the experience that&apos;s right for you.
-          </p>
+    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-slate-200/50 font-jakarta">
+      <div className="w-full max-w-[860px] bg-white rounded-[32px] shadow-2xl p-6 md:p-12 flex flex-col items-center gap-8">
+        <Image src="/Auth/LogoImage.svg" alt="Nibbl" width={150} height={56} priority />
+        <h1 className="text-3xl md:text-4xl font-extrabold text-[#131B2E] text-center">What brings you to Nibbl?</h1>
+        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-5">
+          {cards.map((card) => (
+            <div key={card.role} className="flex flex-col gap-3 rounded-[24px] border border-slate-100 bg-[#F8F9FF] p-5">
+              <div className="relative w-full h-[180px]">
+                <Image src={card.image} alt="" fill className="object-contain" />
+              </div>
+              <h2 className="text-xl font-extrabold text-[#131B2E]">{card.title}</h2>
+              <p className="text-sm text-[#454656] flex-1">{card.text}</p>
+              <button type="button" onClick={() => { remember(card.role); card.go(); }}
+                className={`h-12 rounded-xl text-white font-bold text-sm cursor-pointer ${card.className}`}>
+                {card.cta} →
+              </button>
+            </div>
+          ))}
         </div>
-
-        {/* Role Cards Container */}
-        <div className="w-full flex flex-col md:flex-row gap-8">
-          <RoleCard
-            title="For Brands"
-            description="Launch rebate and review campaigns, drive in-store purchases, and track performance with powerful analytics."
-            buttonText="Explore Brand Platform"
-            buttonColorClass="bg-[#124CE8]"
-            imageSrc="/Auth/brandImage.svg"
-            iconSrc="/Auth/brandIcon.svg"
-            iconBgClass="bg-[#EFF6FF]"
-            iconColorClass="border-[#2563EB]"
-            href="/brand-landing"
-          />
-
-          <RoleCard
-            title="For Shoppers"
-            description="Find rebates, upload receipts, complete reviews, and get cashback on products you already love."
-            buttonText="Start Claiming Rewards!"
-            buttonColorClass="bg-[#6C38E0]"
-            imageSrc="/Auth/shopperImage.svg"
-            iconSrc="/Auth/shopperIcon.svg"
-            iconBgClass="bg-[#FAF5FF]"
-            iconColorClass="border-[#9333EA]"
-            href="/register"
-          />
-        </div>
-
-        {/* Footer Info */}
-        <div className="flex items-center gap-3 bg-slate-50 border border-slate-100 px-6 py-3 rounded-full max-w-lg text-center font-sans shadow-sm">
-          <div className="w-5 h-5 flex-shrink-0 relative">
-            <Image
-              src="/Auth/1stPageBottomIcon.svg"
-              alt="Info icon"
-              fill
-              className="object-contain"
-            />
-          </div>
-          <p className="text-sm font-medium text-slate-500">
-            Not sure? Brands create and manage campaigns. Shoppers claim rewards
-            and{" "}
-            <span className="text-purple-600 font-semibold">earn cashback</span>
-            .
-          </p>
+        <div className="text-center text-sm text-[#454656] font-manrope flex flex-col gap-1">
+          <span>Already a brand user? <Link href="/login" className="font-bold text-[#001BD2]">Sign In</Link></span>
+          <span className="text-xs text-[#94A3B8]">We&apos;ll remember your choice on this device.</span>
         </div>
       </div>
     </div>

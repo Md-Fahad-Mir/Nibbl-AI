@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import DashboardSnapshots from "./DashboardSnapshots";
 import CampaignsTable from "../rebates/CampaignsTable";
 import GetStarted from "./GetStarted";
+import AccountActivated, { ACTIVATED_KEY } from "./AccountActivated";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
 // Master: date range defaults to Last 30 Days for the snapshots and the
@@ -12,10 +14,29 @@ const RANGES = [7, 30, 90, 365];
 export default function DashboardView({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const days = useBrandApiStore((state) => state.dashboardDays);
   const loadAnalyticsDashboard = useBrandApiStore((state) => state.loadAnalyticsDashboard);
+  const [justActivated, setJustActivated] = useState(() => {
+    try {
+      return typeof window !== "undefined" && localStorage.getItem(ACTIVATED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const finishActivation = () => {
+    try {
+      localStorage.removeItem(ACTIVATED_KEY);
+    } catch {
+      // ignore
+    }
+    setJustActivated(false);
+  };
   // Master: the brand name (from Brand Settings) in the welcome message.
   const brand = useBrandApiStore((state) => state.brand);
   const profile = useBrandApiStore((state) => state.profile);
   const displayName = String(brand?.name ?? profile?.full_name ?? profile?.email ?? "there");
+
+  if (justActivated) {
+    return <AccountActivated onDone={finishActivation} onBilling={() => { finishActivation(); onNavigate("Plans"); }} />;
+  }
 
   return (
     <div className="flex flex-col gap-12 w-full">

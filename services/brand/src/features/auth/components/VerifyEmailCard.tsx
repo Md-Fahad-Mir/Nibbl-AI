@@ -30,7 +30,10 @@ export default function VerifyEmailCard() {
     if (!token || !initialEmail || attempted.current) return;
     attempted.current = true;
     verifyEmail(initialEmail, "", token)
-      .then(() => router.replace(`/login?verified=1&email=${encodeURIComponent(initialEmail.trim().toLowerCase())}`))
+      // The secure link signs the brand in: straight on to checkout.
+      .then(() => router.replace(useBrandApiStore.getState().accessToken
+        ? "/onboarding"
+        : `/login?verified=1&email=${encodeURIComponent(initialEmail.trim().toLowerCase())}`))
       .catch(() => setLinkFailed(true));
   }, [token, initialEmail, verifyEmail, router]);
 
@@ -68,14 +71,14 @@ export default function VerifyEmailCard() {
 
         <div className="flex flex-col gap-2">
           <h2 className="text-2xl md:text-3xl font-extrabold text-[#131B2E] tracking-tight">
-            {verifyingLink ? "Verifying your email…" : "Check your inbox"}
+            {verifyingLink ? "Verifying your email…" : "Check Your Email"}
           </h2>
           <p className="text-sm font-medium text-[#454656] leading-relaxed">
             {verifyingLink
               ? "One moment while we confirm your work email."
               : linkFailed
                 ? "That link is invalid or has expired. Send yourself a new one."
-                : "We sent a secure verification link to your work email. Open it to continue to checkout. The link expires in 24 hours."}
+                : "One secure sign-in unlocks your brand workspace. We sent a secure sign-in link to your work email — open it to continue to checkout. Your onboarding progress is saved; the link expires in 15 minutes."}
           </p>
         </div>
 
@@ -102,7 +105,7 @@ export default function VerifyEmailCard() {
               disabled={status === "loading" || !normalizedEmail}
               className="flex items-center justify-center w-full h-[56px] rounded-full text-white font-bold text-lg bg-gradient-to-r from-[#001BD2] to-[#2D3FEA] hover:opacity-95 transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98] disabled:opacity-60"
             >
-              {status === "loading" ? "Sending..." : "Resend verification link"}
+              {status === "loading" ? "Sending..." : "Resend Email"}
             </button>
 
             {!showCode ? (

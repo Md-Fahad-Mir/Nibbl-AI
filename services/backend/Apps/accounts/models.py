@@ -349,3 +349,16 @@ class Referral(BaseModel):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class MagicLinkToken(BaseModel):
+    """Passwordless brand sign-in (Master: magic link, expires in 15 minutes).
+    Only a SHA-256 of the emailed token is stored; each link works once."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="magic_links")
+    token_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]

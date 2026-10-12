@@ -6,6 +6,7 @@ import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 import { getStripe, stripeConfigured } from "@/lib/stripe";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatMoney } from "../../utils/backendMappers";
+import { ACTIVATED_KEY } from "../dashboard/AccountActivated";
 
 const stripePromise = getStripe();
 
@@ -22,7 +23,9 @@ const useActivationPoll = () => {
   };
 };
 
-function PayForm({ due, onPaid }: { due: string; onPaid: () => void }) {
+function PayForm({ due, planName, setup, onPaid }: {
+  due: string; planName: string; setup: boolean; onPaid: () => Promise<void> | void;
+}) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
@@ -33,7 +36,8 @@ function PayForm({ due, onPaid }: { due: string; onPaid: () => void }) {
     if (!stripe || !elements) return;
     setSubmitting(true);
     setError("");
-    const { error: confirmError } = await stripe.confirmPayment({
+    const confirm = setup ? stripe.confirmSetup : stripe.confirmPayment;
+    const { error: confirmError } = await confirm({
       elements,
       confirmParams: { return_url: window.location.href },
       redirect: "if_required",
@@ -43,17 +47,34 @@ function PayForm({ due, onPaid }: { due: string; onPaid: () => void }) {
       setSubmitting(false);
       return;
     }
-    onPaid();
+    try {
+      await onPaid();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not activate your plan.");
+      setSubmitting(false);
+    }
   };
 
   return (
     <form onSubmit={pay} className="flex flex-col gap-4">
       <PaymentElement options={{ layout: "tabs" }} />
+      <label className="flex items-center gap-2 text-xs text-[#454656]">
+        <input type="checkbox" checked readOnly className="accent-[#001BD2]" />
+        Use this card for subscription renewals and future Nibbl charges.
+      </label>
+      {setup && (
+        <p className="text-xs text-[#454656] bg-[#F2F3FF] rounded-xl p-3">
+          A payment card is required even when credits cover today&apos;s charge. Nothing is charged today.
+        </p>
+      )}
       {error && <p className="text-xs font-bold text-red-600">{error}</p>}
       <button type="submit" disabled={!stripe || submitting}
         className="h-12 rounded-full bg-[#001BD2] text-white font-bold text-sm disabled:opacity-50 cursor-pointer">
-        {submitting ? "Processing…" : `Pay ${formatMoney(due)} and activate`}
+        {submitting ? "Processing…" : `Activate ${planName} Plan${Number(due) > 0 ? ` — pay ${formatMoney(due)}` : ""}`}
       </button>
+      <p className="text-[11px] text-[#757688] text-center">
+        By activating, you authorize recurring billing every 30 days until your plan is changed or canceled.
+      </p>
     </form>
   );
 }
@@ -68,6 +89,7 @@ export default function BrandCheckout({ application }: { application: ApiRecord 
   const [promo, setPromo] = useState("");
   const [quote, setQuote] = useState<ApiRecord | null>(null);
   const [clientSecret, setClientSecret] = useState("");
+  const [setupMode, setSetupMode] = useState(false);
   const [activating, setActivating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -110,6 +132,11 @@ export default function BrandCheckout({ application }: { application: ApiRecord 
 
   const activate = async () => {
     setActivating(true);
+    try {
+      localStorage.setItem(ACTIVATED_KEY, "1"); // Master ⑨: show "Account Activated" once
+    } catch {
+      // Private mode: the dashboard simply opens directly.
+    }
     if (!(await waitForActivation())) {
       setActivating(false);
       setError("Payment received — your account is still activating. Refresh in a minute.");
@@ -124,7 +151,10 @@ export default function BrandCheckout({ application }: { application: ApiRecord 
         body: { plan, promo_code: String(quote?.promo_code ?? "") },
       });
       if (result.activated) await activate();
-      else setClientSecret(String(result.client_secret));
+      else {
+        setSetupMode(result.intent_type === "setup");
+        setClientSecret(String(result.client_secret));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start checkout.");
     } finally {
@@ -210,7 +240,7 @@ export default function BrandCheckout({ application }: { application: ApiRecord 
           {error && <p className="text-xs font-bold text-red-600">{error}</p>}
           <button type="button" onClick={() => void startCheckout()} disabled={busy || !quote}
             className="h-12 rounded-full bg-[#001BD2] text-white font-bold text-sm disabled:opacity-50 cursor-pointer">
-            {Number(quote?.due_today ?? 1) > 0 ? "Continue to payment" : "Activate account"}
+            Continue to payment details
           </button>
         </section>
       )}
@@ -222,7 +252,12 @@ export default function BrandCheckout({ application }: { application: ApiRecord 
             <p className="text-sm font-semibold text-red-600">Payments are not configured (missing Stripe publishable key).</p>
           ) : (
             <Elements stripe={stripePromise} options={{ clientSecret }}>
-              <PayForm due={String(quote?.due_today ?? "0")} onPaid={() => void activate()} />
+              <PayForm due={String(quote?.due_today ?? "0")} planName={String(quote?.plan_name ?? "")} setup={setupMode}
+                onPaid={async () => {
+                  // $0 due: the saved card is checked with Stripe, then the plan activates.
+                  if (setupMode) await apiClient.request(backendApi.brand.checkoutConfirm(applicationId));
+                  await activate();
+                }} />
             </Elements>
           )}
           {error && <p className="text-xs font-bold text-red-600">{error}</p>}

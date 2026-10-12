@@ -67,13 +67,27 @@ class CheckoutTests(APITestCase):
         self.assertEqual(brand.wallet.balance, Decimal("0.00"))
         self.assertEqual(Subscription.objects.get(brand=brand).status, Subscription.Status.ACTIVE)
 
-    def test_promo_covering_plan_activates_without_card(self):
+    def test_promo_covering_plan_still_requires_a_saved_card(self):
+        # Master: a payment card is required even when credits cover today's charge.
         billing.create_promo_code(code="free", amount=Decimal("50.00"))
-        data = self.client.post(self.url, {"plan": "starter", "promo_code": "free"}, format="json").data
-        self.assertTrue(data["activated"])
+        setup = SimpleNamespace(id="seti_1", client_secret="seti_secret")
+        with patch("Apps.billing.stripe_gateway.create_checkout_setup_intent", return_value=setup):
+            data = self.client.post(self.url, {"plan": "starter", "promo_code": "free"}, format="json").data
+        self.assertEqual((data["activated"], data["intent_type"], data["client_secret"]), (False, "setup", "seti_secret"))
+        confirm = reverse("v1:brands:application-checkout-confirm", args=[self.application.id])
+
+        pending = {"status": "requires_payment_method", "metadata": {"application_id": str(self.application.id)}}
+        with patch("Apps.billing.stripe_gateway.retrieve_setup_intent", return_value=pending):
+            self.assertEqual(self.client.post(confirm, {}, format="json").status_code, 400)  # no card yet
+
+        saved = {"status": "succeeded", "payment_method": "pm_card",
+                 "metadata": {"application_id": str(self.application.id)}}
+        with patch("Apps.billing.stripe_gateway.retrieve_setup_intent", return_value=saved):
+            self.assertTrue(self.client.post(confirm, {}, format="json").data["activated"])
         self.application.refresh_from_db()
         brand = self.application.brand
         self.assertEqual(brand.wallet.promo_balance(), Decimal("11.00"))  # leftover credit for fees
+        self.assertEqual(brand.auto_refill.stripe_payment_method_id, "pm_card")  # saved for renewals
         self.assertEqual(self.client.post(self.url, {}, format="json").status_code, 400)  # already set up
 
     def test_admin_approved_first_still_records_payment(self):

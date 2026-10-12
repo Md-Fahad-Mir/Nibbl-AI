@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ImagePlus, Search } from "lucide-react";
 import { ApiRecord } from "@/lib/api/backendApi";
 import { DealCampaignInput, RetailerOption, useBrandApiStore } from "@/stores/useBrandApiStore";
+import LaunchFundingModal, { launchReady } from "./LaunchFundingModal";
 import NibblReviewComment from "../NibblReviewComment";
 import OfferPreview from "./OfferPreview";
 import RetailerPicker from "./RetailerPicker";
@@ -47,6 +48,9 @@ const Section = ({ n, title, children }: { n: string; title: string; children: R
 export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: DealCampaignBuilderProps) {
   const products = useBrandApiStore((state) => state.products);
   const saveDealCampaign = useBrandApiStore((state) => state.saveDealCampaign);
+  const campaignAction = useBrandApiStore((state) => state.campaignAction);
+  const brandId = useBrandApiStore((state) => state.selectedBrandId) ?? "";
+  const [fundGate, setFundGate] = useState<ApiRecord | null>(null);
   const loadRetailers = useBrandApiStore((state) => state.loadRetailers);
   const addRetailer = useBrandApiStore((state) => state.addRetailer);
 
@@ -191,10 +195,20 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
     };
     setBusy(submit ? "submit" : "draft");
     try {
+      // Master ⑪: a new submission needs the wallet funded (7-day requirement)
+      // and auto-replenishment on — save first, then check.
+      const gated = submit && !isApproved;
       const saved = await saveDealCampaign(campaign ? String(campaign.id) : null, body, {
         image: imageFile,
-        submit,
+        submit: submit && !gated,
       });
+      if (gated) {
+        if (await launchReady(brandId, String(saved.id))) await campaignAction(String(saved.id), "submit");
+        else {
+          setFundGate(saved);
+          return;
+        }
+      }
       onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the campaign.");
@@ -211,6 +225,16 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
 
   return (
     <div className="w-full max-w-[1240px] mx-auto flex flex-col gap-6 font-manrope text-left animate-slide-up">
+      {fundGate && (
+        <LaunchFundingModal campaignId={String(fundGate.id)} campaignName={String(fundGate.name ?? name)}
+          onClose={() => { const draft = fundGate; setFundGate(null); onSaved(draft); }}
+          onReady={async () => {
+            const ready = fundGate;
+            setFundGate(null);
+            await campaignAction(String(ready.id), "submit");
+            onSaved(ready);
+          }} />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-jakarta text-2xl font-extrabold text-[#131B2E]">

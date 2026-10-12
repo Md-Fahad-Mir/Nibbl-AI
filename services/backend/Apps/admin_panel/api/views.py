@@ -556,7 +556,8 @@ class AdminBrandAccessView(APIView):
 
 @extend_schema(tags=["admin"])
 class AdminShopperListView(APIView):
-    """Shoppers list. ?q (name, email, phone, Shopper ID) &status=active|suspended"""
+    """Shoppers list. ?q (name, email, phone, Shopper ID) &status=active|suspended
+    &page=1&page_size=10 → {results, count, page, page_size}"""
 
     permission_classes = [IsPlatformAdmin]
 
@@ -565,7 +566,10 @@ class AdminShopperListView(APIView):
         from Apps.admin_panel import master
 
         p = request.query_params
-        return Response({"results": master.shoppers_list(q=p.get("q", ""), status=p.get("status", ""))})
+        page, size = p.get("page", "1"), p.get("page_size", "10")
+        return Response(master.shoppers_list(q=p.get("q", ""), status=p.get("status", ""),
+                                             page=int(page) if page.isdigit() else 1,
+                                             page_size=int(size) if size.isdigit() else 10))
 
 
 @extend_schema(tags=["admin"])

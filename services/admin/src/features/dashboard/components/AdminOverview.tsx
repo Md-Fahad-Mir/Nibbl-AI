@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
+import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const RANGES = [
   { days: 7, label: "Last 7 days" },
@@ -52,6 +53,7 @@ export const AdminOverview = () => {
   const rewards = (data?.brand_funded_rewards ?? {}) as ApiRecord;
   const attention = (data?.needs_attention ?? {}) as ApiRecord;
   const brands = (Array.isArray(data?.brands) ? data.brands : []) as ApiRecord[];
+  const brandsPage = usePaged(brands, 10, `${status}${plan}${category}${sort}`);
   const trend = (Array.isArray(data?.trend) ? data.trend : []) as ApiRecord[];
   const categories = (Array.isArray(data?.categories) ? data.categories : []) as string[];
 
@@ -181,7 +183,7 @@ export const AdminOverview = () => {
               </tr>
             </thead>
             <tbody>
-              {brands.map((b) => (
+              {brandsPage.items.map((b) => (
                 <tr key={String(b.id)} className="border-b border-[#F6F6FB]">
                   <td className="py-2 pr-4 font-semibold text-[#1A1A2E]">{String(b.name)}</td>
                   <td className="py-2 pr-4">{String(b.category || "—")}</td>
@@ -202,6 +204,7 @@ export const AdminOverview = () => {
             </tbody>
           </table>
         </div>
+        <Pager paged={brandsPage} noun="brands" />
       </section>
     </div>
   );

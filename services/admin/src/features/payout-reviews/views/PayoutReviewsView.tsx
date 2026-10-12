@@ -7,6 +7,7 @@ import { Header } from "@/features/dashboard/components/Header";
 import { SectionTabs } from "@/features/dashboard/components/SectionTabs";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
+import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const dateText = (value: unknown) =>
   typeof value === "string" && value ? new Date(value).toLocaleDateString() : "—";
@@ -22,6 +23,7 @@ export const PayoutReviewsView = () => {
     loadPendingPayoutMethods,
     reviewPayoutMethod,
   } = useAdminApiStore();
+  const methodsPage = usePaged(pendingPayoutMethods);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -139,7 +141,7 @@ export const PayoutReviewsView = () => {
                 </tr>
               </thead>
               <tbody>
-                {pendingPayoutMethods.map((method) => {
+                {methodsPage.items.map((method) => {
                   const id = String(method.id);
                   const busy = busyId === id;
                   return (
@@ -184,6 +186,7 @@ export const PayoutReviewsView = () => {
               </tbody>
             </table>
           </div>
+          <div className="px-6 pb-4"><Pager paged={methodsPage} noun="payout methods" /></div>
         </div>
       </main>
     </div>

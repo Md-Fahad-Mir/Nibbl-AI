@@ -7,6 +7,7 @@ import { Header } from "@/features/dashboard/components/Header";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord } from "@/lib/api/backendApi";
+import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const money = (value: unknown) => `$${Number(value ?? 0).toFixed(2)}`;
 const dateText = (value: unknown) =>
@@ -27,6 +28,7 @@ export const PromoCodesView = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { profile, loadProfile, logout, promoCodes, loadPromoCodes, createPromoCode } =
     useAdminApiStore();
+  const promoCodesPage = usePaged(promoCodes, 10, "");
 
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
@@ -266,7 +268,7 @@ export const PromoCodesView = () => {
                 </tr>
               </thead>
               <tbody>
-                {promoCodes.map((code) => (
+                {promoCodesPage.items.map((code) => (
                   <tr key={String(code.id)} className="border-t border-[#F0F0F7]">
                     <td className="px-6 py-3 font-bold text-[#1A1A2E]">{String(code.code)}</td>
                     <td className="px-6 py-3 text-[#454656]">{money(code.amount)}</td>
@@ -301,6 +303,7 @@ export const PromoCodesView = () => {
               </tbody>
             </table>
           </div>
+          <div className="px-6 pb-4"><Pager paged={promoCodesPage} noun="codes" /></div>
         </div>
       </main>
     </div>

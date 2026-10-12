@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_BASE_URL, ApiRecord, nibblApi, tokenStorage } from "@/lib/api/backendApi";
-import { AdminPage, Kpi, Notice, btn, money, selectCls } from "@/features/dashboard/components/AdminPage";
+import { AdminPage, Kpi, Notice, Pager, btn, money, selectCls, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const RANGES = [
   { days: 7, label: "Last 7 Days" },
@@ -104,6 +104,7 @@ export const AnalyticsView = () => {
   const rewards = (data?.brand_funded_rewards ?? {}) as ApiRecord;
   const daily = (Array.isArray(data?.daily_trend) ? data.daily_trend : []) as ApiRecord[];
   const brands = (Array.isArray(data?.brands) ? data.brands : []) as ApiRecord[];
+  const brandsPage = usePaged(brands);
   const categories = (Array.isArray(data?.categories) ? data.categories : []) as string[];
   const set = (key: keyof typeof filters) => (e: { target: { value: string } }) =>
     setFilters((f) => ({ ...f, [key]: e.target.value }));
@@ -169,7 +170,7 @@ export const AnalyticsView = () => {
                 </tr>
               </thead>
               <tbody>
-                {brands.map((b) => (
+                {brandsPage.items.map((b) => (
                   <tr key={String(b.id)} className="border-b border-[#F6F6FB]">
                     <td className="py-2 pr-3 font-semibold text-[#1A1A2E]">{String(b.name)}</td>
                     <td className="py-2 pr-3">{String(b.category || "—")}</td>
@@ -185,6 +186,7 @@ export const AnalyticsView = () => {
               </tbody>
             </table>
           </div>
+          <Pager paged={brandsPage} noun="brands" />
         </section>
       </div>
     </AdminPage>

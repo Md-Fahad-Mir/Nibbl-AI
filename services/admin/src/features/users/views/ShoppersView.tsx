@@ -19,7 +19,10 @@ type Dialog = { kind: "wallet" | "note" | "suspend" | "cancel"; claimId?: string
 /** Master Admin Sheet 3 "Shoppers": searchable list + selected shopper with
  *  activity tabs, purchase relationships, cooldowns and admin actions. */
 export const ShoppersView = () => {
-  const initial = useSearchParams().get("shopper") || "";
+  const params = useSearchParams();
+  const initial = params.get("shopper") || "";
+  const [phoneChange, setPhoneChange] = useState(params.get("phone_change") || "");
+  const [phoneNote, setPhoneNote] = useState("");
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [rows, setRows] = useState<ApiRecord[] | null>(null);
@@ -39,7 +42,7 @@ export const ShoppersView = () => {
     let live = true;
     const timer = setTimeout(() => {
       nibblApi
-        .adminShoppers({ q, status, page: String(page), page_size: "10" })
+        .adminShoppers({ q, status, page: String(page), page_size: "10", ...(phoneChange ? { phone_change: phoneChange } : {}) })
         .then((result) => {
           if (!live) return;
           setRows(list(result.results));
@@ -51,7 +54,7 @@ export const ShoppersView = () => {
       live = false;
       clearTimeout(timer);
     };
-  }, [q, status, page, reloadKey]);
+  }, [q, status, page, reloadKey, phoneChange]);
 
   useEffect(() => {
     if (!selected) return;
@@ -103,6 +106,21 @@ export const ShoppersView = () => {
   const ledgerPage = usePaged(list(detail?.ledger));
   const claimsPage = usePaged(list(detail?.claims));
   const reviewsPage = usePaged(list(detail?.reviews));
+  const decidePhone = async (requestId: string, action: "approve" | "reject") => {
+    setBusy(true);
+    setError("");
+    try {
+      setDetail(await nibblApi.decidePhoneChange(requestId, action, phoneNote));
+      setPhoneNote("");
+      setNotice(action === "approve" ? "Phone change approved — the shopper will verify the new number." : "Phone change rejected.");
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      setError((err as Error).message || "Could not save.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const account = (detail?.account ?? {}) as ApiRecord;
   const wallet = (detail?.wallet ?? {}) as ApiRecord;
   const purchases = (detail?.purchase_activity ?? {}) as ApiRecord;
@@ -116,6 +134,10 @@ export const ShoppersView = () => {
           <div className="flex flex-wrap gap-2">
             <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder="Search shoppers by name, email or ID"
               className="h-9 px-4 rounded-full border border-[#E0E0F0] text-xs flex-1 min-w-48" />
+            <select value={phoneChange} onChange={(e) => { setPhoneChange(e.target.value); setPage(1); }} className={selectCls}>
+              <option value="">All shoppers</option>
+              <option value="pending">Phone change pending</option>
+            </select>
             <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className={selectCls}>
               <option value="">All statuses</option>
               <option value="active">Active</option>
@@ -220,6 +242,31 @@ export const ShoppersView = () => {
                     </tbody>
                   </table>
                 </div>
+                {(list(detail.phone_requests).length > 0 || list(detail.phone_history).length > 0) && (
+                  <div className={card}>
+                    <h3 className="text-sm font-bold mb-2">Phone</h3>
+                    {list(detail.phone_requests).filter((r) => r.status === "pending").map((r) => (
+                      <div key={String(r.id)} className="border border-amber-200 bg-amber-50/50 rounded-xl p-3 flex flex-col gap-2 mb-3 text-sm">
+                        <span><b>Change requested:</b> {String(r.old_phone || "—")} → {String(r.new_phone)}{r.reason ? ` · “${String(r.reason)}”` : ""}</span>
+                        <span className="text-xs text-[#6B6B80]">Approving sets the new number unverified — the shopper verifies it by SMS, and withdrawals pause 48 hours.</span>
+                        <div className="flex flex-wrap gap-2">
+                          <input value={phoneNote} onChange={(e) => setPhoneNote(e.target.value)} placeholder="Reason (required to reject)"
+                            className="flex-1 min-w-40 h-9 px-3 rounded-lg border border-[#E0E0F0] text-sm" />
+                          <button disabled={busy} onClick={() => void decidePhone(String(r.id), "approve")}
+                            className={`${btn} h-9 bg-[#3E3EDF] text-white`}>Approve</button>
+                          <button disabled={busy} onClick={() => void decidePhone(String(r.id), "reject")}
+                            className={`${btn} h-9 border border-red-200 text-red-600`}>Reject</button>
+                        </div>
+                      </div>
+                    ))}
+                    {list(detail.phone_history).map((h, i) => (
+                      <div key={i} className="flex justify-between gap-3 text-xs border-b border-[#F6F6FB] py-1.5">
+                        <span className="capitalize">{String(h.event)}{h.detail ? ` · ${String(h.detail)}` : ""}</span>
+                        <span className="text-[#9A9AB0]">{shortDate(h.at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {list(detail.notes).length > 0 && (
                   <div className={card}>
                     <h3 className="text-sm font-bold mb-2">Internal Notes</h3>

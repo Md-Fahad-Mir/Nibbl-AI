@@ -52,6 +52,8 @@ export interface ConsumerApiState {
   setTokens: (access: string, refresh: string) => void;
   clearAuth: () => void;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  /** Passwordless sign-in with the emailed 6-digit code. */
+  signInWithEmailCode: (email: string, code: string, phone?: string, phoneCountry?: string) => Promise<void>;
   register: (fullName: string, email: string, password: string) => Promise<void>;
   verifyEmail: (code: string) => Promise<void>;
   resendEmailVerification: () => Promise<void>;
@@ -65,6 +67,8 @@ export interface ConsumerApiState {
   verifyPhone: (code: string) => Promise<void>;
   loadHome: (search?: string, category?: string, page?: number) => Promise<void>;
   loadOfferDetails: (campaignId: string) => Promise<void>;
+  /** Logged out: open a deal from its public campaign link token. */
+  loadPublicOffer: (token: string) => Promise<void>;
   loadSavedOffers: () => Promise<void>;
   loadRewardsHub: () => Promise<void>;
   loadWallet: () => Promise<void>;
@@ -74,7 +78,7 @@ export interface ConsumerApiState {
   saveOffer: (campaignId: string) => Promise<ApiRecord>;
   claimOffer: (
     campaignId: string,
-    consents?: { consent_nibbl?: boolean; consent_brand?: boolean }
+    consents?: { consent_nibbl?: boolean; consent_brand?: boolean; contact_phone?: string; phone_country?: string }
   ) => Promise<ApiRecord>;
   uploadReceipt: (reservationId: string, file: File) => Promise<ApiRecord>;
   submitReview: (
@@ -229,6 +233,22 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
             remember_me: rememberMe,
           });
           get().setTokens(tokens.access, tokens.refresh);
+          const user = await nibblApi.me();
+          if (!isConsumerProfile(user)) {
+            get().clearAuth();
+            throw new Error(consumerAccessError);
+          }
+          set({ user, status: "success" });
+        } catch (error) {
+          set({ status: "error", error: readError(error) });
+          throw error;
+        }
+      },
+      signInWithEmailCode: async (email, code, phone = "", phoneCountry = "") => {
+        set({ status: "loading", error: null });
+        try {
+          const result = await nibblApi.emailCodeSignIn({ email, code, phone, phone_country: phoneCountry });
+          get().setTokens(result.access, result.refresh);
           const user = await nibblApi.me();
           if (!isConsumerProfile(user)) {
             get().clearAuth();
@@ -397,6 +417,16 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
         const saved = await nibblApi.saveDiscoveryLocation(body);
         set({ discoveryLocation: saved.location });
         await get().loadHome();
+      },
+      loadPublicOffer: async (token) => {
+        set({ status: "loading", error: null });
+        try {
+          const offer = await nibblApi.offerByUrl(token);
+          set({ selectedOffer: offer, status: "success" });
+          trackPixel(offer.meta_pixel_id, "CampaignView", { campaign_id: String(offer.campaign_id ?? "") });
+        } catch (error) {
+          set({ status: "error", error: readError(error) });
+        }
       },
       loadOfferDetails: async (campaignId) => {
         set({ status: "loading", error: null });

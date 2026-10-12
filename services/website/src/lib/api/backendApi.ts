@@ -46,6 +46,8 @@ export const backendApi = {
   auth: {
     register: { method: "POST", path: "/auth/register/", auth: false },
     login: { method: "POST", path: "/auth/login/", auth: false },
+    emailCode: { method: "POST", path: "/auth/email-code/", auth: false },
+    emailCodeSignIn: { method: "POST", path: "/auth/email-code/sign-in/", auth: false },
     logout: { method: "POST", path: "/auth/logout/", auth: true },
     refresh: { method: "POST", path: "/auth/token/refresh/", auth: false },
     verifyEmail: { method: "POST", path: "/auth/verify-email/", auth: false },
@@ -77,6 +79,8 @@ export const backendApi = {
     },
     addPhone: { method: "POST", path: "/users/me/phone/", auth: true },
     verifyPhone: { method: "POST", path: "/users/me/phone/verify/", auth: true },
+    phoneChangeRequest: { method: "GET", path: "/users/me/phone/change-request/", auth: true },
+    createPhoneChangeRequest: { method: "POST", path: "/users/me/phone/change-request/", auth: true },
     marketingConsents: { method: "GET", path: "/users/me/consents/", auth: true },
     withdrawConsent: { method: "POST", path: "/users/me/consents/withdraw/", auth: true },
     referrals: { method: "GET", path: "/users/me/referrals/", auth: true },
@@ -788,6 +792,15 @@ const requestEndpoint = <T>(
 ) => apiClient.request<T>(endpoint, { body, query });
 
 export const nibblApi = {
+  /** Passwordless: email a 6-digit code (`create` = Reserve Offer while logged out). */
+  requestEmailCode: (email: string, create = false) =>
+    requestEndpoint<ApiRecord>(backendApi.auth.emailCode, { email, create }),
+  emailCodeSignIn: (body: { email: string; code: string; phone?: string; phone_country?: string }) =>
+    requestEndpoint<{ access: string; refresh: string; is_new: boolean; phone_saved: boolean; user: ApiRecord }>(
+      backendApi.auth.emailCodeSignIn, body),
+  phoneChangeRequest: () => requestEndpoint<ApiRecord>(backendApi.users.phoneChangeRequest),
+  createPhoneChangeRequest: (body: { new_phone: string; country?: string; reason?: string }) =>
+    requestEndpoint<ApiRecord>(backendApi.users.createPhoneChangeRequest, body),
   login: (body: { email: string; password: string; remember_me?: boolean }) =>
     requestEndpoint<{ access: string; refresh: string }>(backendApi.auth.login, body),
   register: (body: {
@@ -875,7 +888,7 @@ export const nibblApi = {
     requestEndpoint<ApiRecord>(backendApi.consumer.saveOffer(campaignId)),
   createReservation: (
     campaignId: string,
-    consents: { consent_nibbl?: boolean; consent_brand?: boolean } = {}
+    consents: { consent_nibbl?: boolean; consent_brand?: boolean; contact_phone?: string; phone_country?: string } = {}
   ) =>
     requestEndpoint<ApiRecord>(backendApi.consumer.createReservation, {
       campaign: campaignId,

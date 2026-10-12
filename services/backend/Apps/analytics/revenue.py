@@ -71,6 +71,12 @@ def _brand_debits(start, end):
     )
 
 
+def _pending_phone_changes() -> int:
+    from Apps.accounts.models import PhoneChangeRequest
+
+    return PhoneChangeRequest.objects.filter(status=PhoneChangeRequest.Status.PENDING).count()
+
+
 def needs_attention() -> dict:
     from Apps.accounts.models import User
     from Apps.campaigns.models import CampaignReview
@@ -88,6 +94,7 @@ def needs_attention() -> dict:
         "suspended_shoppers": User.objects.filter(role=User.Role.CONSUMER, is_active=False, is_deleted=False).count(),
         "brand_suspensions": BrandCustomerSuspension.objects.filter(is_active=True).count(),
         "flagged_reviews": Review.objects.filter(status=Review.Status.FLAGGED).count(),
+        "phone_change_requests": _pending_phone_changes(),
     }
 
 

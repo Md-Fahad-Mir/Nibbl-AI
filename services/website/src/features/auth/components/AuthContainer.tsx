@@ -96,6 +96,8 @@ export default function AuthContainer() {
   // Offer opened from a campaign link / QR (/c/<token>) while signed out:
   // shown right after sign-in.
   const [linkedCampaignId, setLinkedCampaignId] = useState<string>("");
+  // A deal opened from its public link may be viewed (and reserved) logged out.
+  const [publicDeal, setPublicDeal] = useState(false);
   const [authFlow, setAuthFlow] = useState<"signup" | "password-reset" | null>(null);
   const [passwordResetCode, setPasswordResetCode] = useState("");
   const {
@@ -109,6 +111,7 @@ export default function AuthContainer() {
     logout,
     validateSession,
     loadOfferDetails,
+    loadPublicOffer,
     pendingEmail,
     error,
   } = useConsumerApiStore();
@@ -124,6 +127,13 @@ export default function AuthContainer() {
         setSelectedCampaignId(linkedCampaign);
         if (hasStoredAccessToken()) {
           void loadOfferDetails(linkedCampaign);
+          setStage("claim-details");
+        } else if (params.get("link")) {
+          // Logged out (Master Reserve Offer): show the deal; reserving
+          // collects email + phone and signs in with an email code.
+          setLinkedCampaignId(linkedCampaign);
+          setPublicDeal(true);
+          void loadPublicOffer(String(params.get("link")));
           setStage("claim-details");
         } else {
           setLinkedCampaignId(linkedCampaign);
@@ -154,7 +164,7 @@ export default function AuthContainer() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [loadOfferDetails]);
+  }, [loadOfferDetails, loadPublicOffer]);
 
   useEffect(() => {
     if (!hasRestoredNavigation || !accessToken) return;
@@ -173,6 +183,7 @@ export default function AuthContainer() {
 
   useEffect(() => {
     if (!hasRestoredNavigation || accessToken || !authenticatedStages.has(stage)) return;
+    if (stage === "claim-details" && publicDeal) return;
     clearStoredNavigation();
 
     const timer = window.setTimeout(() => {
@@ -180,7 +191,7 @@ export default function AuthContainer() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [accessToken, hasRestoredNavigation, stage]);
+  }, [accessToken, hasRestoredNavigation, stage, publicDeal]);
 
   useEffect(() => {
     if (!accessToken || !authenticatedStages.has(stage) || !storageAvailable()) return;
@@ -247,19 +258,24 @@ export default function AuthContainer() {
     setStage(accessToken ? "home" : "onboarding");
   };
 
+  // After any sign-in: back to the linked deal, else home.
+  const afterSignIn = () => {
+    if (linkedCampaignId) {
+      setSelectedCampaignId(linkedCampaignId);
+      setLinkedCampaignId("");
+      void loadOfferDetails(linkedCampaignId);
+      setStage("claim-details");
+      return;
+    }
+    if (storageAvailable()) window.localStorage.setItem(ROUTE_STORAGE_KEY, "home");
+    setStage("home");
+  };
+
   const handleSignInSubmit = async (data: SignInCredentials) => {
     if (!data.password) return;
     try {
       await login(data.email, data.password, data.rememberMe);
-      if (linkedCampaignId) {
-        setSelectedCampaignId(linkedCampaignId);
-        setLinkedCampaignId("");
-        void loadOfferDetails(linkedCampaignId);
-        setStage("claim-details");
-        return;
-      }
-      if (storageAvailable()) window.localStorage.setItem(ROUTE_STORAGE_KEY, "home");
-      setStage("home");
+      afterSignIn();
     } catch {
       // Store keeps the displayable error.
     }
@@ -453,6 +469,7 @@ export default function AuthContainer() {
           <SignInForm
             onNavigate={setStage}
             onSubmit={handleSignInSubmit}
+            onCodeSignedIn={afterSignIn}
           />
         )}
         {stage === "signup" && (

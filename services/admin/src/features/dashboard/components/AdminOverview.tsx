@@ -69,6 +69,7 @@ export const AdminOverview = () => {
     { label: "Suspended shoppers", value: attention.suspended_shoppers, href: "/users" },
     { label: "Brand suspensions", value: attention.brand_suspensions, href: "/suspensions" },
     { label: "Flagged reviews", value: attention.flagged_reviews, href: "/review-flags" },
+    { label: "Phone change requests", value: attention.phone_change_requests, href: "/users?phone_change=pending" },
   ];
 
   return (

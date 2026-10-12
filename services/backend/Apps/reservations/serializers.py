@@ -87,6 +87,10 @@ class CreateReservationSerializer(serializers.Serializer):
     # Two separate, optional marketing consents (email + SMS each).
     consent_nibbl = serializers.BooleanField(required=False, default=False)
     consent_brand = serializers.BooleanField(required=False, default=False)
+    # Master Reserve Offer: contact phone (kept, unverified, only if the
+    # shopper has none yet — a verified phone is never replaced here).
+    contact_phone = serializers.CharField(required=False, allow_blank=True, default="", max_length=32)
+    phone_country = serializers.CharField(required=False, allow_blank=True, default="", max_length=2)
 
 
 class ClaimSlotsSerializer(serializers.Serializer):

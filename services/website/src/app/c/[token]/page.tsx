@@ -15,7 +15,9 @@ export default function CampaignLinkPage() {
     let live = true;
     nibblApi
       .offerByUrl(token)
-      .then((offer) => live && router.replace(`/?campaign=${encodeURIComponent(String(offer.campaign_id))}`))
+      // `link` lets a logged-out shopper open the deal and reserve it (Master).
+      .then((offer) => live && router.replace(
+        `/?campaign=${encodeURIComponent(String(offer.campaign_id))}&link=${encodeURIComponent(token)}`))
       .catch(() => live && setMissing(true));
     return () => {
       live = false;

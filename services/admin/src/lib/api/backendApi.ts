@@ -615,6 +615,11 @@ export const backendApi = {
     },
     revenueDashboard: { method: "GET", path: "/admin/analytics/revenue/", auth: true },
     reviewCampaignQueue: { method: "GET", path: "/admin/review-campaigns/", auth: true },
+    phoneChangeDecision: (requestId: string, action: string): ApiEndpoint => ({
+      method: "POST",
+      path: `/admin/phone-changes/${requestId}/${action}/`,
+      auth: true,
+    }),
     reviewCampaignDecision: (campaignId: string, action: string): ApiEndpoint => ({
       method: "POST",
       path: `/admin/review-campaigns/${campaignId}/${action}/`,
@@ -989,6 +994,8 @@ export const nibblApi = {
     apiClient.request<ApiRecord>(backendApi.admin.staffDetail(userId), { method: "DELETE" }),
   adminAuditLogs: () => requestEndpoint<ApiRecord[]>(backendApi.admin.auditLogs),
   reviewCampaignQueue: () => requestEndpoint<ApiRecord[]>(backendApi.admin.reviewCampaignQueue),
+  decidePhoneChange: (requestId: string, action: "approve" | "reject", note: string) =>
+    requestEndpoint<ApiRecord>(backendApi.admin.phoneChangeDecision(requestId, action), { note }),
   decideReviewCampaign: (campaignId: string, action: string, comment: string) =>
     requestEndpoint<ApiRecord>(backendApi.admin.reviewCampaignDecision(campaignId, action), { comment }),
   adminProductCategories: () => requestEndpoint<ApiRecord>(backendApi.admin.productCategories),

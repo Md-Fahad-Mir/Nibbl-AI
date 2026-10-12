@@ -431,6 +431,8 @@ export const useBrandApiStore = create<BrandApiState>()(
       },
       completeSignIn: async (tokens) => {
         tokenStorage.set(tokens.access, tokens.refresh);
+        // A new sign-in starts clean: never reuse the previous user's brand.
+        set({ selectedBrandId: null, brand: null, analyticsDashboard: null });
         const profile = tokens.user || (await nibblApi.me());
         if (isPlatformAdminProfile(profile)) {
           tokenStorage.clear();
@@ -560,7 +562,12 @@ export const useBrandApiStore = create<BrandApiState>()(
             optionalRequest(() => nibblApi.notifications({ unread: true }), []),
           ]);
           const brands = listResults(brandsResponse);
-          const selectedBrandId = get().selectedBrandId || String(brands[0]?.id ?? "");
+          // A remembered brand only counts if this user is a member of it (the
+          // browser may still hold another account's brand).
+          const remembered = get().selectedBrandId;
+          const selectedBrandId = remembered && brands.some((b) => String(b.id) === remembered)
+            ? remembered
+            : String(brands[0]?.id ?? "");
           set({
             profile,
             brands,

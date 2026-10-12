@@ -15,6 +15,10 @@ export interface CustomerData {
   reviews: number;
   rewards: string;
   status: "Active" | "Suspended";
+  brandClaims: number;
+  openClaims: number;
+  cooldownDaysLeft: number | null;
+  siteActivity: { claims: number; completionRate: number | null; reviews: number };
   // Brand marketing consent (Master): badge + date.
   consent: "Opted In" | "Opted Out" | "No consent";
   consentDate: string;
@@ -23,27 +27,15 @@ export interface CustomerData {
   lastActivityAt: string | null;
   lastActivity: string;
   avatar: string;
-  memberSince: string;
   canSuspend: boolean;
-  fraudScore: string;
-  trustLabel: string;
-  recentReceipts?: {
-    merchant: string;
-    date: string;
-    id: string;
-    value: string;
-    points: string;
-    status: string;
-  }[];
 }
 
 interface CustomerLedgerProps {
   customers: CustomerData[];
   onSelectCustomer: (c: CustomerData) => void;
-  onToggleSuspend: (c: CustomerData) => void;
 }
 
-export default function CustomerLedger({ customers, onSelectCustomer, onToggleSuspend }: CustomerLedgerProps) {
+export default function CustomerLedger({ customers, onSelectCustomer }: CustomerLedgerProps) {
   const [activePage, setActivePage] = useState(1);
   const itemsPerPage = 8;
   const totalPages = Math.max(1, Math.ceil(customers.length / itemsPerPage));
@@ -58,7 +50,7 @@ export default function CustomerLedger({ customers, onSelectCustomer, onToggleSu
       {/* Ledger Header */}
       <div className="bg-[#F2F3FF] px-8 py-5 border-b border-[#C5C5D9]/10 flex justify-between items-center gap-4">
         <div className="flex items-center gap-3">
-          <h3 className="font-jakarta font-bold text-lg text-[#131B2E]">Customer Ledger</h3>
+          <h3 className="font-jakarta font-bold text-lg text-[#131B2E]">Customers</h3>
           <span className="bg-[#DFE0FF] text-[#0B22D9] text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
             Live Data
           </span>
@@ -78,14 +70,15 @@ export default function CustomerLedger({ customers, onSelectCustomer, onToggleSu
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-[#C5C5D9]/10 bg-[#FAF8FF]">
-              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Name</th>
-              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Contact Information</th>
-              <th className="p-5 text-center text-[11px] font-bold tracking-wider text-[#454656] uppercase">Claims</th>
-              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Rewards Earned</th>
-              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Consent</th>
+              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Customer</th>
+              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Contact</th>
+              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Brand Activity</th>
+              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Site Activity</th>
+              <th className="p-5 text-center text-[11px] font-bold tracking-wider text-[#454656] uppercase">Open Claims</th>
+              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Cooldowns</th>
+              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Last Active</th>
               <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Status</th>
-              <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Last Activity</th>
-              <th className="p-5 text-right text-[11px] font-bold tracking-wider text-[#454656] uppercase">Actions</th>
+              <th className="p-5 text-right text-[11px] font-bold tracking-wider text-[#454656] uppercase">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -116,45 +109,46 @@ export default function CustomerLedger({ customers, onSelectCustomer, onToggleSu
                     <span className="text-[11px] text-[#454656] font-medium">{c.phone}</span>
                   </div>
                 </td>
-                <td className="p-5 text-center font-bold text-[#131B2E]">{c.claims}</td>
-                <td className="p-5 text-left font-bold text-[#001BD2]">{c.rewards}</td>
-                <td className="p-5 text-left">
-                  <div className="flex flex-col gap-0.5">
-                    <span className={`font-bold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider w-fit ${
-                      c.consent === "Opted In"
-                        ? "bg-[#E2E7FF] text-[#001BD2]"
-                        : c.consent === "Opted Out"
-                          ? "bg-slate-200 text-slate-600"
-                          : "bg-slate-100 text-slate-400"
-                    }`}>
-                      {c.consent}
-                    </span>
-                    {c.consentDate && <span className="text-[10px] text-slate-400">{c.consentDate}</span>}
+                <td className="p-5 text-left text-xs">
+                  <div className="font-bold text-[#131B2E]">{c.brandClaims} claims</div>
+                  <div>{c.claims} rebates · {c.reviews} reviews</div>
+                </td>
+                <td className="p-5 text-left text-xs">
+                  <div className="font-bold text-[#131B2E]">{c.siteActivity.claims} total claims</div>
+                  <div>
+                    {c.siteActivity.completionRate == null ? "—" : `${c.siteActivity.completionRate}%`} completion ·{" "}
+                    {c.siteActivity.reviews} reviews
                   </div>
                 </td>
+                <td className="p-5 text-center font-bold text-[#131B2E]">{c.openClaims}</td>
+                <td className="p-5 text-left text-xs">
+                  {c.cooldownDaysLeft == null ? (
+                    <span className="text-slate-400">None</span>
+                  ) : (
+                    <span className="font-bold text-red-600 bg-red-50 rounded-full px-2 py-1">{c.cooldownDaysLeft} days left</span>
+                  )}
+                </td>
+                <td className="p-5 text-left font-medium">{c.lastActivity}</td>
                 <td className="p-5 text-left">
                   <span className={`font-bold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider ${
                     c.status === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
                   }`}>
-                    {c.status}
+                    {c.status === "Active" ? "Active" : "Banned"}
                   </span>
                 </td>
-                <td className="p-5 text-left font-medium">{c.lastActivity}</td>
                 <td className="p-5 text-right">
                   <button
-                    onClick={() => onToggleSuspend(c)}
-                    disabled={!c.canSuspend}
-                    title={c.canSuspend ? "" : "Backend must return user_id before this action can be used."}
-                    className="bg-[#E2E7FF] hover:bg-[#D0D7FF] text-[#001BD2] font-bold text-xs px-4 py-2 rounded-full transition-colors border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => onSelectCustomer(c)}
+                    className="bg-[#E2E7FF] hover:bg-[#D0D7FF] text-[#001BD2] font-bold text-xs px-4 py-2 rounded-full transition-colors border-none cursor-pointer"
                   >
-                    {c.status === "Active" ? "Suspend" : "Activate"}
+                    View
                   </button>
                 </td>
               </tr>
             ))}
             {paginatedCustomers.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-10 text-center text-sm font-semibold text-slate-400">
+                <td colSpan={9} className="p-10 text-center text-sm font-semibold text-slate-400">
                   No customers available.
                 </td>
               </tr>

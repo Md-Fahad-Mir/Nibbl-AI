@@ -62,6 +62,16 @@ brand_patterns = [
         name="customer-export",
     ),
     path(
+        "<uuid:brand_id>/customers/<str:customer_id>/profile/",
+        views.BrandCustomerProfileView.as_view(),
+        name="customer-profile",
+    ),
+    path(
+        "<uuid:brand_id>/customers/<str:customer_id>/cooldowns/remove/",
+        views.BrandCustomerCooldownRemoveView.as_view(),
+        name="customer-cooldown-remove",
+    ),
+    path(
         "<uuid:brand_id>/customers/<str:customer_id>/<str:action>/",
         views.BrandCustomerSuspendView.as_view(),
         name="customer-action",

@@ -206,3 +206,17 @@ class ReviewHelpfulVote(BaseModel):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["review", "user"], name="uniq_helpful_vote")]
+
+
+class ReviewCooldownWaiver(models.Model):
+    """A brand removed a shopper's review cooldown for one product (Master
+    Customer Profile: Remove cooldown). Reviews before ``waived_at`` no longer
+    count toward the cooldown."""
+
+    brand = models.ForeignKey("brands.Brand", on_delete=models.CASCADE, related_name="+")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    product = models.ForeignKey("products.Product", on_delete=models.CASCADE, related_name="+")
+    waived_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "product"], name="uniq_review_cooldown_waiver")]

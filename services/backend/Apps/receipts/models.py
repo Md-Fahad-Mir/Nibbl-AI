@@ -33,6 +33,9 @@ class Receipt(BaseModel):
     )
 
     image = models.FileField(upload_to="receipts/", null=True, blank=True)
+    # Master: the full receipt is kept 30 days; afterwards only the matching
+    # line and necessary receipt details remain (image deleted).
+    image_purged_at = models.DateTimeField(null=True, blank=True)
     merchant = models.CharField(max_length=255, blank=True)
     purchased_at = models.DateTimeField(null=True, blank=True)
     total = models.DecimalField(null=True, blank=True, **MONEY_FIELD)

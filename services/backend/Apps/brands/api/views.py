@@ -369,6 +369,45 @@ class BrandCustomerSuspendView(APIView):
         )
 
 
+class BrandCustomerProfileView(APIView):
+    """Master Customer Profile for one of this brand's customers."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, brand_id, customer_id):
+        from Apps.brands import customers
+
+        brand = _get_brand_or_404(brand_id)
+        _require_membership(request.user, brand)
+        user = customers.resolve_customer(brand, customer_id)
+        if user is None:
+            raise NotFound("Customer not found.")
+        return Response(customers.customer_profile(brand, user, request))
+
+
+class BrandCustomerCooldownRemoveView(APIView):
+    """POST {kind: rebate|review, id}: remove a shopper's cooldown (audit logged)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request, brand_id, customer_id):
+        from Apps.brands import customers
+
+        brand = _get_brand_or_404(brand_id)
+        _require_membership(request.user, brand, manager=True, active=True)
+        user = customers.resolve_customer(brand, customer_id)
+        if user is None:
+            raise NotFound("Customer not found.")
+        try:
+            customers.remove_cooldown(brand=brand, user=user, kind=str(request.data.get("kind", "")),
+                                      ref=str(request.data.get("id", "")), actor=request.user)
+        except customers.CustomerError as exc:
+            raise ValidationError({"detail": str(exc)})
+        return Response(customers.customer_profile(brand, user, request))
+
+
 class BrandCustomerExportView(APIView):
     """CSV export of the brand's customer directory. PII columns are included
     only for full-access plans (Pro/Scale); anonymized plans export the opaque

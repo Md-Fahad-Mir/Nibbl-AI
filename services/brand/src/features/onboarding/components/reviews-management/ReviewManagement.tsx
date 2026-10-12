@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiRecord, API_BASE_URL, tokenStorage } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatDate, formatInteger, formatMoney } from "../../utils/backendMappers";
+import Pager from "@/components/shared/Pager";
 
 interface ReviewManagementProps {
   onBack: () => void;
@@ -336,11 +337,14 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
     Object.entries({ status, rating, product, retailer, region, q: q.trim(), from, to }).filter(([, v]) => v)
   );
   const filterKey = JSON.stringify(filters);
+  // Server-side pages of 10; any filter change goes back to page 1.
+  const [pageState, setPageState] = useState({ key: filterKey, page: 1 });
+  const page = pageState.key === filterKey ? pageState.page : 1;
 
   useEffect(() => {
     let live = true;
     const timer = window.setTimeout(() => {
-      loadBrandReviews(JSON.parse(filterKey))
+      loadBrandReviews({ ...JSON.parse(filterKey), page: String(page), page_size: "10" })
         .then((result) => live && (setData(result), setError("")))
         .catch((err) => live && setError(err instanceof Error ? err.message : "Could not load reviews."));
     }, 250);
@@ -348,7 +352,7 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
       live = false;
       window.clearTimeout(timer);
     };
-  }, [loadBrandReviews, filterKey, reloadKey]);
+  }, [loadBrandReviews, filterKey, page, reloadKey]);
 
   const summary = (data?.summary ?? {}) as ApiRecord;
   const counts = (summary.status_counts ?? {}) as ApiRecord;
@@ -506,6 +510,11 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
               )}
             </tbody>
           </table>
+          <Pager className="px-4 py-3 border-t border-[#F1F2FA]" noun="reviews" paged={{
+            page: Number(data?.page ?? page), size: 10, total: Number(data?.count ?? reviews.length),
+            pages: Math.max(1, Math.ceil(Number(data?.count ?? reviews.length) / 10)),
+            setPage: (next) => setPageState({ key: filterKey, page: next }),
+          }} />
         </div>
         {selected && <ReviewDetails review={selected} onClose={() => setSelectedId(null)} />}
       </div>

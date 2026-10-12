@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatDate, formatMoney } from "../../utils/backendMappers";
+import Pager, { usePaged } from "@/components/shared/Pager";
 
 const STATUS: Record<string, string> = {
   pending: "bg-amber-50 text-amber-700",
@@ -86,13 +87,14 @@ export function RequestRefundModal({ refundable, onClose, onDone }: {
 }
 
 export function RefundRequestList({ requests }: { requests: ApiRecord[] }) {
+  const requestsPage = usePaged(requests);
   if (!requests.length) return null;
   return (
     <section className="bg-white border border-[#EAEDFF] rounded-[20px] p-6 shadow-sm flex flex-col gap-3">
       <h3 className="font-jakarta font-bold text-base text-[#131B2E]">Refund requests</h3>
       <table className="w-full text-sm">
         <tbody>
-          {requests.map((r) => (
+          {requestsPage.items.map((r) => (
             <tr key={String(r.id)} className="border-b border-[#F8F9FF] align-top">
               <td className="py-2 pr-3 whitespace-nowrap">{formatDate(String(r.created_at ?? ""))}</td>
               <td className="py-2 pr-3 font-semibold">{formatMoney(r.amount)}</td>
@@ -106,6 +108,7 @@ export function RefundRequestList({ requests }: { requests: ApiRecord[] }) {
           ))}
         </tbody>
       </table>
+      <Pager paged={requestsPage} noun="requests" />
     </section>
   );
 }

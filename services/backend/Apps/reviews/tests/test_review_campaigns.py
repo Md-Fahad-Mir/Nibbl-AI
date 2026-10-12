@@ -211,6 +211,11 @@ class ReviewCampaignTests(APITestCase):
                                  ({"region": "IL"}, 1), ({"q": "chips"}, 1), ({"q": "nothing"}, 0)):
             self.assertEqual(len(self.client.get(url, params).data["reviews"]), expected, params)
 
+        # Optional paging: ?page adds count/page; without it the response is unchanged.
+        paged = self.client.get(url, {"page": 1, "page_size": 10}).data
+        self.assertEqual((paged["count"], paged["page"], len(paged["reviews"])), (1, 1, 1))
+        self.assertNotIn("count", data)
+
         # Starter: first name + last initial; email only for 1–3★ service recovery.
         self.brand.plan = Plan.objects.get(slug="starter")
         self.brand.save()

@@ -7,6 +7,7 @@ import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { CustomerData } from "./CustomerLedger";
 import { customerInitials, formatDate, formatMoney } from "../../utils/backendMappers";
+import Pager, { usePaged } from "@/components/shared/Pager";
 
 interface CustomerProfileViewProps {
   customer: CustomerData;
@@ -80,6 +81,7 @@ export default function CustomerProfileView({ customer, onBack, onToggleSuspend,
   const openClaims = asList(profile?.open_claims);
   const cooldowns = asList(profile?.cooldowns);
   const history = asList(profile?.redemption_history);
+  const historyPage = usePaged(history);
   const activity = asList(profile?.recent_activity);
   const banned = profile?.status === "banned";
   const pct = (v: unknown) => (v == null ? "—" : `${String(v)}%`);
@@ -199,7 +201,7 @@ export default function CustomerProfileView({ customer, onBack, onToggleSuspend,
                   </tr>
                 </thead>
                 <tbody>
-                  {history.map((h) => {
+                  {historyPage.items.map((h) => {
                     const lines = asList(h.matching_lines);
                     return (
                       <tr key={String(h.id)} className="border-b border-[#F8F9FF] align-top">
@@ -227,6 +229,7 @@ export default function CustomerProfileView({ customer, onBack, onToggleSuspend,
                 </tbody>
               </table>
             </div>
+            <Pager paged={historyPage} noun="receipts" />
             <p className="text-xs text-[#64748B]">ⓘ Full receipts are available for 30 days. After 30 days, only the matching line item and required receipt details remain.</p>
           </section>
 

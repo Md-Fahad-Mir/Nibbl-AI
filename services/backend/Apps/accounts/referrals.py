@@ -74,6 +74,31 @@ def _completed_steps(user) -> dict:
     }
 
 
+def _same_payout_identity(user, other) -> bool:
+    from Apps.payouts.models import PayoutMethod
+
+    handles = {h.strip().lower() for h in PayoutMethod.objects.filter(user=user).values_list("handle", flat=True)}
+    return any(h.strip().lower() in handles for h in PayoutMethod.objects.filter(user=other).values_list("handle", flat=True))
+
+
+def _email_identity(email: str) -> str:
+    """Mailbox owner of an address: ignores +tags and (for Gmail) dots."""
+    local, _, domain = (email or "").lower().partition("@")
+    local = local.split("+", 1)[0]
+    if domain in ("gmail.com", "googlemail.com"):
+        local, domain = local.replace(".", ""), "gmail.com"
+    return f"{local}@{domain}"
+
+
+def _looks_like_self_referral(user, other) -> bool:
+    if _email_identity(user.email) == _email_identity(other.email):
+        return True
+    if user.phone and user.phone == other.phone:
+        return True
+    name = (user.full_name or "").strip().lower()
+    return bool(name) and name == (other.full_name or "").strip().lower()
+
+
 def protection_flags(referral: Referral) -> list[str]:
     """Referral Flag Rules (each can be switched off in Admin Settings)."""
     from Apps.accounts.risk import risk_reasons, shared_with
@@ -86,6 +111,16 @@ def protection_flags(referral: Referral) -> list[str]:
         reasons.append("The new shopper and the referrer used the same device.")
     if cfg.referral_flag_shared_network and shared["network"]:
         reasons.append("The new shopper and the referrer used the same network.")
+    if cfg.referral_flag_duplicate_payout and _same_payout_identity(referral.referrer, referral.referred):
+        reasons.append("Same payout identity as the referrer.")
+    if cfg.referral_flag_self_referral and _looks_like_self_referral(referral.referrer, referral.referred):
+        reasons.append("The new shopper appears to be the referrer (same name, email or phone).")
+    if cfg.referral_flag_unusual_volume:
+        recent = Referral.objects.filter(
+            referrer=referral.referrer, created_at__gte=timezone.now() - dt.timedelta(days=7)
+        ).count()
+        if recent > cfg.referral_volume_limit:
+            reasons.append(f"Unusual referral volume: {recent} referrals in 7 days.")
     if cfg.referral_flag_fraud_signals:
         users = (referral.referred, referral.referrer)
         if FraudFlag.objects.filter(user__in=users).exists():

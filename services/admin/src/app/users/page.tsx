@@ -1,5 +1,10 @@
-import { UsersView } from "@/features/users/views/UsersView";
+import { Suspense } from "react";
+import { ShoppersView } from "@/features/users/views/ShoppersView";
 
 export default function UsersPage() {
-  return <UsersView />;
+  return (
+    <Suspense fallback={null}>
+      <ShoppersView />
+    </Suspense>
+  );
 }

@@ -29,6 +29,10 @@ class PlatformSettingsSerializer(serializers.ModelSerializer):
             "referral_flag_shared_device",
             "referral_flag_shared_network",
             "referral_flag_fraud_signals",
+            "referral_flag_duplicate_payout",
+            "referral_flag_self_referral",
+            "referral_flag_unusual_volume",
+            "referral_volume_limit",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

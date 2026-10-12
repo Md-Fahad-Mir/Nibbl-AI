@@ -30,6 +30,7 @@ export const AdminOverview = () => {
   const [days, setDays] = useState(30);
   const [status, setStatus] = useState("");
   const [plan, setPlan] = useState("");
+  const [category, setCategory] = useState("");
   const [sort, setSort] = useState("lowest");
   const [data, setData] = useState<ApiRecord | null>(null);
   const [error, setError] = useState("");
@@ -39,26 +40,27 @@ export const AdminOverview = () => {
     const to = new Date();
     const from = new Date(to.getTime() - (days - 1) * 86400000);
     nibblApi
-      .adminRevenueDashboard({ from: isoDay(from), to: isoDay(to), status, plan, sort })
+      .adminRevenueDashboard({ from: isoDay(from), to: isoDay(to), status, plan, sort, category })
       .then((result) => live && (setData(result), setError("")))
       .catch((err: Error) => live && setError(err.message || "Could not load the dashboard."));
     return () => {
       live = false;
     };
-  }, [days, status, plan, sort]);
+  }, [days, status, plan, sort, category]);
 
   const revenue = (data?.revenue ?? {}) as ApiRecord;
   const rewards = (data?.brand_funded_rewards ?? {}) as ApiRecord;
   const attention = (data?.needs_attention ?? {}) as ApiRecord;
   const brands = (Array.isArray(data?.brands) ? data.brands : []) as ApiRecord[];
   const trend = (Array.isArray(data?.trend) ? data.trend : []) as ApiRecord[];
+  const categories = (Array.isArray(data?.categories) ? data.categories : []) as string[];
 
   const attentionItems = [
     { label: "Withdrawals needing review", value: attention.withdrawals_to_review, href: "/payout-reviews" },
     { label: "Campaign approvals", value: attention.campaign_approvals, href: "/campaign-approvals" },
     { label: "Failed payouts", value: attention.failed_payouts, href: "/withdraw-request" },
     { label: "Suspended shoppers", value: attention.suspended_shoppers, href: "/users" },
-    { label: "Brand suspensions", value: attention.brand_suspensions, href: "/users" },
+    { label: "Brand suspensions", value: attention.brand_suspensions, href: "/suspensions" },
     { label: "Flagged reviews", value: attention.flagged_reviews, href: "/review-flags" },
   ];
 
@@ -142,6 +144,10 @@ export const AdminOverview = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-[#1A1A2E]">Brand Revenue</h2>
           <div className="flex flex-wrap gap-2">
+            <select value={category} onChange={(e) => setCategory(e.target.value)} className="h-9 px-3 rounded-full border border-[#E0E0F0] text-xs font-semibold">
+              <option value="">All categories</option>
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
             <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-9 px-3 rounded-full border border-[#E0E0F0] text-xs font-semibold">
               <option value="">All statuses</option>
               <option value="active">Active</option>
@@ -164,28 +170,34 @@ export const AdminOverview = () => {
             <thead>
               <tr className="text-left text-xs text-[#9A9AB0] border-b border-[#ECECF5]">
                 <th className="py-2 pr-4">Brand</th>
+                <th className="py-2 pr-4">Category</th>
                 <th className="py-2 pr-4">Plan</th>
                 <th className="py-2 pr-4">Status</th>
                 <th className="py-2 pr-4 text-right">Subscriptions</th>
                 <th className="py-2 pr-4 text-right">Rebate fees</th>
                 <th className="py-2 pr-4 text-right">Review fees</th>
-                <th className="py-2 text-right">Revenue</th>
+                <th className="py-2 pr-4 text-right">Total Nibbl Revenue</th>
+                <th className="py-2 text-right">Last Activity</th>
               </tr>
             </thead>
             <tbody>
               {brands.map((b) => (
                 <tr key={String(b.id)} className="border-b border-[#F6F6FB]">
                   <td className="py-2 pr-4 font-semibold text-[#1A1A2E]">{String(b.name)}</td>
+                  <td className="py-2 pr-4">{String(b.category || "—")}</td>
                   <td className="py-2 pr-4">{String(b.plan ?? "—")}</td>
                   <td className="py-2 pr-4 capitalize">{String(b.status)}</td>
                   <td className="py-2 pr-4 text-right">{money(b.subscriptions)}</td>
                   <td className="py-2 pr-4 text-right">{money(b.rebate_fees)}</td>
                   <td className="py-2 pr-4 text-right">{money(b.review_fees)}</td>
-                  <td className="py-2 text-right font-bold">{money(b.revenue)}</td>
+                  <td className="py-2 pr-4 text-right font-bold">{money(b.revenue)}</td>
+                  <td className="py-2 text-right text-xs text-[#6B6B80]">
+                    {b.last_activity ? new Date(String(b.last_activity)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                  </td>
                 </tr>
               ))}
               {data && brands.length === 0 && (
-                <tr><td colSpan={7} className="py-6 text-center text-[#9A9AB0]">No brands match.</td></tr>
+                <tr><td colSpan={9} className="py-6 text-center text-[#9A9AB0]">No brands match.</td></tr>
               )}
             </tbody>
           </table>

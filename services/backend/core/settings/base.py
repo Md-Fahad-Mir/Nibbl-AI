@@ -96,6 +96,9 @@ LAUNCH_FUNDING_REQUIRED = env.bool("LAUNCH_FUNDING_REQUIRED", default=True)
 RECEIPT_IMAGE_PURGE_ENABLED = env.bool("RECEIPT_IMAGE_PURGE_ENABLED", default=False)
 # Estimated PayPal/Venmo fee per payout, for the admin batch summary.
 PAYOUT_FEE_ESTIMATE = env("PAYOUT_FEE_ESTIMATE", default="0.25")
+# Estimated Stripe card fee on brand wallet funding (admin processing costs).
+STRIPE_FEE_PERCENT = env("STRIPE_FEE_PERCENT", default="2.9")
+STRIPE_FEE_FIXED = env("STRIPE_FEE_FIXED", default="0.30")
 
 # Public base URL used to build campaign URLs / QR payloads.
 PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="http://localhost:8000")
@@ -201,6 +204,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "Apps.common.middleware.AdminBrandAccessAuditMiddleware",
 ]
 
 ROOT_URLCONF = "core.urls"
@@ -442,6 +446,6 @@ CORS_PREFLIGHT_MAX_AGE = env.int("CORS_PREFLIGHT_MAX_AGE", default=86400)
 from corsheaders.defaults import default_headers  # noqa: E402
 
 _extra_cors_headers = env.list("CORS_EXTRA_ALLOW_HEADERS", default=[])
-CORS_ALLOW_HEADERS = (*default_headers, "x-device-id", *_extra_cors_headers)
+CORS_ALLOW_HEADERS = (*default_headers, "x-device-id", "x-nibbl-admin-brand", *_extra_cors_headers)
 
 

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Sidebar } from "@/features/dashboard/components/Sidebar";
 import { Header } from "@/features/dashboard/components/Header";
+import { SectionTabs } from "@/features/dashboard/components/SectionTabs";
 import { StatsCards } from "@/features/dashboard/components/StatsCards";
 import { EarningsTable } from "../components/EarningsTable";
 import { TransactionDetailsModal } from "../components/TransactionDetailsModal";
@@ -98,6 +99,7 @@ export const EarningsView = () => {
           onToggleMobileMenu={() => setIsMobileMenuOpen(true)}
           onProfileClick={() => router.push("/settings")}
         />
+        <SectionTabs current="earnings" />
 
         {/* Stats Cards */}
         <StatsCards stats={stats} />

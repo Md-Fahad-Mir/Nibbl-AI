@@ -6,6 +6,7 @@ import { setBrandTimeZone } from "@/features/onboarding/utils/backendMappers";
 import {
   ApiError,
   ApiRecord,
+  adminMode,
   backendApi,
   backendAssetUrl,
   apiClient,
@@ -295,7 +296,9 @@ interface BrandApiState {
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   /** Master passwordless sign-in: email a 15-minute one-time link. */
   requestMagicLink: (email: string) => Promise<void>;
-  signInWithMagicLink: (token: string) => Promise<void>;
+  signInWithMagicLink: (token: string, adminBrandId?: string) => Promise<void>;
+  /** Nibbl Admin Mode: the brand a platform admin opened from Admin → Brands. */
+  adminBrandId: string | null;
   /** Store the tokens, check brand access and load the applications. */
   completeSignIn: (tokens: { access: string; refresh: string; user?: ApiRecord }) => Promise<void>;
   registerAndApply: (body: {
@@ -374,6 +377,7 @@ export const useBrandApiStore = create<BrandApiState>()(
       refreshToken: tokenStorage.getRefresh(),
       profile: null,
       selectedBrandId: null,
+      adminBrandId: null,
       brands: [],
       brandApplications: [],
       brand: null,
@@ -420,8 +424,8 @@ export const useBrandApiStore = create<BrandApiState>()(
           throw error;
         }
       },
-      signInWithMagicLink: async (token) => {
-        set({ status: "loading", error: null });
+      signInWithMagicLink: async (token, adminBrandId) => {
+        set({ status: "loading", error: null, adminBrandId: adminBrandId || null });
         try {
           await get().completeSignIn(await nibblApi.signInWithMagicLink(token));
         } catch (error) {
@@ -434,7 +438,10 @@ export const useBrandApiStore = create<BrandApiState>()(
         // A new sign-in starts clean: never reuse the previous user's brand.
         set({ selectedBrandId: null, brand: null, analyticsDashboard: null });
         const profile = tokens.user || (await nibblApi.me());
-        if (isPlatformAdminProfile(profile)) {
+        const adminBrandId = isPlatformAdminProfile(profile) ? get().adminBrandId : null;
+        adminMode.brandId = adminBrandId ?? "";
+        set({ adminBrandId });
+        if (isPlatformAdminProfile(profile) && !adminBrandId) {
           tokenStorage.clear();
           set({ accessToken: null, refreshToken: null, profile: null });
           throw new Error(brandAccessError);
@@ -442,7 +449,8 @@ export const useBrandApiStore = create<BrandApiState>()(
 
         let submittedApplicationDraft = false;
         try {
-          submittedApplicationDraft = await submitSavedApplicationDraft();
+          // A Nibbl admin viewing a brand never submits a brand application.
+          if (!adminBrandId) submittedApplicationDraft = await submitSavedApplicationDraft();
         } catch {
           // Email verification or approval gating can block this until a later login.
         }
@@ -451,7 +459,7 @@ export const useBrandApiStore = create<BrandApiState>()(
           []
         );
         const brandApplications = listResults(applicationsResponse);
-        if (!isBrandProfile(profile) && !submittedApplicationDraft && !brandApplications.length) {
+        if (!adminBrandId && !isBrandProfile(profile) && !submittedApplicationDraft && !brandApplications.length) {
           tokenStorage.clear();
           set({ accessToken: null, refreshToken: null, profile: null });
           throw new Error(brandAccessError);
@@ -541,8 +549,20 @@ export const useBrandApiStore = create<BrandApiState>()(
         try {
           const profile = await networkRetry(() => nibblApi.me());
           if (isPlatformAdminProfile(profile)) {
-            await get().logout();
-            set({ status: "error", error: brandAccessError });
+            const adminBrandId = get().adminBrandId;
+            if (!adminBrandId) {
+              await get().logout();
+              set({ status: "error", error: brandAccessError });
+              return;
+            }
+            // Nibbl Admin Mode: only the brand opened from Admin → Brands.
+            adminMode.brandId = adminBrandId;
+            const viewed = await networkRetry(() =>
+              apiClient.request<ApiRecord>(backendApi.brand.brandDetail(adminBrandId))
+            );
+            set({ profile, brands: [viewed], brandApplications: [], selectedBrandId: adminBrandId, notifications: [] });
+            await get().selectBrand(adminBrandId);
+            set({ status: "success" });
             return;
           }
 
@@ -1045,10 +1065,12 @@ export const useBrandApiStore = create<BrandApiState>()(
           }
         }
         tokenStorage.clear();
+        adminMode.brandId = "";
         set({
           accessToken: null,
           refreshToken: null,
           profile: null,
+          adminBrandId: null,
           selectedBrandId: null,
           brands: [],
           brandApplications: [],
@@ -1078,6 +1100,7 @@ export const useBrandApiStore = create<BrandApiState>()(
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         selectedBrandId: state.selectedBrandId,
+        adminBrandId: state.adminBrandId,
       }),
     }
   )

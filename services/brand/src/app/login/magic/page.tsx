@@ -8,7 +8,9 @@ import { useBrandApiStore } from "@/stores/useBrandApiStore";
 /** Master passwordless sign-in: the emailed link lands here. */
 function MagicSignIn() {
   const router = useRouter();
-  const token = useSearchParams().get("token") || "";
+  const params = useSearchParams();
+  const token = params.get("token") || "";
+  const adminBrand = params.get("admin_brand") || "";
   const signInWithMagicLink = useBrandApiStore((s) => s.signInWithMagicLink);
   const [failed, setFailed] = useState("");
   const attempted = useRef(false);
@@ -17,10 +19,10 @@ function MagicSignIn() {
   useEffect(() => {
     if (attempted.current || !token) return;
     attempted.current = true;
-    signInWithMagicLink(token)
+    signInWithMagicLink(token, adminBrand)
       .then(() => router.replace("/onboarding"))
       .catch((err: unknown) => setFailed(err instanceof Error ? err.message : "This sign-in link is invalid or has expired."));
-  }, [token, signInWithMagicLink, router]);
+  }, [token, adminBrand, signInWithMagicLink, router]);
 
   return (
     <div className="min-h-screen w-full bg-[#FAF8FF] flex items-center justify-center p-4 font-jakarta">

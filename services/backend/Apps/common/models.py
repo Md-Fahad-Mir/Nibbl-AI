@@ -173,6 +173,12 @@ class PlatformSettings(models.Model):
     referral_flag_shared_device = models.BooleanField(default=True)
     referral_flag_shared_network = models.BooleanField(default=True)
     referral_flag_fraud_signals = models.BooleanField(default=True)
+    # Master list: duplicate payout identity, same device, self-referral,
+    # unusual referral volume (more than ``referral_volume_limit`` in 7 days).
+    referral_flag_duplicate_payout = models.BooleanField(default=True)
+    referral_flag_self_referral = models.BooleanField(default=True)
+    referral_flag_unusual_volume = models.BooleanField(default=True)
+    referral_volume_limit = models.PositiveSmallIntegerField(default=10)
 
     # --- Discovery ranking (Master: Base CVR × Store Match × Brand Interest) ---
     # Base CVR = (redemptions + prior redemptions) ÷ (views + prior views) over

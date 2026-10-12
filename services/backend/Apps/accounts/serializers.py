@@ -311,3 +311,24 @@ class MagicLinkRequestSerializer(serializers.Serializer):
 
 class MagicLinkSignInSerializer(serializers.Serializer):
     token = serializers.CharField(max_length=128)
+
+
+class EmailCodeRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    # Reserve Offer while logged out: create the shopper account if new.
+    create = serializers.BooleanField(required=False, default=False)
+    full_name = serializers.CharField(required=False, allow_blank=True, default="", max_length=255)
+
+
+class EmailCodeSignInSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=6)
+    # Contact phone typed on Reserve Offer (kept unverified if the shopper has none).
+    phone = serializers.CharField(required=False, allow_blank=True, default="", max_length=32)
+    phone_country = serializers.CharField(required=False, allow_blank=True, default="", max_length=2)
+
+
+class PhoneChangeRequestSerializer(serializers.Serializer):
+    new_phone = serializers.CharField(max_length=32)
+    country = serializers.CharField(required=False, allow_blank=True, default="", max_length=2)
+    reason = serializers.CharField(required=False, allow_blank=True, default="", max_length=500)

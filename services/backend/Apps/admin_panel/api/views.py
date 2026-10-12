@@ -568,6 +568,7 @@ class AdminShopperListView(APIView):
         p = request.query_params
         page, size = p.get("page", "1"), p.get("page_size", "10")
         return Response(master.shoppers_list(q=p.get("q", ""), status=p.get("status", ""),
+                                             phone_change=p.get("phone_change", ""),
                                              page=int(page) if page.isdigit() else 1,
                                              page_size=int(size) if size.isdigit() else 10))
 
@@ -835,3 +836,33 @@ class AdminCategoryRequestDecisionView(APIView):
                         metadata={"event": f"category_request_{action}d", "name": req.name, "brand": str(req.brand_id),
                                   "note": note})
         return Response(_category_payload())
+
+
+# ---------------------------------------------------------------------------
+# Shopper phone changes (verified phone is locked)
+# ---------------------------------------------------------------------------
+@extend_schema(tags=["admin"])
+class AdminPhoneChangeDecisionView(APIView):
+    """POST approve | reject {note}. Approving sets the new number unverified —
+    the shopper verifies it by SMS (withdrawals pause as for any change)."""
+
+    permission_classes = [IsPlatformAdmin]
+
+    @extend_schema(request=None, responses={200: None})
+    def post(self, request, request_id, action):
+        from Apps.accounts.models import PhoneChangeRequest
+        from Apps.accounts.services import AccountError as AccError
+        from Apps.accounts.services import decide_phone_change
+        from Apps.admin_panel import master
+
+        if action not in ("approve", "reject"):
+            raise NotFound()
+        req = PhoneChangeRequest.objects.select_related("user").filter(id=request_id).first()
+        if req is None:
+            raise NotFound("Request not found.")
+        try:
+            decide_phone_change(req, admin=request.user, approve=action == "approve",
+                                note=str(request.data.get("note", "")))
+        except AccError as exc:
+            raise ValidationError({"detail": str(exc)})
+        return Response(master.shopper_detail(req.user))

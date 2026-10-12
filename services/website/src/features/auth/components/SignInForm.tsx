@@ -3,13 +3,17 @@
 import { useState } from "react";
 import Image from "next/image";
 import { AuthStage, SignInCredentials } from "../types/auth.types";
+import EmailCodeForm from "./EmailCodeForm";
 
 interface SignInFormProps {
   onNavigate: (stage: AuthStage) => void;
   onSubmit: (data: SignInCredentials) => void;
+  /** Passwordless sign-in finished (email code). */
+  onCodeSignedIn: () => void;
 }
 
-export default function SignInForm({ onNavigate, onSubmit }: SignInFormProps) {
+export default function SignInForm({ onNavigate, onSubmit, onCodeSignedIn }: SignInFormProps) {
+  const [withCode, setWithCode] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -27,6 +31,14 @@ export default function SignInForm({ onNavigate, onSubmit }: SignInFormProps) {
         <p className="text-xs text-gray-400 mt-1">Login to your account</p>
       </div>
 
+      {withCode ? (
+        <div className="flex flex-col gap-3">
+          <EmailCodeForm onSignedIn={onCodeSignedIn} />
+          <button type="button" onClick={() => setWithCode(false)} className="text-xs text-[#3E3EDF] font-medium cursor-pointer">
+            Use my password instead
+          </button>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {/* Email Input */}
         <div className="flex flex-col gap-1.5">
@@ -113,7 +125,12 @@ export default function SignInForm({ onNavigate, onSubmit }: SignInFormProps) {
         >
           Login
         </button>
+        <button type="button" onClick={() => setWithCode(true)}
+          className="w-full h-[44px] text-[#3E3EDF] font-medium text-sm rounded-lg border border-[#3E3EDF]/40 cursor-pointer">
+          Email me a sign-in code (no password)
+        </button>
       </form>
+      )}
 
       {/* Divider */}
       <div className="relative my-6 flex items-center justify-center">

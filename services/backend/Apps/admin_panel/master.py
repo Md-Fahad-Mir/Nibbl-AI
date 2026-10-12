@@ -167,7 +167,7 @@ def _shopper_id(user) -> str:
     return f"SHP-{str(user.id)[:8].upper()}"
 
 
-def shoppers_list(*, q="", status="", page: int = 1, page_size: int = 10) -> dict:
+def shoppers_list(*, q="", status="", page: int = 1, page_size: int = 10, phone_change: str = "") -> dict:
     """Shopper List: account status, wallet, redemptions, referrals, brand
     suspensions and last activity (most recent first), one page at a time."""
     from django.db.models.functions import Coalesce, Greatest
@@ -183,6 +183,8 @@ def shoppers_list(*, q="", status="", page: int = 1, page_size: int = 10) -> dic
         users = users.filter(is_active=True)
     elif status == "suspended":
         users = users.filter(is_active=False)
+    if phone_change == "pending":
+        users = users.filter(phone_change_requests__status="pending").distinct()
     users = users.annotate(
         n_redemptions=Count("redemptions", distinct=True),
         n_referrals=Count("referrals_made", distinct=True),
@@ -256,6 +258,19 @@ def shopper_detail(user) -> dict:
         "brand": c.campaign.brand.name, "campaign": c.campaign.name, "ends_at": c.expires_at,
     } for c in CooldownRecord.objects.filter(user=user, expires_at__gt=now).select_related("campaign__brand")
         .order_by("expires_at")]
+    from Apps.accounts.models import PhoneChangeRequest
+
+    phone_requests = [{
+        "id": str(r.id), "old_phone": r.old_phone, "new_phone": r.new_phone, "reason": r.reason,
+        "status": r.status, "created_at": r.created_at, "decided_at": r.decided_at, "note": r.decision_note,
+    } for r in PhoneChangeRequest.objects.filter(user=user)[:20]]
+    phone_events = [{
+        "event": str(log.metadata.get("event", "")).replace("_", " "), "at": log.created_at,
+        "detail": log.metadata.get("phone") or log.metadata.get("after") or log.metadata.get("new_phone") or "",
+    } for log in AuditLog.objects.filter(target_type="user", target_id=str(user.id),
+                                         metadata__event__in=["phone_verified", "phone_reset", "phone_change_requested",
+                                                              "phone_change_approved", "phone_change_rejected"])
+        .order_by("-created_at")[:30]]
     notes = [{
         "id": str(n.id), "body": n.body, "created_at": n.created_at,
         "author": (n.author.full_name or n.author.email) if n.author else "",
@@ -281,6 +296,7 @@ def shopper_detail(user) -> dict:
         "cooldowns": cooldowns,
         "ledger": ledger, "claims": claims, "reviews": reviews, "referrals": referrals,
         "suspensions": suspensions, "notes": notes,
+        "phone_requests": phone_requests, "phone_history": phone_events,
     }
 
 

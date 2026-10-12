@@ -24,7 +24,7 @@ def _run(func, *args, **kwargs):
     except AccountError as exc:
         from rest_framework.exceptions import ValidationError
 
-        raise ValidationError({"detail": str(exc)})
+        raise ValidationError({"detail": str(exc), **({"code": exc.code} if getattr(exc, "code", "") else {})})
 
 
 @extend_schema(tags=["auth"])
@@ -446,3 +446,74 @@ class SignOutOtherSessionsView(APIView):
     def post(self, request):
         count = services.sign_out_other_sessions(request.user, current_sid=_current_sid(request))
         return Response({"signed_out": count})
+
+
+# ---------------------------------------------------------------------------
+# Passwordless shopper sign-in (email code)
+# ---------------------------------------------------------------------------
+@extend_schema(tags=["auth"])
+class EmailCodeRequestView(APIView):
+    """Email a 6-digit sign-in code to a shopper. Always 202 (never reveals
+    whether the email exists). ``create: true`` (Reserve Offer while logged
+    out) makes the shopper account if the email is new."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    @extend_schema(request=s.EmailCodeRequestSerializer, responses={202: None})
+    def post(self, request):
+        serializer = s.EmailCodeRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        _run(services.request_sign_in_code, **serializer.validated_data)
+        return Response({"detail": "We sent a 6-digit code to your email."}, status=status.HTTP_202_ACCEPTED)
+
+
+@extend_schema(tags=["auth"])
+class EmailCodeSignInView(APIView):
+    """Sign in with the emailed code → tokens + user (+ ``is_new``,
+    ``phone_saved``)."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    @extend_schema(request=s.EmailCodeSignInSerializer, responses={200: s.TokenPairSerializer})
+    def post(self, request):
+        serializer = s.EmailCodeSignInSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+        result = _run(services.sign_in_with_code, email=d["email"], code=d["code"], phone=d["phone"],
+                      phone_country=d["phone_country"], client=_client(request))
+        risk.record(request, result["user"], "login")
+        return Response({**result["tokens"], "user": s.UserSerializer(result["user"], context={"request": request}).data,
+                         "is_new": result["is_new"], "phone_saved": result["phone_saved"]})
+
+
+@extend_schema(tags=["users"])
+class PhoneChangeRequestView(APIView):
+    """A verified phone is locked. GET → the latest change request (or
+    null); POST {new_phone, country, reason} → ask Nibbl to change it."""
+
+    permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def _data(req):
+        if req is None:
+            return None
+        return {"id": str(req.id), "new_phone": req.new_phone, "status": req.status,
+                "decision_note": req.decision_note, "created_at": req.created_at, "decided_at": req.decided_at}
+
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        return Response({"phone_locked": bool(request.user.is_phone_verified),
+                         "request": self._data(request.user.phone_change_requests.first())})
+
+    @extend_schema(request=s.PhoneChangeRequestSerializer, responses={201: None})
+    def post(self, request):
+        serializer = s.PhoneChangeRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        req = _run(services.request_phone_change, request.user, **serializer.validated_data)
+        return Response({"phone_locked": True, "request": self._data(req)}, status=status.HTTP_201_CREATED)

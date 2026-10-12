@@ -51,6 +51,13 @@
 - **Token lifetimes:** access **30 min**; refresh **1 day** (or **30 days** if `remember_me: true`).
 - **Errors:** `400 {"detail":"Invalid email or password."}`, `400 {"detail":"Email address is not verified."}`, `429` if throttled.
 
+### Passwordless sign-in — email code (Oct 13 2026) ⚠️ app update needed
+Shoppers can sign in **without a password** (Master: passwordless access to My Offers, Wallet and Profile). Passwords keep working for existing shoppers.
+- `POST /auth/email-code/` `{ "email": "jane@email.com", "create": false }` · **Auth:** none · rate-limited → `202 {"detail":"We sent a 6-digit code to your email."}`. Always `202` — it never reveals whether the email exists. With `create: false` an unknown email gets nothing; brand / admin / suspended accounts get nothing.
+  - `create: true` is for **Reserve Offer while logged out** (see §5): a new email gets a shopper account (no password).
+- `POST /auth/email-code/sign-in/` `{ "email", "code", "phone"?, "phone_country"? }` → `200 { "access", "refresh", "user", "is_new", "phone_saved" }`. Marks the email verified. `phone` (+ ISO `phone_country`, e.g. `"US"`, unless the number starts with `+`) is the contact phone typed on Reserve Offer — kept **unverified** only if the shopper has no phone yet (`phone_saved` tells you). `400 {"detail":"Invalid or expired code."}` on a wrong / expired code (codes last 15 minutes; requesting a new one cancels the old).
+- App: on the sign-in screen offer **"Email me a sign-in code"** next to the password form.
+
 ### Logout
 - **Endpoint:** `/auth/logout/` · **Method:** `POST` · **Auth:** required
 - **Request:** `{ "refresh": "<refresh_token>" }`
@@ -112,9 +119,13 @@ Consent is given with the two checkboxes when claiming an offer (`consent_nibbl`
 - **Errors:** `400 {"detail":"Password is incorrect."}`, `400 {"password":["This field is required."]}`
 - **UX:** show a confirm modal that collects the current password.
 
-### Phone (optional) — ⚠️ SMS not wired in prod
-- `POST /users/me/phone/` `{ "phone": "+15551234567" }` → `202` (sends a code; in current envs the code is logged, not SMS-delivered).
-- `POST /users/me/phone/verify/` `{ "code": "123456" }` → `200`.
+### Phone — verify, and the locked verified phone (Oct 13 2026) ⚠️ app update needed
+- `POST /users/me/phone/` `{ "phone": "+15551234567" }` (or a local number + `"country": "US"`) → `202 {"phone":"+15551234567"}` — sends a 6-digit SMS code (Twilio, live in production).
+- `POST /users/me/phone/verify/` `{ "code": "123456" }` → `200` user.
+- **A verified phone is locked** (Master account security). `POST /users/me/phone/` with a *different* number → `400 {"code":"phone_locked","detail":"Your verified phone number is locked for your security. Request a change and Nibbl will review it."}`. In Profile show the number with a lock and a **Request a change** action instead of an edit field.
+- `GET /users/me/phone/change-request/` → `{ "phone_locked": true, "request": null | { id, new_phone, status: pending|approved|rejected, decision_note, created_at, decided_at } }`.
+- `POST /users/me/phone/change-request/` `{ "new_phone", "country"?, "reason"? }` → `201` (same shape). One pending request at a time (`400` otherwise). Show "Change request submitted — Nibbl will review your request."
+- When Nibbl **approves**, the new number becomes the shopper's phone **unverified**: show "Verify" and run the normal SMS verify (withdrawals pause 48 hours after a phone change). When **rejected**, show `decision_note`.
 
 ---
 
@@ -282,7 +293,8 @@ A **reservation** = a claimed offer, held for the user while they upload a recei
 ```
 
 ### Create Reservation (claim)
-- `POST /reservations/` `{ "campaign": "<campaign_id>" }` · **Auth:** required → `201` Reservation.
+- `POST /reservations/` `{ "campaign": "<campaign_id>", "consent_nibbl": true, "consent_brand": true, "contact_phone"?: "…", "phone_country"?: "US" }` · **Auth:** required → `201` Reservation.
+- **Reserve Offer (Master ④, Oct 13 2026):** show email + phone. **Signed in:** prefill both from `/users/me/` (email read-only; phone read-only once verified; if the shopper has no phone, collect it and send it as `contact_phone`). **Logged out:** collect email + phone + both consents → `POST /auth/email-code/` with `create: true` → code screen → `POST /auth/email-code/sign-in/` (send the phone there) → Confirm Reservation → `POST /reservations/`. Logged-out shoppers reach a deal through its public link (`GET /offers/by-url/{token}/`, no auth).
 - `reward_amount` on a reservation is the **reserved maximum**; the paid amount is on the redemption (§8) once approved.
 - **Errors `400`** (show `detail` as-is):
   - `"Current rebates have been claimed. This offer is temporarily unavailable."` — 25-hour capacity filled
@@ -336,7 +348,9 @@ A **reservation** = a claimed offer, held for the user while they upload a recei
 
 ## 7. Review APIs
 
-Earn $1 by reviewing products from a verified purchase (Master: review campaigns, rebuilt Oct 2026). **Lifecycle:** a rebate receipt is verified → each eligible product on it that's in a brand's live review campaign creates a **review opportunity** (one per product, max 5 per receipt, $1, **30 days** to complete) → the shopper chats with the AI (6 questions) → reviews/edits the AI-written draft → submits → **$1 is paid immediately** (any rating). 4–5★ publish now; 1–3★ are held 7 days for the brand to respond, then publish.
+Earn $1 by reviewing products from a verified purchase (Master: review campaigns, rebuilt Oct 2026). **Lifecycle:** a rebate receipt is verified → each eligible product on it that's in a brand's live review campaign creates a **review opportunity** (one per product, max 5 per receipt, $1, **30 days** to complete) → **Product Confirmed** (or **Multiple Matches**) → **Missing Consent** (only if missing) → **Share Your Voice** → the AI chat (product questions + one brand question, then *recommend* and *buy again*) → the shopper edits the AI-written draft → submits → **$1 is paid immediately** (any rating). 4–5★ publish now; 1–3★ are held 7 days for the brand to respond, then publish.
+
+**Master screen order (Oct 13 2026 — app update needed):** My Offers card → `GET …/overview/` → Product Confirmed *or* Multiple Matches → Missing Consent (only when `needs_consent` has a `true`) → Share Your Voice → chat (`GET /reviews/sessions/{id}/`). Opening the chat directly still works (the product is then taken as confirmed), so older app builds keep working.
 
 ### Review Opportunities (My Offers)
 - `GET /reviews/opportunities/` · **Auth:** required · **Paginated: no** (plain array) — open opportunities only:
@@ -347,11 +361,30 @@ Earn $1 by reviewing products from a verified purchase (Master: review campaigns
   ```
   Card: campaign image, $1 reward, days left until `expires_at`, **Claim $1** → open the session.
 
+### Before the chat (Oct 13 2026) ⚠️ app update needed
+- `GET /reviews/sessions/{id}/overview/` → everything the screens before the chat need (doesn't start the chat):
+  ```json
+  { "id":"…","status":"active","brand_name":"Acme Foods","campaign_image":"https://…",
+    "product": { "id":"…","name":"Acme Granola","code":"PRD-002","flavor":"Vanilla","size_label":"12 oz",
+                 "category":"Snacks","image_url":"https://…","avg_rating":4.6,"review_count":28 },
+    "product_confirmed": false,
+    "candidates": [ /* same shape as product — only when the receipt wording fits 2+ products */ ],
+    "needs_consent": { "nibbl": false, "brand": true },
+    "reward_amount":"1.00","expires_at":"…","days_left":29,"estimated_minutes":2,"question_count":5,
+    "chat_started": false }
+  ```
+  - `chat_started: true` → skip straight to the chat. Otherwise: `candidates` non-empty → **Multiple Matches** (radio list, "Confirm Product"); else **Product Confirmed** ("Is this the product you purchased?").
+- `POST /reviews/sessions/{id}/confirm/` `{ "product_id": "…" }` → the overview (product confirmed; with Multiple Matches send the chosen candidate's id). `400` if the product isn't one of the candidates or the shopper already has an open review / cooldown for it.
+- `POST /reviews/sessions/{id}/decline/` → "This isn't my product" / "None of these": closes the opportunity (returns the overview with `status: "expired"`); remove the card.
+- `POST /reviews/sessions/{id}/consent/` `{ "nibbl": true, "brand": true }` → the overview. Show **only** the boxes whose `needs_consent` value is `true` (never ask again for consent already given); send `true` for both. `400` if a required one is missing.
+- **Share Your Voice** uses the overview: product, `reward_amount`, `days_left`, "About `estimated_minutes` minutes", "`question_count` conversational questions based on this product", button **Begin Review**.
+
 ### Open the conversation
-- `GET /reviews/sessions/{id}/` → the session. The first open plans the questions: `prompts` (6: product questions with one brand question in the middle, then "Would you buy it again or recommend it to a friend?") and `messages` (starts with the first question as `{"role":"assistant"}`).
+- `GET /reviews/sessions/{id}/` → the session. The first open plans the questions: `prompts` (product questions with one brand question in the middle, then **"Would you recommend this product to a friend or family member?"** and **"How likely are you to purchase this product again?"**) and `messages` (starts with the first question as `{"role":"assistant"}`).
+- Also returns (additive, Oct 13 2026): `suggestions` (answer chips for the question being asked — e.g. `["Yes, definitely","Maybe","No"]` for the recommend / buy-again questions, `[]` otherwise), `title_max: 100`, `body_max: 500`, `product_confirmed`.
 
 ### Answer (chat)
-- `POST /reviews/sessions/{id}/answer/` `{ "text": "…" }` → `{ "next_prompt": "…", "done": false, "review": null, "title": null }`.
+- `POST /reviews/sessions/{id}/answer/` `{ "text": "…" }` → `{ "next_prompt": "…", "done": false, "review": null, "title": null, "suggestions": [ … ] }`. Show `suggestions` as tappable chips under the input (tapping one sends it as the answer); the shopper can always type instead.
 - After the last answer: `{ "next_prompt": null, "done": true, "title": "…", "review": "…" }` — the AI-written draft. Show it for editing.
 - Questions may adapt to previous answers once the AI service supports it — always show `next_prompt` as returned.
 
@@ -359,9 +392,11 @@ Earn $1 by reviewing products from a verified purchase (Master: review campaigns
 - `POST /reviews/sessions/{id}/regenerate/` → `{ "title": "…", "review": "…" }` (a new draft from the same answers).
 
 ### Submit (final approval)
-- `POST /reviews/sessions/{id}/submit/` `{ "rating": 1-5, "title": "…", "content": "…", "would_recommend": true }` → `201` Review.
+- `POST /reviews/sessions/{id}/submit/` `{ "rating": 1-5, "title": "…", "content": "…" }` → `201` Review.
+- **Limits (Master):** title ≤ **100** characters, review ≤ **500** — show counters ("38/100", "276/500"); longer text is refused with `400`. The AI draft is already trimmed to fit.
+- `would_recommend` / `would_buy_again` are taken from the shopper's chat answers; you may still send them explicitly (`true`/`false`/`null`).
 - `content` / `title` = the shopper's edited text (omit to use the draft). Show a "This review accurately reflects my experience" checkbox in the app and enable Submit only when it's ticked (app-side only; not sent to the API).
-- **Errors `400`:** expired, not open, empty review (in `detail`).
+- **Errors `400`:** expired, not open, empty review, title/review too long (in `detail`).
 
 ### My Reviews (status)
 - `GET /reviews/` · **Paginated: no** — items include `status` ∈ `published | held | flagged | removed` and `published_at`.
@@ -370,7 +405,7 @@ Earn $1 by reviewing products from a verified purchase (Master: review campaigns
 - `GET /products/{product_id}/reviews/?sort=newest|highest|lowest|helpful` · **Paginated: yes** — published only: `{ id, author_name, author_avatar, display_name, title, rating, content, verified_purchase, disclosure, would_recommend, helpful_count, brand_response, brand_response_at, published_at, created_at }`.
   - Show `display_name` (first name + last initial), **not** `author_name`. Show the `disclosure` and a verified-purchase badge on each review, and the brand response when present.
 - `POST /reviews/{review_id}/helpful/` → `{ "helpful_count": 12 }` (once per shopper).
-- `GET /products/{product_id}/review-summary/` → `{ "rating": 4.3, "review_count": 120, "star_distribution": {"1":2,"2":3,"3":10,"4":35,"5":70}, "recommendation_rate": 91.5, "ai_summary": null }` — `ai_summary` (`{summary, positives[], negatives[]}`) is `null` until the AI service supports it.
+- `GET /products/{product_id}/review-summary/` → `{ "rating": 4.3, "review_count": 120, "star_distribution": {"1":2,"2":3,"3":10,"4":35,"5":70}, "recommendation_rate": 91.5, "buy_again_rate": 87.0, "ai_summary": null }` — show **% recommend** and **% would buy again** side by side (Master Reviews Overview). `ai_summary` (`{summary, positives[], negatives[]}`) is `null` until the AI service supports it.
 
 ---
 
@@ -561,6 +596,8 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 | Verify email | `/auth/verify-email/` | POST | No | ✅ |
 | Resend verification | `/auth/resend-email-verification/` | POST | No | ✅ |
 | Login | `/auth/login/` | POST | No | ✅ (rate-limited) |
+| Email sign-in code | `/auth/email-code/` | POST | No | ⚠️ new (Oct 13) · always 202 |
+| Sign in with email code | `/auth/email-code/sign-in/` | POST | No | ⚠️ new (Oct 13) |
 | Logout | `/auth/logout/` | POST | Yes | ✅ |
 | Refresh token | `/auth/token/refresh/` | POST | No (body) | ✅ (refresh rotates) |
 | Forgot password | `/auth/password/forgot/` | POST | No | ✅ |
@@ -571,8 +608,9 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 | Change password | `/users/me/change-password/` | PATCH | Yes | ✅ |
 | Avatar upload | — | — | — | ❌ URL-only via PATCH |
 | Delete account | `/users/me/` | DELETE | Yes | ⚠️ requires `{password}` in body |
-| Add phone | `/users/me/phone/` | POST | Yes | ⚠️ SMS not wired |
-| Verify phone | `/users/me/phone/verify/` | POST | Yes | ⚠️ SMS not wired |
+| Add phone | `/users/me/phone/` | POST | Yes | ✅ SMS live · `phone_locked` once verified |
+| Verify phone | `/users/me/phone/verify/` | POST | Yes | ✅ |
+| Phone change request | `/users/me/phone/change-request/` | GET/POST | Yes | ⚠️ new (Oct 13) |
 | Config (constants) | `/config/` | GET | No | ✅ |
 | Offer feed | `/offers/` | GET | Yes | ✅ paginated · `search`,`category` |
 | Offer categories | `/offers/categories/` | GET | Yes | ⚠️ not paginated (array) |
@@ -593,7 +631,11 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 | Receipt detail | `/receipts/{id}/` | GET | Yes | ✅ |
 | Review opportunities | `/reviews/opportunities/` | GET | Yes | ⚠️ not paginated (array) |
 | Review session detail | `/reviews/sessions/{id}/` | GET | Yes | ✅ |
-| Answer review prompt | `/reviews/sessions/{id}/answer/` | POST | Yes | ✅ |
+| Review screens before the chat | `/reviews/sessions/{id}/overview/` | GET | Yes | ⚠️ new (Oct 13) |
+| Confirm / pick product | `/reviews/sessions/{id}/confirm/` | POST | Yes | ⚠️ new (Oct 13) |
+| Not my product | `/reviews/sessions/{id}/decline/` | POST | Yes | ⚠️ new (Oct 13) |
+| Review consent | `/reviews/sessions/{id}/consent/` | POST | Yes | ⚠️ new (Oct 13) |
+| Answer review prompt | `/reviews/sessions/{id}/answer/` | POST | Yes | ✅ (+ `suggestions`) |
 | Submit review | `/reviews/sessions/{id}/submit/` | POST | Yes | ✅ |
 | My reviews | `/reviews/` | GET | Yes | ⚠️ not paginated (array) |
 | Product reviews (public) | `/products/{id}/reviews/` | GET | Yes | ✅ paginated · no email |
@@ -631,7 +673,7 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 7. **Receipt review (Oct 2026)** — see §6: receipts under review are decided within 7 days of upload (auto-approved otherwise); show `decision_reason` on rejected receipts; a reservation with a pending receipt stays `active`.
 8. **Discovery location (Oct 2026)** — see §4 "Discovery location": ask for location/ZIP before showing discovery; `PUT /me/location/`; header `X-Discovery-Location: required` means none is saved.
 9. **Marketing consent (Oct 2026)** — see §2 "Marketing consent": list consents and let shoppers opt out per brand / NibblAI.
-10. **Review campaigns (Oct 2026)** — see §7: opportunities → 6-question chat → editable AI draft (regenerate) → honesty checkbox in the app, then submit `{rating, title, content, would_recommend}`; show `display_name` + disclosure; review summary has star distribution / recommendation rate.
+10. **Review campaigns (Oct 2026)** — see §7: opportunities → screens before the chat → chat → editable AI draft (regenerate) → honesty checkbox in the app, then submit `{rating, title, content}`; show `display_name` + disclosure; review summary has star distribution / recommendation rate / buy-again rate.
 11. **Meta Pixel (Oct 2026)** — offer detail and redemption responses include `meta_pixel_id` (the brand's validated pixel, or `null` when tracking is off). The website fires Campaign View / Claim / Approved Redemption to it in the browser. The app may ignore it (no Meta SDK work is required at launch); if the app adds Meta later, use only this ID — never brand-supplied scripts.
 12. **Device id for fraud checks (Oct 2026)** — send a stable, app-generated device identifier on **every** request as header `X-Device-Id` (8–128 chars, letters/digits/`-_.:`; e.g. a UUID created on first launch and kept in secure storage). It's hashed server-side and used for device/network fraud rules. Without it, device checks fall back to network checks only.
 13. **Referrals (Oct 2026)** — see §10: link format with `?ref=` / `&deal=`, `referral_campaign` on register, and the 5-step progress in `GET /users/me/referrals/`.
@@ -647,3 +689,5 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 20. **Referrals — Master link + 90-day window (Oct 2026)** — share links are now `https://www.joinnibbl.com/r/<CODE>` (general) and `…/r/<CODE>?deal=<campaign_id>` (a product deal); old `?ref=` links still work. `GET /users/me/referrals/` adds (additive) `referral_link`, `reward_amount`, `window_days` (90) and `summary: {earned, pending, invited}`; each friend adds `expires_at` / `days_left` while in progress. New friend status `expired` — the friend didn't finish every step within 90 days (`decision_reason` explains; show "Not eligible"). Show progress as "Step X of 4" (the 4 steps after joining).
 21. **Receipt submission & outcomes (Oct 2026)** — reservations add (additive) `receipt_requirements` `{purchase_after, submit_by, products[], required_quantity, retailers[]}` (empty `retailers` = any retailer), `resubmissions_left` and `last_receipt_rejection`. Master flow: requirements → take/choose photo → review → `POST /receipts/`. Outcomes: `201` with `status: "verified"` (purchase verified) or `"pending"` (manual review, within 7 days); `422` unreadable (no decision — ask for another photo); `400` with `code` `date_rejected` / `retailer_rejected` (first clear rejection — one resubmission before the original deadline, which never restarts) or `final_rejection` (claim closed, slot released). A receipt must be dated on or after the claim was reserved.
 22. **Claim & receipt notifications (Oct 2026)** — `GET /notifications/` now also carries the Master shopper events (types): `claim_reserved` (offer reserved + exact deadline), `receipt_submitted` (manual review, response within 7 days), `receipt_approved` (reward added), `receipt_rejected` (first rejection with one resubmission, or final), `claim_expired`. Approval and rejection are also emailed. Push delivery follows once Firebase is configured.
+23. **Review opportunity screens + chat changes (Oct 13 2026)** — see §7 "Before the chat": Product Confirmed / Multiple Matches (`candidates`), Missing Consent (only the boxes in `needs_consent`), Share Your Voice, "This isn't my product" (`decline`). In the chat: separate recommend and buy-again questions with `suggestions` chips; title ≤ 100 / review ≤ 500 with counters. Product cards now carry `code` (Product ID, e.g. `PRD-002`) and `size_label` (e.g. `12 oz`, `6 × 12 oz`) — show "Flavor · size" so products that share a name (one record per flavor / size) are distinguishable. The review summary adds `buy_again_rate`. Card button wording per Master: **Claim $1**.
+24. **Passwordless shoppers, logged-out Reserve Offer, locked phone (Oct 13 2026)** — see §1 "Passwordless sign-in", §2 "Phone" and §5 "Create Reservation": email-code sign-in (`/auth/email-code/`, `/auth/email-code/sign-in/`); a logged-out shopper opening a deal link can reserve — collect email + phone + consents, send the code with `create: true`, sign in, then confirm; a verified phone is locked (`code: "phone_locked"`) and changes go through `/users/me/phone/change-request/` (Nibbl approves, then the shopper verifies the new number by SMS).

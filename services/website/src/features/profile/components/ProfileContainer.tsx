@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState
 import Image from "next/image";
 import UserAvatar from "@/components/UserAvatar";
 import VerifyPhoneModal from "@/features/wallet/components/VerifyPhoneModal";
+import PhoneChangeModal from "./PhoneChangeModal";
 import Header from "../../homepage/components/Header";
 import Footer from "../../homepage/components/Footer";
 import { LoadState, useConsumerApiStore } from "@/stores/useConsumerApiStore";
@@ -300,7 +301,7 @@ export default function ProfileContainer({
                 onClick={() => setShowPhoneModal(true)}
                 badge={
                   phoneVerified ? (
-                    <span className="text-[12px] font-medium text-[#00A671]">{phone} ✓ Verified</span>
+                    <span className="text-[12px] font-medium text-[#00A671]">{phone} ✓ Verified · 🔒</span>
                   ) : (
                     <span className="text-[12px] font-medium text-[#E6A23C]">
                       {phone ? "Not verified" : "Add"}
@@ -345,14 +346,13 @@ export default function ProfileContainer({
               <p className="text-sm font-medium text-[#00A671]">{saveMessage}</p>
             )}
 
-            {showPhoneModal && (
+            {showPhoneModal && phoneVerified && (
+              <PhoneChangeModal phone={phone} onClose={() => setShowPhoneModal(false)} />
+            )}
+            {showPhoneModal && !phoneVerified && (
               <VerifyPhoneModal
-                initialPhone={phoneVerified ? "" : phone}
-                reason={
-                  phoneVerified
-                    ? "Changing your number pauses withdrawals for 48 hours for your security."
-                    : "We'll text you a 6-digit code to confirm it's yours."
-                }
+                initialPhone={phone}
+                reason="We'll text you a 6-digit code to confirm it's yours."
                 onClose={() => setShowPhoneModal(false)}
                 onVerified={() => {
                   setShowPhoneModal(false);

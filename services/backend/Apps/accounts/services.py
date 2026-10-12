@@ -44,11 +44,17 @@ _PURPOSE_LABEL = {
     VerificationCode.Purpose.EMAIL_VERIFY: "email verification",
     VerificationCode.Purpose.PHONE_VERIFY: "phone verification",
     VerificationCode.Purpose.PASSWORD_RESET: "password reset",
+    VerificationCode.Purpose.SIGN_IN: "Nibbl sign-in",
 }
 
 
 class AccountError(Exception):
-    """Raised for expected, user-facing account errors (mapped to HTTP 400)."""
+    """Raised for expected, user-facing account errors (mapped to HTTP 400).
+    ``code`` (optional) is a stable machine-readable reason for the apps."""
+
+    def __init__(self, message="", code=""):
+        super().__init__(message)
+        self.code = code
 
 
 # ---------------------------------------------------------------------------
@@ -320,10 +326,18 @@ def normalize_phone(raw: str, country: str | None = None) -> str:
     return phonenumbers.format_number(number, phonenumbers.PhoneNumberFormat.E164)
 
 
+PHONE_LOCKED = ("Your verified phone number is locked for your security. "
+                "Request a change and Nibbl will review it.")
+
+
 def start_phone_verification(user: User, *, phone: str, country: str = "") -> None:
     from Apps.accounts import twilio_verify
 
     phone = normalize_phone(phone, country)
+    # Master account security: a verified phone can't be changed by the
+    # shopper — only through a reviewed change request.
+    if user.is_phone_verified and user.phone and phone != user.phone:
+        raise AccountError(PHONE_LOCKED, code="phone_locked")
     if (
         User.objects.filter(phone=phone, is_deleted=False)
         .exclude(pk=user.pk)
@@ -372,11 +386,130 @@ def verify_phone(user: User, *, code: str) -> User:
             hours=settings.PHONE_CHANGE_WITHDRAWAL_PAUSE_HOURS
         )
         fields.append("withdrawals_paused_until")
+    changed = bool(user.last_verified_phone and user.last_verified_phone != user.phone)
     user.is_phone_verified = True
     user.phone_verified_at = now
     user.last_verified_phone = user.phone
     user.save(update_fields=fields)
+    AuditLog.objects.create(
+        action=AuditLog.Action.UPDATE, actor_type="user", actor_id=str(user.id), target_type="user",
+        target_id=str(user.id), metadata={"event": "phone_verified", "phone": user.phone, "changed": changed},
+    )
     return user
+
+
+# ---------------------------------------------------------------------------
+# Phone change requests (verified phone is locked)
+# ---------------------------------------------------------------------------
+@transaction.atomic
+def request_phone_change(user: User, *, new_phone: str, reason: str = "", country: str = "") -> "PhoneChangeRequest":
+    from Apps.accounts.models import PhoneChangeRequest
+
+    if not user.is_phone_verified:
+        raise AccountError("Your phone isn't verified yet — you can change it in Profile.")
+    new_phone = normalize_phone(new_phone, country)
+    if new_phone == user.phone:
+        raise AccountError("That's already your phone number.")
+    if User.objects.filter(phone=new_phone, is_deleted=False).exclude(pk=user.pk).exists():
+        raise AccountError("That phone number is already in use.")
+    if PhoneChangeRequest.objects.filter(user=user, status=PhoneChangeRequest.Status.PENDING).exists():
+        raise AccountError("You already have a phone change waiting for review.")
+    req = PhoneChangeRequest.objects.create(user=user, old_phone=user.phone or "", new_phone=new_phone,
+                                            reason=(reason or "").strip()[:500])
+    AuditLog.objects.create(action=AuditLog.Action.CREATE, actor_type="user", actor_id=str(user.id),
+                            target_type="user", target_id=str(user.id),
+                            metadata={"event": "phone_change_requested", "new_phone": new_phone})
+    return req
+
+
+@transaction.atomic
+def decide_phone_change(req, *, admin: User, approve: bool, note: str = "") -> "PhoneChangeRequest":
+    """Approve: the new number replaces the old one *unverified* — the shopper
+    must verify it by SMS (which also starts the usual withdrawal pause).
+    Reject: a reason the shopper sees is required."""
+    from Apps.accounts.models import PhoneChangeRequest
+
+    if req.status != PhoneChangeRequest.Status.PENDING:
+        raise AccountError("This request was already decided.")
+    note = (note or "").strip()[:255]
+    if not approve and not note:
+        raise AccountError("Tell the shopper why (required).")
+    user = req.user
+    if approve:
+        if User.objects.filter(phone=req.new_phone, is_deleted=False).exclude(pk=user.pk).exists():
+            raise AccountError("That phone number is now used by another account.")
+        user.phone = req.new_phone
+        user.is_phone_verified = False
+        user.save(update_fields=["phone", "is_phone_verified", "updated_at"])
+    req.status = PhoneChangeRequest.Status.APPROVED if approve else PhoneChangeRequest.Status.REJECTED
+    req.decided_by, req.decided_at, req.decision_note = admin, timezone.now(), note
+    req.save(update_fields=["status", "decided_by", "decided_at", "decision_note", "updated_at"])
+    AuditLog.objects.create(
+        action=AuditLog.Action.APPROVE if approve else AuditLog.Action.REJECT, actor_type="admin",
+        actor_id=str(admin.id), target_type="user", target_id=str(user.id),
+        metadata={"event": "phone_change_approved" if approve else "phone_change_rejected",
+                  "before": req.old_phone, "after": req.new_phone if approve else req.old_phone, "note": note},
+    )
+    return req
+
+
+# ---------------------------------------------------------------------------
+# Passwordless shopper sign-in (email code)
+# ---------------------------------------------------------------------------
+def request_sign_in_code(*, email: str, create: bool = False, full_name: str = "") -> None:
+    """Email a 6-digit sign-in code to a shopper. ``create`` (Reserve Offer
+    while logged out) makes the account if the email is new. Silent for
+    brand / admin accounts, suspended accounts and unknown emails without
+    ``create`` — never reveals which accounts exist."""
+    email = (email or "").strip().lower()
+    if not email:
+        raise AccountError("Enter your email address.")
+    user = User.objects.filter(email__iexact=email, is_deleted=False).first()
+    if user is None:
+        if not create:
+            return
+        user = User.objects.create_user(email=email, password=None, full_name=(full_name or "").strip()[:255],
+                                        role=User.Role.CONSUMER)
+    if not user.is_active or user.role != User.Role.CONSUMER:
+        return
+    code = _issue_code(user, VerificationCode.Purpose.SIGN_IN, user.email)
+    emails.send_email_code(to_email=user.email, code=code.code,
+                           purpose_label=_PURPOSE_LABEL[VerificationCode.Purpose.SIGN_IN])
+
+
+@transaction.atomic
+def sign_in_with_code(*, email: str, code: str, phone: str = "", phone_country: str = "",
+                      client: dict | None = None) -> dict:
+    user = User.objects.filter(email__iexact=(email or "").strip(), is_deleted=False,
+                               role=User.Role.CONSUMER).first()
+    if user is None or not user.is_active:
+        raise AccountError("Invalid or expired code.")
+    _verify_code(user, VerificationCode.Purpose.SIGN_IN, (code or "").strip())
+    is_new = user.last_login is None and not user.has_usable_password()
+    if not user.is_email_verified:
+        user.is_email_verified = True
+        user.save(update_fields=["is_email_verified", "updated_at"])
+    phone_saved = remember_phone(user, phone, phone_country)
+    AuditLog.objects.create(action=AuditLog.Action.LOGIN, actor_type="user", actor_id=str(user.id),
+                            target_type="user", target_id=str(user.id), metadata={"event": "email_code_sign_in"})
+    return {"tokens": issue_tokens(user, client=client), "user": user, "is_new": is_new, "phone_saved": phone_saved}
+
+
+def remember_phone(user: User, phone: str, country: str = "") -> bool:
+    """Keep a contact phone typed on Reserve Offer (unverified) when the
+    shopper has none yet. Never replaces an existing number."""
+    if not (phone or "").strip() or user.phone:
+        return False
+    try:
+        phone = normalize_phone(phone, country)
+    except AccountError:
+        return False
+    if User.objects.filter(phone=phone, is_deleted=False).exclude(pk=user.pk).exists():
+        return False
+    user.phone = phone
+    user.is_phone_verified = False
+    user.save(update_fields=["phone", "is_phone_verified", "updated_at"])
+    return True
 
 
 @transaction.atomic

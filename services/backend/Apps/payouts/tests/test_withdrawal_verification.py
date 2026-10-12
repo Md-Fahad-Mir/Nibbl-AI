@@ -166,7 +166,16 @@ class PhoneGateTests(APITestCase):
         user.refresh_from_db()
         self.assertEqual(user.phone, "+12125550101")
         self.assertIsNone(user.withdrawals_paused_until)
-        # Change to a different number → withdrawals pause.
+        # A verified phone is locked: the shopper can't change it directly …
+        with self.assertRaises(account_services.AccountError):
+            account_services.start_phone_verification(user, phone="+44 7911 123456")
+        # … only through an approved change request, then SMS re-verification.
+        from Apps.accounts.models import User as U
+
+        req = account_services.request_phone_change(user, new_phone="+44 7911 123456")
+        admin = U.objects.create_user(email="ops@example.com", password="x", full_name="Ops", role=U.Role.ADMIN)
+        account_services.decide_phone_change(req, admin=admin, approve=True)
+        user.refresh_from_db()
         account_services.start_phone_verification(user, phone="+44 7911 123456")
         account_services.verify_phone(user, code="123456")
         user.refresh_from_db()

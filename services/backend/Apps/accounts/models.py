@@ -138,6 +138,7 @@ class VerificationCode(BaseModel):
         EMAIL_VERIFY = "email_verify", "Email verification"
         PHONE_VERIFY = "phone_verify", "Phone verification"
         PASSWORD_RESET = "password_reset", "Password reset"
+        SIGN_IN = "sign_in", "Passwordless sign-in"
 
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="verification_codes"
@@ -375,6 +376,28 @@ class MagicLinkToken(BaseModel):
     token_hash = models.CharField(max_length=64, unique=True)
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class PhoneChangeRequest(BaseModel):
+    """A shopper asking Nibbl to change their verified (locked) phone.
+    Approving clears the old number so the shopper verifies the new one."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="phone_change_requests")
+    old_phone = models.CharField(max_length=20, blank=True)
+    new_phone = models.CharField(max_length=20)
+    reason = models.CharField(max_length=500, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    decided_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

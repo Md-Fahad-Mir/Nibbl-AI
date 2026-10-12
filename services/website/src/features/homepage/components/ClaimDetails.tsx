@@ -7,6 +7,7 @@ import Footer from "./Footer";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
 import { ApiError, nibblApi } from "@/lib/api/backendApi";
 import { displayOffer } from "../lib/offerMappers";
+import EmailCodeForm from "@/features/auth/components/EmailCodeForm";
 
 // Master "Rebate Restriction Pop-ups" — keyed by the API's error code.
 const RESTRICTION_TITLES: Record<string, string> = {
@@ -34,6 +35,13 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
   // Two separate, optional marketing consents (email + SMS each).
   const [consentNibbl, setConsentNibbl] = useState(false);
   const [consentBrand, setConsentBrand] = useState(false);
+  // Master Reserve Offer: email + phone — prefilled when signed in, collected
+  // here when logged out (then a 6-digit email code signs them in).
+  const user = useConsumerApiStore((state) => state.user);
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [codeSentTo, setCodeSentTo] = useState("");
+  const [sendingCode, setSendingCode] = useState(false);
   const {
     accessToken,
     selectedOffer,
@@ -52,8 +60,10 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
   const [reserving, setReserving] = useState(false);
 
   useEffect(() => {
-    if (campaignId) void loadOfferDetails(campaignId);
-  }, [campaignId, loadOfferDetails]);
+    // Logged out, the deal comes from its public link (loadPublicOffer);
+    // the full details load once the shopper is signed in.
+    if (campaignId && accessToken) void loadOfferDetails(campaignId);
+  }, [campaignId, accessToken, loadOfferDetails]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -70,17 +80,37 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
   const reviewCount = details?.reviewsCount || 0;
   const visibleRating = reviewCount > 0 ? Math.max(0, Math.min(5, Number(details?.rating || 0))) : 0;
 
-  const handleClaimClick = async () => {
-    if (!accessToken) {
-      setIsModalOpen(true);
-      return;
-    }
+  const signedInEmail = accessToken ? String(user?.email ?? "") : "";
+  const savedPhone = accessToken ? String(user?.phone ?? "") : "";
+  const phoneLocked = Boolean(accessToken && user?.is_phone_verified && savedPhone);
+  const emailValue = signedInEmail || contactEmail;
+  const phoneValue = savedPhone || contactPhone;
 
+  const handleClaimClick = async () => {
     if (!consentNibbl || !consentBrand) {
       setRestriction({
         code: "consent_required",
         message: "Please agree to both Nibbl and brand email and SMS to claim this offer.",
       });
+      return;
+    }
+
+    if (!accessToken) {
+      if (!/^\S+@\S+\.\S+$/.test(contactEmail.trim())) {
+        setMessage("Enter your email to reserve this offer.");
+        return;
+      }
+      setSendingCode(true);
+      setMessage("");
+      try {
+        await nibblApi.requestEmailCode(contactEmail.trim(), true);
+        setCodeSentTo(contactEmail.trim());
+        setIsModalOpen(true);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not send the code.");
+      } finally {
+        setSendingCode(false);
+      }
       return;
     }
 
@@ -107,6 +137,7 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
       const reservation = await claimOffer(id, {
         consent_nibbl: consentNibbl,
         consent_brand: consentBrand,
+        ...(!savedPhone && contactPhone.trim() ? { contact_phone: contactPhone.trim(), phone_country: "US" } : {}),
       });
       const reservationId = String(reservation.id || reservation.reservation || "");
       setMessage("Offer claimed. Upload your receipt to complete the reward.");
@@ -235,6 +266,16 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
 
               {/* Marketing consents — two separate checkboxes, both required (Master: Reserve Offer) */}
               <div className="w-full max-w-[335px] flex flex-col gap-2 text-left">
+                <p className="text-[12px] text-[#4D4D4D]">
+                  We&apos;ll use your contact info to reserve your offer, check eligibility and send important claim updates.
+                </p>
+                <input type="email" value={emailValue} readOnly={Boolean(signedInEmail)}
+                  onChange={(e) => setContactEmail(e.target.value)} placeholder="Email"
+                  className={`h-10 px-3 rounded-lg border border-gray-300 text-sm ${signedInEmail ? "bg-gray-50 text-gray-500" : ""}`} />
+                <input type="tel" value={phoneValue} readOnly={Boolean(savedPhone)}
+                  onChange={(e) => setContactPhone(e.target.value)} placeholder="Mobile phone (e.g. +1 512 555 0123)"
+                  title={phoneLocked ? "Your verified phone is locked. Change it from Profile." : undefined}
+                  className={`h-10 px-3 rounded-lg border border-gray-300 text-sm ${savedPhone ? "bg-gray-50 text-gray-500" : ""}`} />
                 {slots && (
                   <div className="flex items-center justify-between gap-2 text-[13px] text-[#4D4D4D]">
                     <span>{slots.used} of {slots.limit} claim slots used</span>
@@ -274,10 +315,10 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
               )}
               <button
                 onClick={handleClaimClick}
-                disabled={Boolean(details?.unavailableReason)}
+                disabled={Boolean(details?.unavailableReason) || sendingCode}
                 className="w-full max-w-[197px] h-[46px] bg-gradient-to-b from-[#3E3EDF] to-[#3E3EDF] hover:opacity-90 active:scale-[0.98] text-[#FEFEFE] text-[16px] font-medium leading-[24px] rounded-lg shadow-[0_4px_4px_rgba(0,0,0,0.12),inset_0_4px_4px_rgba(255,255,255,0.12)] flex items-center justify-center cursor-pointer transition-all focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {details?.unavailableReason ? "Not available" : "Continue"}
+                {details?.unavailableReason ? "Not available" : sendingCode ? "Sending code…" : "Continue"}
             </button>
             {message && (
               <p className={`text-center text-[13px] font-medium ${status === "error" ? "text-[#E65353]" : "text-[#00A671]"}`}>
@@ -379,63 +420,24 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
         </div>
       )}
 
-      {/* Auth Modal Overlay (Blurred background, overlay card) */}
+      {/* Logged out: confirm the email with a 6-digit code (signs in or creates the account) */}
       {isModalOpen && (
-        <div
-          onClick={() => setIsModalOpen(false)}
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 cursor-pointer"
-        >
-          {/* Modal Container */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[380px] bg-white rounded-2xl shadow-[0px_4px_23.6px_rgba(0,0,0,0.12)] p-6 sm:p-8 flex flex-col items-center gap-6 relative select-none animate-scale-in cursor-default border border-gray-100"
-          >
-            {/* Title */}
-            <h3 className="text-[24px] font-bold text-[#1F1D1D] text-center">
-              Claim Offer
-            </h3>
-
-            {/* Red Warning text */}
-            <p className="text-[14px] font-semibold text-[#E65353] text-center leading-relaxed">
-              Receipts must be uploaded within 7 days of claiming this offer.
-            </p>
-
-            {/* Alert / Clock Info Box */}
-            <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-lg p-3 w-full">
-              <span className="text-[#575757] flex-shrink-0">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </span>
-              <span className="text-[13px] font-semibold text-[#1F1D1D]">
-                Please sign in or sign up to continue
-              </span>
-            </div>
-
-            {/* Buttons stack */}
-            <div className="w-full flex flex-col gap-3">
-              {/* Sign In Button */}
-              <button
-                onClick={() => onNavigate("signin")}
-                className="w-full h-[40px] bg-[#3E3EDF] hover:bg-[#3232c4] active:scale-[0.98] text-white text-sm font-semibold rounded-lg flex items-center justify-center cursor-pointer transition-all shadow-sm focus:outline-none"
-              >
-                Sign In
-              </button>
-
-              {/* Sign Up Button */}
-              <button
-                onClick={() => onNavigate("signup")}
-                className="w-full h-[40px] bg-white border border-[#3E3EDF] hover:bg-gray-50 active:scale-[0.98] text-[#3E3EDF] text-sm font-semibold rounded-lg flex items-center justify-center cursor-pointer transition-all focus:outline-none"
-              >
-                Sign Up
-              </button>
-            </div>
-
-            {/* Bottom text */}
-            <span className="text-[12px] font-normal text-[#676464] text-center">
-              New here? It only takes a few seconds.
-            </span>
-
+        <div onClick={() => setIsModalOpen(false)}
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[380px] bg-white rounded-2xl shadow-[0px_4px_23.6px_rgba(0,0,0,0.12)] p-6 sm:p-8 flex flex-col gap-4 border border-gray-100">
+            <h3 className="text-[22px] font-bold text-[#1F1D1D] text-center">Check your email</h3>
+            <EmailCodeForm initialEmail={codeSentTo} codeSent create phone={contactPhone.trim()} phoneCountry="US"
+              onSignedIn={() => {
+                setIsModalOpen(false);
+                setMessage("");
+                // Signed in: continue to Confirm Reservation (the slot is used only on Confirm & Reserve).
+                setConfirmDeadline(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+              }}
+              onCancel={() => setIsModalOpen(false)} />
+            <button onClick={() => onNavigate("signin")} className="text-xs text-[#3E3EDF] font-medium cursor-pointer">
+              Have a password? Sign in instead
+            </button>
           </div>
         </div>
       )}

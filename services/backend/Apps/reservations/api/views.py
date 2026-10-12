@@ -54,6 +54,11 @@ class ReservationListCreateView(APIView):
         except ReservationError as exc:
             raise ValidationError({"detail": str(exc), "code": exc.code})
         risk.record(request, request.user, "claim")
+        if serializer.validated_data["contact_phone"]:
+            from Apps.accounts.services import remember_phone
+
+            remember_phone(request.user, serializer.validated_data["contact_phone"],
+                           serializer.validated_data["phone_country"])
         return Response(
             s.ReservationSerializer(reservation, context={"request": request}).data,
             status=status.HTTP_201_CREATED,

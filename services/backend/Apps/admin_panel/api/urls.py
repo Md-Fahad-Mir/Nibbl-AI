@@ -20,6 +20,8 @@ urlpatterns = [
     path("admin/suspensions/<uuid:suspension_id>/remove/", views.AdminSuspensionRemoveView.as_view(),
          name="suspension-remove"),
     path("admin/staff/", views.AdminStaffListView.as_view(), name="staff-list"),
+    path("admin/phone-changes/<uuid:request_id>/<str:action>/", views.AdminPhoneChangeDecisionView.as_view(),
+         name="phone-change-decision"),
     path("admin/product-categories/", views.AdminProductCategoryView.as_view(), name="product-categories"),
     path("admin/product-categories/<uuid:category_id>/", views.AdminProductCategoryDetailView.as_view(),
          name="product-category-detail"),

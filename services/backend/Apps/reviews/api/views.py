@@ -450,7 +450,19 @@ class BrandReviewListView(APIView):
                       [LedgerEntry.Category.REVIEW_REWARD, LedgerEntry.Category.REVIEW_FEE])
         counts = dict(all_reviews.values_list("status").annotate(n=Count("id")).values_list("status", "n"))
         with_receipt = all_reviews.filter(session__receipt__isnull=False)
+        # Optional paging (?page=&page_size=): without ?page the full list is
+        # returned exactly as before.
+        paging = {}
+        page_param = request.query_params.get("page", "")
+        if page_param.isdigit():
+            size = request.query_params.get("page_size", "")
+            size = max(1, min(int(size), 100)) if size.isdigit() else 10
+            total = reviews.count()
+            page = max(1, min(int(page_param), (total + size - 1) // size or 1))
+            reviews = reviews[(page - 1) * size: page * size]
+            paging = {"count": total, "page": page, "page_size": size}
         return Response({
+            **paging,
             "summary": {
                 "total_reviews": all_reviews.exclude(status=Review.Status.REMOVED).count(),
                 "low_rating_awaiting_action": all_reviews.filter(status=Review.Status.HELD).count(),

@@ -5,6 +5,7 @@ import { Download } from "lucide-react";
 import { ApiRecord, API_BASE_URL, apiClient, backendApi, tokenStorage } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatMoney } from "../../utils/backendMappers";
+import Pager, { usePaged } from "@/components/shared/Pager";
 
 const COLUMNS = [
   ["rebate_rewards", "Rebate rewards"],
@@ -41,6 +42,7 @@ export const downloadCsv = async (path: string, filename: string) => {
 export default function WeeklyStatements() {
   const selectedBrandId = useBrandApiStore((state) => state.selectedBrandId);
   const [weeks, setWeeks] = useState<ApiRecord[] | null>(null);
+  const weeksPage = usePaged(weeks ?? []);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -82,7 +84,7 @@ export default function WeeklyStatements() {
             </tr>
           </thead>
           <tbody>
-            {(weeks ?? []).map((week) => (
+            {weeksPage.items.map((week) => (
               <tr key={String(week.week_start)} className="border-b border-[#F8F9FF] text-[#131B2E]">
                 <td className="py-3 pr-4 font-semibold whitespace-nowrap">
                   {weekLabel(week.week_start, week.week_end)}
@@ -111,6 +113,7 @@ export default function WeeklyStatements() {
           </tbody>
         </table>
       </div>
+      <Pager paged={weeksPage} noun="weeks" />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import RebatesLandingCard from "./RebatesLandingCard";
 import CampaignLimitBanner from "./CampaignLimitBanner";
+import Pager, { usePaged } from "@/components/shared/Pager";
 import {
   formatInteger,
   formatMinutes,
@@ -40,6 +41,7 @@ export default function RebatesLanding({ campaigns, onCreateNew, onEditCampaign,
   const rebatesSummary = useBrandApiStore((state) => state.analyticsRebatesSummary);
 
   const filteredCampaigns = campaigns.filter((camp) => camp.status === filter);
+  const campaignsPage = usePaged(filteredCampaigns, 9, filter);
   const performanceChange = rebatesSummary?.performance_change_percent;
   const performanceLabel = String(
     rebatesSummary?.performance_change_label || (toNumber(performanceChange) >= 0 ? "better" : "worse")
@@ -123,11 +125,12 @@ export default function RebatesLanding({ campaigns, onCreateNew, onEditCampaign,
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 w-full">
-          {filteredCampaigns.map((camp) => (
+          {campaignsPage.items.map((camp) => (
             <RebatesLandingCard key={camp.id} campaign={camp} onEdit={onEditCampaign} />
           ))}
         </div>
       )}
+      <Pager paged={campaignsPage} noun="campaigns" className="w-full" />
 
       {hasSummaryContent && (
         <section className="bg-white border border-slate-100 rounded-[20px] p-8 shadow-sm flex flex-col gap-6 w-full text-left">

@@ -37,9 +37,10 @@ export default function DashboardView({
     setJustActivated(false);
   };
   // Master: the brand name (from Brand Settings) in the welcome message.
-  const brand = useBrandApiStore((state) => state.brand);
-  const profile = useBrandApiStore((state) => state.profile);
-  const displayName = String(brand?.name || brand?.legal_name || profile?.full_name || profile?.email || "there");
+  const brandName = useBrandApiStore((state) => {
+    const selected = state.brand ?? state.brands.find((item) => String(item.id ?? "") === state.selectedBrandId);
+    return String(selected?.name || selected?.legal_name || "");
+  });
 
   if (justActivated) {
     return <AccountActivated onDone={finishActivation} onBilling={() => { finishActivation(); onNavigate("Plans"); }} />;
@@ -51,7 +52,7 @@ export default function DashboardView({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold font-jakarta text-[#131B2E]">
-            Welcome back, {displayName}
+            {brandName ? `Welcome back, ${brandName}` : "Welcome back"}
           </h1>
           <p className="text-sm font-manrope text-[#454656] font-medium">
             Your campaign performance at a glance.

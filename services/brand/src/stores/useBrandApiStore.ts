@@ -298,6 +298,8 @@ interface BrandApiState {
   analyticsCampaigns: ApiRecord[];
   analyticsProducts: ApiRecord[];
   members: ApiRecord[];
+  /** True once every part of the selected brand's workspace has loaded. */
+  workspaceReady: boolean;
   notifications: NotificationItem[];
   status: LoadState;
   error: string | null;
@@ -408,6 +410,7 @@ export const useBrandApiStore = create<BrandApiState>()(
       analyticsCampaigns: [],
       analyticsProducts: [],
       members: [],
+      workspaceReady: false,
       notifications: [],
       status: "idle",
       error: null,
@@ -558,7 +561,13 @@ export const useBrandApiStore = create<BrandApiState>()(
       loadWorkspace: async () => {
         set({ status: "loading", error: null });
         try {
-          const profile = await networkRetry(() => nibblApi.me());
+          // Independent requests run together; the admin path ignores the rest.
+          const [profile, applicationsResponse, brandsFirstTry, notificationsResponse] = await Promise.all([
+            networkRetry(() => nibblApi.me()),
+            optionalRequest(() => apiClient.request<unknown>(backendApi.brand.applications), []),
+            optionalRequest(() => apiClient.request<unknown>(backendApi.brand.brands), null),
+            optionalRequest(() => nibblApi.notifications({ unread: true }), []),
+          ]);
           if (isPlatformAdminProfile(profile)) {
             const adminBrandId = get().adminBrandId;
             if (!adminBrandId) {
@@ -577,10 +586,6 @@ export const useBrandApiStore = create<BrandApiState>()(
             return;
           }
 
-          const applicationsResponse = await optionalRequest(
-            () => apiClient.request<unknown>(backendApi.brand.applications),
-            []
-          );
           const brandApplications = listResults(applicationsResponse);
           if (!isBrandProfile(profile) && !brandApplications.length) {
             await get().logout();
@@ -588,10 +593,8 @@ export const useBrandApiStore = create<BrandApiState>()(
             return;
           }
 
-          const [brandsResponse, notificationsResponse] = await Promise.all([
-            networkRetry(() => apiClient.request<unknown>(backendApi.brand.brands)),
-            optionalRequest(() => nibblApi.notifications({ unread: true }), []),
-          ]);
+          const brandsResponse =
+            brandsFirstTry ?? (await networkRetry(() => apiClient.request<unknown>(backendApi.brand.brands)));
           const brands = listResults(brandsResponse);
           // A remembered brand only counts if this user is a member of it (the
           // browser may still hold another account's brand).
@@ -624,7 +627,7 @@ export const useBrandApiStore = create<BrandApiState>()(
         set({ analyticsDashboard: dashboard });
       },
       selectBrand: async (brandId) => {
-        set({ selectedBrandId: brandId });
+        set({ selectedBrandId: brandId, workspaceReady: false });
         void get().loadAnalyticsDashboard();
         // Each part of the workspace shows as soon as its own request returns
         // (waiting for all of them left the dashboard empty for ~10 s). A
@@ -690,6 +693,7 @@ export const useBrandApiStore = create<BrandApiState>()(
         const reviews = await loadReviewsForProducts(mappedProducts);
         apply({ reviews });
         await Promise.all(extras);
+        apply({ workspaceReady: true });
       },
       loadProducts: async (brandId = get().selectedBrandId || undefined) => {
         if (!brandId) return;
@@ -1097,6 +1101,7 @@ export const useBrandApiStore = create<BrandApiState>()(
           analyticsProducts: [],
           members: [],
           notifications: [],
+          workspaceReady: false,
         });
       },
     }),

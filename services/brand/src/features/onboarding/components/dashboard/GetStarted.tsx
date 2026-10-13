@@ -30,6 +30,7 @@ export default function GetStarted({ onNavigate }: { onNavigate: (tab: string) =
   const reviewCampaigns = useBrandApiStore((s) => s.reviewCampaigns);
   const wallet = useBrandApiStore((s) => s.wallet);
   const getAutoRefill = useBrandApiStore((s) => s.getAutoRefill);
+  const workspaceReady = useBrandApiStore((s) => s.workspaceReady);
   const [goal, setGoal] = useState(() => readGoal(brandId));
   const [autoRefillOn, setAutoRefillOn] = useState(false);
 
@@ -42,7 +43,8 @@ export default function GetStarted({ onNavigate }: { onNavigate: (tab: string) =
   }, [getAutoRefill]);
 
   const all = [...campaigns, ...reviewCampaigns];
-  if (all.some((c) => c.status === "active")) return null;
+  // Decide only once the workspace has loaded, so it never flashes on.
+  if (!workspaceReady || all.some((c) => c.status === "active")) return null;
 
   const chosen = GOALS.find((g) => g.id === goal);
   const goalCampaigns = goal === "reviews" ? reviewCampaigns : campaigns;

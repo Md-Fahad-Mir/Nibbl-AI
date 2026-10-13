@@ -1,24 +1,26 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Check, ClipboardCheck, Gauge, HeartHandshake, type LucideIcon, Megaphone, Receipt, Repeat, Search, ShieldCheck, ShoppingCart, Star, Target, TrendingUp, UserCheck, Users } from "lucide-react";
 
 // Master onboarding ②–④: public brand homepage, How it works / Reviews /
 // Controls, and Plans (before authentication).
-const WHY = [
-  ["👥", "Acquire new-to-brand customers", "Match relevant shoppers with the right products."],
-  ["🔄", "Reconnect with existing customers", "Use opted-in customer data across your owned channels."],
-  ["⭐", "Build loyalty and repeat purchase", "Run controlled offers and campaign-specific cooldowns."],
-  ["⚙️", "Generate reviews consistently", "Review campaigns can run independently from rebate claims."],
+type Item = [LucideIcon, string, string];
+const WHY: Item[] = [
+  [Users, "Acquire new-to-brand customers", "Match relevant shoppers with the right products."],
+  [Repeat, "Reconnect with existing customers", "Use opted-in customer data across your owned channels."],
+  [HeartHandshake, "Build loyalty and repeat purchase", "Run controlled offers and campaign-specific cooldowns."],
+  [Star, "Generate reviews consistently", "Review campaigns can run independently from rebate claims."],
 ];
-const STEPS = [
-  ["📣", "Launch a controlled campaign", "Set products, audience, geography, retailers and pacing."],
-  ["🎯", "Reach the right shoppers", "Find new-to-brand customers and reconnect with known customers."],
-  ["🧾", "Verify real purchases", "Receipt and line-item checks confirm product experience."],
-  ["⭐", "Build lasting relationships", "Encourage repeat purchase and generate verified reviews consistently."],
+const STEPS: Item[] = [
+  [Megaphone, "Launch a controlled campaign", "Set products, audience, geography, retailers and pacing."],
+  [Target, "Reach the right shoppers", "Find new-to-brand customers and reconnect with known customers."],
+  [ClipboardCheck, "Verify real purchases", "Receipt and line-item checks confirm product experience."],
+  [Star, "Build lasting relationships", "Encourage repeat purchase and generate verified reviews consistently."],
 ];
-const CONTROLS = [
-  ["⚙️", "Control your pace", "Adjust campaign goals for the next 25-hour cycle."],
-  ["📊", "Control repeat participation", "Campaign-specific cooldowns prevent repeat redemption."],
-  ["🛡️", "Protect your campaigns", "Pause campaigns and suspend suspicious shoppers."],
+const CONTROLS: Item[] = [
+  [Gauge, "Control your pace", "Adjust campaign goals for the next 25-hour cycle."],
+  [Repeat, "Control repeat participation", "Campaign-specific cooldowns prevent repeat redemption."],
+  [ShieldCheck, "Protect your campaigns", "Pause campaigns and suspend suspicious shoppers."],
 ];
 const PLANS = [
   { name: "Starter", price: 39, slug: "starter", blurb: "Test customer acquisition and review campaigns",
@@ -29,9 +31,12 @@ const PLANS = [
     fit: "Recommended for $5K+ monthly Nibbl spend", features: ["10 active rebate campaigns", "10% fee on shopper rewards", "$3 per completed review", "Future integrations and API", "Monthly account-manager insights"] },
 ];
 
-const Card = ({ icon, title, text }: { icon: string; title: string; text: string }) => (
-  <div className="bg-white border border-[#EAEDFF] rounded-2xl p-5 flex flex-col gap-2 text-center">
-    <span className="text-2xl">{icon}</span>
+const Card = ({ icon: Icon, step, title, text }: { icon: LucideIcon; step?: number; title: string; text: string }) => (
+  <div className="bg-white border border-[#EAEDFF] rounded-2xl p-5 flex flex-col items-center gap-2 text-center">
+    <span className="flex items-center gap-2 text-2xl font-extrabold text-[#001BD2]">
+      {step !== undefined && <span>{step}.</span>}
+      <Icon className="w-7 h-7" />
+    </span>
     <span className="font-extrabold text-[#131B2E]">{title}</span>
     <span className="text-sm text-[#64748B]">{text}</span>
   </div>
@@ -69,7 +74,7 @@ export default function BrandLandingView() {
               <a href="#how" className="h-12 px-6 rounded-xl border border-[#001BD2]/40 text-[#001BD2] font-bold flex items-center">See How It Works</a>
             </div>
             <div className="flex flex-wrap gap-5 text-sm text-[#454656]">
-              <span>✓ Verified purchases</span><span>📊 Flexible daily pacing</span><span>🛡️ Built-in fraud controls</span>
+              <span><Check className="w-4 h-4 inline-block align-[-3px] mr-1" />Verified purchases</span><span><Gauge className="w-4 h-4 inline-block align-[-3px] mr-1" />Flexible daily pacing</span><span><ShieldCheck className="w-4 h-4 inline-block align-[-3px] mr-1" />Built-in fraud controls</span>
             </div>
           </div>
           <div className="relative w-full h-[320px]">
@@ -88,7 +93,7 @@ export default function BrandLandingView() {
         <section id="how" className="flex flex-col gap-6 text-center scroll-mt-20">
           <h2 className="text-3xl font-extrabold">Acquire. Reconnect. Build loyalty. Keep reviews coming.</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {STEPS.map(([icon, title, text], i) => <Card key={title} icon={`${i + 1}. ${icon}`} title={title} text={text} />)}
+            {STEPS.map(([icon, title, text], i) => <Card key={title} icon={icon} step={i + 1} title={title} text={text} />)}
           </div>
         </section>
 
@@ -103,9 +108,9 @@ export default function BrandLandingView() {
               claims, so feedback can continue even when trial campaigns change.
             </p>
             <ul className="text-sm text-[#454656] flex flex-col gap-1">
-              <li>🛒 Social proof for your website</li>
-              <li>📈 Fresh feedback for retailer conversations</li>
-              <li>🔍 Useful product content for search and AI discovery</li>
+              <li><ShoppingCart className="w-4 h-4 inline-block align-[-3px] mr-1" />Social proof for your website</li>
+              <li><TrendingUp className="w-4 h-4 inline-block align-[-3px] mr-1" />Fresh feedback for retailer conversations</li>
+              <li><Search className="w-4 h-4 inline-block align-[-3px] mr-1" />Useful product content for search and AI discovery</li>
             </ul>
             <p className="text-xs text-[#94A3B8]">Opted-in customer contacts can support email, MMS and other owned-channel follow-up on eligible plans.</p>
           </div>
@@ -117,8 +122,8 @@ export default function BrandLandingView() {
             {CONTROLS.map(([icon, title, text]) => <Card key={title} icon={icon} title={title} text={text} />)}
           </div>
           <div className="flex flex-wrap justify-center gap-6 text-sm text-[#454656]">
-            <span>✓ Verified receipts</span><span>🧾 Duplicate receipt prevention</span>
-            <span>👤 Identity and payout controls</span><span>🛡️ Monitored withdrawals</span>
+            <span><Check className="w-4 h-4 inline-block align-[-3px] mr-1" />Verified receipts</span><span><Receipt className="w-4 h-4 inline-block align-[-3px] mr-1" />Duplicate receipt prevention</span>
+            <span><UserCheck className="w-4 h-4 inline-block align-[-3px] mr-1" />Identity and payout controls</span><span><ShieldCheck className="w-4 h-4 inline-block align-[-3px] mr-1" />Monitored withdrawals</span>
           </div>
         </section>
 
@@ -136,7 +141,7 @@ export default function BrandLandingView() {
                 <p className="text-sm text-[#454656]">{plan.blurb}</p>
                 <p className="text-xs text-[#94A3B8]">{plan.fit}</p>
                 <ul className="text-sm text-[#131B2E] flex flex-col gap-1.5 flex-1">
-                  {plan.features.map((f) => <li key={f}>✓ {f}</li>)}
+                  {plan.features.map((f) => <li key={f}><Check className="w-4 h-4 inline-block align-[-3px] mr-1" />{f}</li>)}
                 </ul>
                 <Link href={`/register?plan=${plan.slug}`}
                   className={`h-11 rounded-xl font-bold text-sm flex items-center justify-center ${

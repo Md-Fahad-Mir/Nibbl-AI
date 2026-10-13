@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
-import { AdminPage, Kpi, Notice, Pager, btn, selectCls, shortDate, usePaged } from "@/features/dashboard/components/AdminPage";
+import { AdminPage, AlertIcon, InfoIcon, Kpi, Notice, Pager, btn, selectCls, shortDate, usePaged } from "@/features/dashboard/components/AdminPage";
 
 /** Master Admin Sheet 3 "Suspensions": shoppers suspended by individual
  *  brands — review, remove a brand suspension or apply a global suspension. */
@@ -90,7 +90,7 @@ export const SuspensionsView = () => {
                 {rowsPage.items.map((r) => (
                   <tr key={String(r.id)} onClick={() => setSelectedId(String(r.id))}
                     className={`border-b border-[#F6F6FB] cursor-pointer ${selectedId === r.id ? "bg-[#F2F3FF]" : "hover:bg-[#FAFAFE]"}`}>
-                    <td className="py-2 pr-3 font-semibold text-[#1A1A2E]">{String(r.shopper)}{r.repeated ? <span title="Repeated suspensions" className="text-red-600"> ⚠</span> : null}</td>
+                    <td className="py-2 pr-3 font-semibold text-[#1A1A2E]">{String(r.shopper)}{r.repeated ? <span title="Repeated suspensions" className="text-red-600 ml-1"><AlertIcon className="w-3.5 h-3.5" /></span> : null}</td>
                     <td className="py-2 pr-3">{String(r.brand)}</td>
                     <td className="py-2 pr-3">{String(r.reason || "—")}</td>
                     <td className="py-2 pr-3 text-xs">{shortDate(r.date)}</td>
@@ -134,7 +134,7 @@ export const SuspensionsView = () => {
               {selected.globally_suspended ? "Globally Suspended" : "Globally Suspend"}
             </button>
             <p className="text-xs text-[#6B6B80] bg-[#F6F6FB] rounded-lg p-2">
-              ⓘ Repeated suspensions create an Admin alert; they do not automatically create a global suspension.
+              <InfoIcon className="w-3.5 h-3.5 mr-1 align-[-2px]" />Repeated suspensions create an Admin alert; they do not automatically create a global suspension.
             </p>
           </aside>
         )}

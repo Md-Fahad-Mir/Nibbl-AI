@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { UserRound } from "lucide-react";
 
 export default function OnboardingHeader() {
   return (
@@ -40,7 +41,7 @@ export default function OnboardingHeader() {
           aria-label="User profile menu"
         >
           <div className="w-8 h-8 rounded-full bg-[#F3F4F6] border border-slate-200 flex items-center justify-center text-slate-500 font-semibold group-hover:bg-[#E5E7EB] transition-colors text-xs">
-            👤
+            <UserRound className="w-4 h-4" />
           </div>
           <span className="text-slate-400 text-xs group-hover:text-slate-600 transition-colors">
             ▼

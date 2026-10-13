@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatInteger, formatMoney, toNumber } from "../../utils/backendMappers";
+import { ChevronRight, Plus } from "lucide-react";
 
 interface CampaignItem {
   id: string;
@@ -44,7 +45,7 @@ export default function ReviewsLanding({ campaigns, onCreateNew, onViewDetail, o
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
             <span>Reviews</span>
-            <span>➔</span>
+            <ChevronRight className="w-3.5 h-3.5" />
             <span className="text-[#001BD2]">Review Performance</span>
           </div>
           <div className="flex items-center gap-3">
@@ -71,7 +72,7 @@ export default function ReviewsLanding({ campaigns, onCreateNew, onViewDetail, o
             onClick={onCreateNew}
             className="px-6 h-[46px] bg-[#001BD2] hover:bg-blue-700 text-white font-bold text-sm rounded-full transition-all shadow-md shadow-blue-500/10 cursor-pointer flex items-center gap-2 border-none"
           >
-            <span>➕</span> Create Review Campaign
+            <Plus className="w-4 h-4" /> Create Review Campaign
           </button>
         </div>
       </div>

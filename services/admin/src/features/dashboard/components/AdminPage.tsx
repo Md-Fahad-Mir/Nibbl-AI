@@ -128,3 +128,23 @@ export const Pager = ({ paged, noun }: { paged: Omit<Paged<unknown>, "items">; n
     </div>
   );
 };
+
+// Small inline icons (the admin app has no icon library).
+const svg = (path: React.ReactNode, className = "w-4 h-4") => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"
+    strokeLinejoin="round" className={`inline-block ${className}`} aria-hidden="true">{path}</svg>
+);
+export const CheckIcon = ({ className }: { className?: string }) => svg(<path d="M20 6 9 17l-5-5" />, className);
+export const InfoIcon = ({ className }: { className?: string }) =>
+  svg(<><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></>, className);
+export const AlertIcon = ({ className }: { className?: string }) =>
+  svg(<><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4M12 17h.01" /></>, className);
+export const Stars = ({ rating }: { rating: number }) => (
+  <span className="inline-flex gap-0.5 text-[#F59E0B]" aria-label={`${rating} stars`}>
+    {Array.from({ length: Math.max(0, Math.min(5, Math.round(rating))) }, (_, i) => (
+      <svg key={i} viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current" aria-hidden="true">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
+      </svg>
+    ))}
+  </span>
+);

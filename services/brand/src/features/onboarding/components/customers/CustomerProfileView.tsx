@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Info } from "lucide-react";
 import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { CustomerData } from "./CustomerLedger";
@@ -150,7 +150,7 @@ export default function CustomerProfileView({ customer, onBack, onToggleSuspend,
               <Tile label="Total Reviews" value={String(site.total_reviews ?? 0)} />
               <Tile label="Total Rewards" value={formatMoney(site.total_rewards ?? 0)} />
             </div>
-            <p className="text-xs text-[#64748B]">ⓘ Other brands, products, receipts, and review content are never shown.</p>
+            <p className="text-xs text-[#64748B]"><Info className="w-3.5 h-3.5 inline-block align-[-2px] mr-1" />Other brands, products, receipts, and review content are never shown.</p>
           </section>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -185,7 +185,7 @@ export default function CustomerProfileView({ customer, onBack, onToggleSuspend,
                     className="h-8 px-3 rounded-lg border border-[#001BD2]/40 text-[#001BD2] text-xs font-bold cursor-pointer">Remove</button>
                 </div>
               ))}
-              <p className="text-xs text-[#64748B]">ⓘ Removing a cooldown requires confirmation and is audit logged.</p>
+              <p className="text-xs text-[#64748B]"><Info className="w-3.5 h-3.5 inline-block align-[-2px] mr-1" />Removing a cooldown requires confirmation and is audit logged.</p>
             </section>
           </div>
 
@@ -230,7 +230,7 @@ export default function CustomerProfileView({ customer, onBack, onToggleSuspend,
               </table>
             </div>
             <Pager paged={historyPage} noun="receipts" />
-            <p className="text-xs text-[#64748B]">ⓘ Full receipts are available for 30 days. After 30 days, only the matching line item and required receipt details remain.</p>
+            <p className="text-xs text-[#64748B]"><Info className="w-3.5 h-3.5 inline-block align-[-2px] mr-1" />Full receipts are available for 30 days. After 30 days, only the matching line item and required receipt details remain.</p>
           </section>
 
           <section className={`${card} flex flex-col gap-2`}>

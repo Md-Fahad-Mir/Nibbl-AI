@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
-import { AdminPage, Notice, Pager, btn, money, selectCls, shortDate, usePaged } from "@/features/dashboard/components/AdminPage";
+import { AdminPage, Notice, Pager, Stars, btn, money, selectCls, shortDate, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const TABS = ["Overview", "Wallet Ledger", "Claims & Reviews", "Referrals", "Suspensions"] as const;
 type Tab = (typeof TABS)[number];
@@ -337,7 +337,7 @@ export const ShoppersView = () => {
                       {reviewsPage.items.map((r) => (
                         <tr key={String(r.id)} className="border-b border-[#F6F6FB]">
                           <td className="py-2 pr-3">{String(r.product)}</td><td className="py-2 pr-3">{String(r.brand)}</td>
-                          <td className="py-2 pr-3">{"★".repeat(Number(r.rating))}</td>
+                          <td className="py-2 pr-3"><Stars rating={Number(r.rating)} /></td>
                           <td className="py-2 pr-3 capitalize">{String(r.status)}</td><td className="py-2 text-xs">{shortDate(r.created_at)}</td>
                         </tr>
                       ))}

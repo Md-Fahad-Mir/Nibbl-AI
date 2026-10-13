@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Sparkles, Trash2 } from "lucide-react";
 import { ApiRecord } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { COOLDOWN_OPTIONS } from "./ReviewCampaignBuilder";
@@ -211,7 +211,7 @@ export default function ReviewCampaignDetail({ campaignId, onBack, onEdit, onRev
           <button disabled={!!busy}
             onClick={() => run("suggest", async () => setSuggestions(await suggestReviewPrompts(campaignId, 4)))}
             className="self-start text-sm font-bold text-[#001BD2] disabled:opacity-50 cursor-pointer">
-            {busy === "suggest" ? "Suggesting…" : "✨ Suggest questions"}
+            {busy === "suggest" ? "Suggesting…" : <><Sparkles className="w-4 h-4 inline-block align-[-3px] mr-1" />Suggest questions</>}
           </button>
           {suggestions.map((s) => (
             <div key={s} className="flex items-center gap-3 bg-[#FAF8FF] rounded-xl px-4 py-2.5">

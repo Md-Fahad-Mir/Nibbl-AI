@@ -8,21 +8,22 @@ import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
 import { ApiError, nibblApi } from "@/lib/api/backendApi";
 import { displayOffer } from "../lib/offerMappers";
 import EmailCodeForm from "@/features/auth/components/EmailCodeForm";
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock, Info, Layers, Mail, PauseCircle, Star, Store, Trophy, User, type LucideIcon } from "lucide-react";
 
 // Master "Rebate Restriction Pop-ups" (RB-33). Title / message / note come
 // from the API (`title`, `message`, `note`, `days_remaining`); these are the
 // icons and the codes we know.
-const RESTRICTION_ICONS: Record<string, string> = {
-  consent_required: "✉️",
-  slots_full: "🗂️",
-  already_claimed: "👤",
-  cooldown: "🕒",
-  one_time_redeemed: "✅",
-  not_started: "📅",
-  paused_or_ended: "⏸️",
-  capacity_reached: "🏆",
-  unavailable: "⚠️",
-  retailer_required: "🏪",
+const RESTRICTION_ICONS: Record<string, LucideIcon> = {
+  consent_required: Mail,
+  slots_full: Layers,
+  already_claimed: User,
+  cooldown: Clock,
+  one_time_redeemed: CheckCircle2,
+  not_started: CalendarDays,
+  paused_or_ended: PauseCircle,
+  capacity_reached: Trophy,
+  unavailable: AlertTriangle,
+  retailer_required: Store,
 };
 
 type Restriction = {
@@ -274,7 +275,11 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
                       <span className="text-center text-[11px] leading-[13px] text-[#1F1D1D]">{product.name}</span>
                       {product.variant && <span className="text-center text-[10px] text-[#575757]">{product.variant}</span>}
                       <span className="text-[10px] text-[#575757]">
-                        {product.reviewCount > 0 ? `★ ${Number(product.rating ?? 0).toFixed(1)} · ${product.reviewCount}` : "No reviews yet"}
+                        {product.reviewCount > 0 ? (
+                          <span className="inline-flex items-center gap-0.5">
+                            <Star className="w-3 h-3 fill-[#FFB701] text-[#FFB701]" /> {Number(product.rating ?? 0).toFixed(1)} · {product.reviewCount}
+                          </span>
+                        ) : "No reviews yet"}
                       </span>
                     </div>
                   ))}
@@ -465,7 +470,10 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
             <button onClick={() => setRestriction(null)} aria-label="Close"
               className="absolute right-4 top-3 text-xl text-gray-400 hover:text-gray-600 cursor-pointer">×</button>
             <span className="w-14 h-14 rounded-full bg-[#EEF0FF] flex items-center justify-center text-2xl">
-              {RESTRICTION_ICONS[restriction.code]}
+              {(() => {
+                const Icon = RESTRICTION_ICONS[restriction.code] ?? AlertTriangle;
+                return <Icon className="w-7 h-7 text-[#3E3EDF]" />;
+              })()}
             </span>
             <h3 className="text-[18px] font-semibold text-[#1F1D1D]">{restriction.title}</h3>
             <p className="text-[14px] text-[#575757]">{restriction.message}</p>
@@ -476,7 +484,7 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
               </div>
             ) : null}
             {restriction.note && (
-              <p className="w-full rounded-lg bg-[#F5F6FA] px-3 py-2 text-[12px] text-[#575757]">ⓘ {restriction.note}</p>
+              <p className="w-full rounded-lg bg-[#F5F6FA] px-3 py-2 text-[12px] text-[#575757] flex gap-1.5 text-left"><Info className="w-4 h-4 flex-shrink-0 mt-px" /> {restriction.note}</p>
             )}
             <div className="w-full flex flex-col gap-2 mt-1">
               {restriction.code === "retailer_required" ? (

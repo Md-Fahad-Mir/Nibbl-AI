@@ -8,7 +8,7 @@ import { SectionTabs } from "@/features/dashboard/components/SectionTabs";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
-import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
+import { Pager, Stars, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const dateTime = (value: unknown) =>
   typeof value === "string" && value ? new Date(value).toLocaleString() : "—";
@@ -46,7 +46,7 @@ const FlagCard = ({ review, onDecided }: { review: ApiRecord; onDecided: (messag
         <div>
           <p className="text-xs font-semibold text-[#3E3EDF] uppercase tracking-wider">{String(review.brand_name ?? "")}</p>
           <h2 className="text-lg font-bold text-[#1A1A2E]">{String(review.product_name ?? "")}</h2>
-          <p className="text-sm text-[#F59E0B]">{"★".repeat(Number(review.rating ?? 0))}</p>
+          <p className="text-sm"><Stars rating={Number(review.rating ?? 0)} /></p>
         </div>
         <div className="text-right text-xs text-[#6B6B80]">
           <p>Flagged {dateTime(review.flagged_at)}</p>

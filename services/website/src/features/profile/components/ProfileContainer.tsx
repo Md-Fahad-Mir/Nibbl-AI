@@ -11,6 +11,7 @@ import { LoadState, useConsumerApiStore } from "@/stores/useConsumerApiStore";
 import { ApiError, ApiRecord, nibblApi } from "@/lib/api/backendApi";
 import { displayOffer, imageUrl, text } from "@/features/homepage/lib/offerMappers";
 import MarketingPreferences from "./MarketingPreferences";
+import { BadgeCheck, Lock } from "lucide-react";
 
 type ProfileView = "menu" | "edit" | "saved" | "privacy" | "terms" | "notifications" | "help" | "faq" | "contact-us";
 
@@ -301,7 +302,7 @@ export default function ProfileContainer({
                 onClick={() => setShowPhoneModal(true)}
                 badge={
                   phoneVerified ? (
-                    <span className="text-[12px] font-medium text-[#00A671]">{phone} ✓ Verified · 🔒</span>
+                    <span className="text-[12px] font-medium text-[#00A671] flex items-center gap-1">{phone} <BadgeCheck className="w-3.5 h-3.5" /> Verified <Lock className="w-3 h-3" /></span>
                   ) : (
                     <span className="text-[12px] font-medium text-[#E6A23C]">
                       {phone ? "Not verified" : "Add"}

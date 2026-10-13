@@ -9,6 +9,7 @@ import {
 } from "@stripe/react-stripe-js";
 import { getStripe, stripeConfigured } from "@/lib/stripe";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
+import { Check } from "lucide-react";
 
 const stripePromise = getStripe();
 
@@ -53,7 +54,7 @@ function PaymentForm({ amount, onClose }: FundWalletModalProps) {
     return (
       <div className="flex flex-col items-center gap-3 p-8 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-3xl text-emerald-600">
-          ✓
+          <Check className="w-7 h-7" />
         </div>
         <h3 className="text-lg font-bold text-[#131B2E]">Payment received</h3>
         <p className="text-sm text-[#454656]">

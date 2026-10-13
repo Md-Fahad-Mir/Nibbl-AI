@@ -5,6 +5,7 @@ import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
 import { referralLink } from "@/lib/referral";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
 import { displayOffer } from "@/features/homepage/lib/offerMappers";
+import { X } from "lucide-react";
 
 interface InviteFriendsCardProps {
   onInviteClick: () => void;
@@ -182,7 +183,7 @@ export default function InviteFriendsCard({ onInviteClick }: InviteFriendsCardPr
           <div className="w-full max-w-[440px] max-h-[85vh] overflow-y-auto bg-white rounded-[16px] p-6 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center">
               <h3 className="text-[18px] font-semibold text-[#1F1D1D]">{sheet === "rules" ? "Referral Rules" : "Share a Product"}</h3>
-              <button onClick={() => setSheet(null)} aria-label="Close" className="text-[#8A8A8A] cursor-pointer">✕</button>
+              <button onClick={() => setSheet(null)} aria-label="Close" className="text-[#8A8A8A] cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
             {sheet === "rules" ? (
               <>

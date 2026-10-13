@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, ApiRecord } from "@/lib/api/backendApi";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
+import { AlertTriangle, CalendarX, Camera, CheckCircle2, Clock, ReceiptText, Store, X, XCircle } from "lucide-react";
 
 interface ReceiptSubmitFlowProps {
   reservation: ApiRecord;
@@ -29,7 +30,7 @@ const when = (value: unknown) =>
 const Header = ({ text, onClose }: { text: string; onClose: () => void }) => (
   <div className="flex justify-between items-start">
     <h3 className="text-[20px] font-semibold text-[#1F1D1D]">{text}</h3>
-    <button onClick={onClose} aria-label="Close" className="text-[#8A8A8A] cursor-pointer">✕</button>
+    <button onClick={onClose} aria-label="Close" className="text-[#8A8A8A] cursor-pointer"><X className="w-5 h-5" /></button>
   </div>
 );
 
@@ -140,7 +141,8 @@ export default function ReceiptSubmitFlow({ reservation, onClose, onNavigate }: 
           <p className="text-[13px] text-[#575757]">Photograph the entire receipt clearly.</p>
           <button onClick={() => camera.current?.click()}
             className="h-44 rounded-[12px] border-2 border-dashed border-[#C9CCF5] bg-[#F6F6FB] text-[14px] text-[#575757] cursor-pointer">
-            📷 Take a clear photo of the entire receipt so all details are visible.
+            <Camera className="w-8 h-8 mx-auto mb-2 text-[#3E3EDF]" />
+            Take a clear photo of the entire receipt so all details are visible.
           </button>
           <button onClick={() => camera.current?.click()} className={primary}>Take Photo</button>
           <button onClick={() => gallery.current?.click()} className={secondary}>Choose Photo</button>
@@ -177,7 +179,7 @@ export default function ReceiptSubmitFlow({ reservation, onClose, onNavigate }: 
     return (
       <div className={shell}>
         <div className={`${card} items-center text-center`}>
-          <span className="w-14 h-14 rounded-full bg-[#EEF0FF] text-[#3E3EDF] text-[26px] flex items-center justify-center">⏱</span>
+          <span className="w-14 h-14 rounded-full bg-[#EEF0FF] text-[#3E3EDF] text-[26px] flex items-center justify-center"><Clock className="w-7 h-7" /></span>
           <h3 className="text-[20px] font-semibold text-[#1F1D1D]">Receipt submitted</h3>
           <p className="text-[14px] text-[#575757]">We&apos;re checking your receipt now.</p>
         </div>
@@ -187,9 +189,9 @@ export default function ReceiptSubmitFlow({ reservation, onClose, onNavigate }: 
 
   // Master Receipt Outcomes.
   const o = outcome ?? { kind: "error", message: "Something went wrong." };
-  const views: Record<Outcome["kind"], { icon: string; title: string; body: React.ReactNode; actions: React.ReactNode }> = {
+  const views: Record<Outcome["kind"], { icon: React.ReactNode; title: string; body: React.ReactNode; actions: React.ReactNode }> = {
     verified: {
-      icon: "✅",
+      icon: <CheckCircle2 className="w-8 h-8 text-[#00A671]" />,
       title: "Purchase verified.",
       body: (
         <>
@@ -200,7 +202,7 @@ export default function ReceiptSubmitFlow({ reservation, onClose, onNavigate }: 
       actions: <button onClick={() => onNavigate("wallet")} className={primary}>View Wallet</button>,
     },
     manual: {
-      icon: "🕒",
+      icon: <Clock className="w-8 h-8 text-[#3E3EDF]" />,
       title: "Manual review",
       body: (
         <>
@@ -212,7 +214,7 @@ export default function ReceiptSubmitFlow({ reservation, onClose, onNavigate }: 
       actions: <button onClick={onClose} className={primary}>View My Offers</button>,
     },
     unreadable: {
-      icon: "🧾",
+      icon: <ReceiptText className="w-8 h-8 text-[#3E3EDF]" />,
       title: "We couldn't read the full receipt.",
       body: (
         <>
@@ -228,7 +230,7 @@ export default function ReceiptSubmitFlow({ reservation, onClose, onNavigate }: 
       ),
     },
     date: {
-      icon: "📅",
+      icon: <CalendarX className="w-8 h-8 text-[#E0700B]" />,
       title: "This receipt was purchased outside your eligible period.",
       body: (
         <>
@@ -241,7 +243,7 @@ export default function ReceiptSubmitFlow({ reservation, onClose, onNavigate }: 
       actions: <button onClick={retry} className={primary}>Submit Different Receipt</button>,
     },
     retailer: {
-      icon: "🏬",
+      icon: <Store className="w-8 h-8 text-[#E0700B]" />,
       title: "This campaign requires a receipt from an eligible retailer.",
       body: (
         <>
@@ -254,7 +256,7 @@ export default function ReceiptSubmitFlow({ reservation, onClose, onNavigate }: 
       actions: <button onClick={retry} className={primary}>Submit Different Receipt</button>,
     },
     final: {
-      icon: "❌",
+      icon: <XCircle className="w-8 h-8 text-[#E65353]" />,
       title: "This receipt still does not meet the campaign requirements.",
       body: (
         <>
@@ -265,7 +267,7 @@ export default function ReceiptSubmitFlow({ reservation, onClose, onNavigate }: 
       actions: <button onClick={() => onNavigate("offer")} className={primary}>Explore More Offers</button>,
     },
     error: {
-      icon: "⚠️",
+      icon: <AlertTriangle className="w-8 h-8 text-[#E0700B]" />,
       title: "We couldn't submit this receipt.",
       body: <p className="text-[14px] text-[#575757]">{"message" in o ? o.message : ""}</p>,
       actions: <button onClick={retry} className={primary}>Try Again</button>,

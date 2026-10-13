@@ -13,18 +13,19 @@ interface SidebarProps {
   hasBrandAccess?: boolean;
 }
 
+// Master navigation order and labels. `name` is the internal tab key.
 const menuItems = [
-  { name: "Dashboard", icon: "/sidebarIcon/dashboardIcon.svg" },
-  { name: "Product Library", icon: "/sidebarIcon/productLibary.svg" },
-  { name: "Rebate", icon: "/sidebarIcon/Rebate.svg" },
-  { name: "Reviews", icon: "/sidebarIcon/Reviews.svg" },
-  { name: "Redemptions", icon: "/sidebarIcon/redemption.svg" },
-  { name: "Analytics", icon: "/sidebarIcon/Analytics.svg" },
-  { name: "Customers", icon: "/sidebarIcon/Customers.svg" },
-  { name: "Wallet", icon: "/sidebarIcon/wallets.svg" },
-  { name: "Plans", icon: "/sidebarIcon/Rebate.svg" },
-  { name: "Settings", icon: "/sidebarIcon/settings.svg" },
-  { name: "Tag Generator", icon: "/sidebarIcon/tagGenerator.svg" },
+  { name: "Dashboard", label: "Dashboard", icon: "/sidebarIcon/dashboardIcon.svg" },
+  { name: "Product Library", label: "Product Library", icon: "/sidebarIcon/productLibary.svg" },
+  { name: "Rebate", label: "Rebate Campaigns", icon: "/sidebarIcon/Rebate.svg" },
+  { name: "Reviews", label: "Review Campaigns", icon: "/sidebarIcon/Reviews.svg" },
+  { name: "Redemptions", label: "Redemptions", icon: "/sidebarIcon/redemption.svg" },
+  { name: "Analytics", label: "Analytics", icon: "/sidebarIcon/Analytics.svg" },
+  { name: "Customers", label: "Customers", icon: "/sidebarIcon/Customers.svg" },
+  { name: "Tag Generator", label: "Tag Generator", icon: "/sidebarIcon/tagGenerator.svg" },
+  { name: "Plans", label: "Plans", icon: "/sidebarIcon/plans.svg" },
+  { name: "Wallet", label: "Wallet", icon: "/sidebarIcon/wallets.svg" },
+  { name: "Settings", label: "Settings", icon: "/sidebarIcon/settings.svg" },
 ];
 
 export default function Sidebar({
@@ -87,7 +88,7 @@ export default function Sidebar({
               >
                 <img
                   src={item.icon}
-                  alt={`${item.name} icon`}
+                  alt=""
                   className="w-[18px] h-[18px] object-contain flex-shrink-0"
                   style={{
                     filter: isActive
@@ -95,7 +96,7 @@ export default function Sidebar({
                       : "none",
                   }}
                 />
-                <span>{item.name}</span>
+                <span>{item.label}</span>
               </button>
             );
           })}

@@ -30,7 +30,7 @@ const Tile = ({ label, value }: { label: string; value: string }) => (
 
 const Badge = ({ on, text }: { on: boolean; text: string }) => (
   <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${on ? "bg-[#E2E7FF] text-[#001BD2]" : "bg-slate-100 text-slate-500"}`}>
-    {on ? "●" : "○"} {text}
+    <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${on ? "bg-[#001BD2]" : "border border-slate-400"}`} />{text}
   </span>
 );
 
@@ -115,7 +115,7 @@ export default function CustomerProfileView({ customer, onBack, onToggleSuspend,
               <Badge on={Boolean(profile.nibbl_opt_in)} text="Nibbl Opt-In" />
               <Badge on={Boolean(profile.brand_opt_in)} text={`${brandName} Opt-In`} />
               <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${banned ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
-                ● {banned ? "Banned" : "Active"}
+                <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${banned ? "bg-red-600" : "bg-emerald-600"}`} />{banned ? "Banned" : "Active"}
               </span>
               <button onClick={() => onToggleSuspend({ ...customer, status: banned ? "Suspended" : "Active" })}
                 disabled={!customer.canSuspend}

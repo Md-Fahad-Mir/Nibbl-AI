@@ -101,3 +101,27 @@ class DashboardTests(APITestCase):
         Reservation.objects.all().delete()
         self._cycles([None] * 6 + [10])
         self.assertEqual(cycle_performance(self.campaign)["status"], "behind")
+
+
+class ReviewCampaignSpendTests(APITestCase):
+    def test_review_row_spend_is_reward_plus_fee_of_completed_reviews(self):
+        from Apps.reviews.models import Review, ReviewCampaign, ReviewSession
+
+        owner = User.objects.create_user(email="o@x.com", password="x", full_name="O")
+        brand = Brand.objects.create(name="Acme", slug="acme")
+        BrandMembership.objects.create(brand=brand, user=owner, role=BrandMembership.Role.OWNER)
+        product = create_product(brand=brand, name="Cola 12oz", category="Drinks")
+        rc = ReviewCampaign.objects.create(brand=brand, name="Cola reviews")
+        for i in range(2):
+            shopper = User.objects.create_user(email=f"s{i}@x.com", password="x", full_name="S")
+            session = ReviewSession.objects.create(
+                review_campaign=rc, product=product, user=shopper, reward_amount=Decimal("1.00"),
+                fee_amount=Decimal("4.00"), status=ReviewSession.Status.COMPLETED,
+                expires_at=timezone.now() + dt.timedelta(days=30),
+            )
+            Review.objects.create(product=product, brand=brand, user=shopper, rating=5, review_campaign=rc,
+                                  session=session)
+        self.client.force_authenticate(owner)
+        data = self.client.get(reverse("v1:analytics:brand-dashboard", args=[brand.id])).data
+        row = next(c for c in data["campaigns"] if c["type"] == "review")
+        self.assertEqual((row["completed"], row["spend"]), (2, "10.00"))

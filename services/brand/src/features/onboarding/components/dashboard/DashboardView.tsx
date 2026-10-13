@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CalendarDays } from "lucide-react";
 import DashboardSnapshots from "./DashboardSnapshots";
 import CampaignsTable from "../rebates/CampaignsTable";
 import GetStarted from "./GetStarted";
@@ -11,7 +12,13 @@ import { useBrandApiStore } from "@/stores/useBrandApiStore";
 // campaign table (Available Funds stays current).
 const RANGES = [7, 30, 90, 365];
 
-export default function DashboardView({ onNavigate }: { onNavigate: (tab: string) => void }) {
+export default function DashboardView({
+  onNavigate,
+  onOpenCampaign,
+}: {
+  onNavigate: (tab: string) => void;
+  onOpenCampaign?: (type: "REBATE" | "REVIEW", id: string) => void;
+}) {
   const days = useBrandApiStore((state) => state.dashboardDays);
   const loadAnalyticsDashboard = useBrandApiStore((state) => state.loadAnalyticsDashboard);
   const [justActivated, setJustActivated] = useState(() => {
@@ -32,7 +39,7 @@ export default function DashboardView({ onNavigate }: { onNavigate: (tab: string
   // Master: the brand name (from Brand Settings) in the welcome message.
   const brand = useBrandApiStore((state) => state.brand);
   const profile = useBrandApiStore((state) => state.profile);
-  const displayName = String(brand?.name ?? profile?.full_name ?? profile?.email ?? "there");
+  const displayName = String(brand?.name || brand?.legal_name || profile?.full_name || profile?.email || "there");
 
   if (justActivated) {
     return <AccountActivated onDone={finishActivation} onBilling={() => { finishActivation(); onNavigate("Plans"); }} />;
@@ -47,11 +54,12 @@ export default function DashboardView({ onNavigate }: { onNavigate: (tab: string
             Welcome back, {displayName}
           </h1>
           <p className="text-sm font-manrope text-[#454656] font-medium">
-            Here&apos;s what&apos;s happening with your campaigns today.
+            Your campaign performance at a glance.
           </p>
         </div>
         <label className="flex items-center gap-2 text-xs font-bold text-[#454656] font-manrope">
-          Date range
+          <span className="sr-only">Date range</span>
+          <CalendarDays className="w-4 h-4 text-[#454656]" />
           <select value={days} onChange={(e) => void loadAnalyticsDashboard(Number(e.target.value))}
             className="h-10 px-3 bg-white border border-[#C5C5D9]/30 rounded-xl text-xs font-bold text-[#131B2E] outline-none cursor-pointer">
             {RANGES.map((d) => <option key={d} value={d}>{d === 365 ? "Last 12 Months" : `Last ${d} Days`}</option>)}
@@ -63,7 +71,7 @@ export default function DashboardView({ onNavigate }: { onNavigate: (tab: string
 
       {/* SNAPSHOTS (selected date range) */}
       <DashboardSnapshots />
-      <CampaignsTable />
+      <CampaignsTable onOpenCampaign={onOpenCampaign} onViewAll={() => onNavigate("Rebate")} />
     </div>
   );
 }

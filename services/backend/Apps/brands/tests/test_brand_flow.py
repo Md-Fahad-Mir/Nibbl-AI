@@ -138,6 +138,18 @@ class BrandAccessTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_settings_name_is_the_shopper_facing_name(self):
+        self.client.force_authenticate(self.owner)
+        url = reverse("v1:brands:brand-detail", args=[self.brand.id])
+        resp = self.client.patch(url, {"name": "Acme Snacks"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.brand.refresh_from_db()
+        self.assertEqual(self.brand.name, "Acme Snacks")
+        slug = self.brand.slug
+        self.assertEqual(self.client.patch(url, {"name": ""}, format="json").status_code, 400)
+        self.brand.refresh_from_db()
+        self.assertEqual((self.brand.name, self.brand.slug), ("Acme Snacks", slug))
+
     @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
     def test_manager_can_update_brand_with_logo_upload(self):
         buf = BytesIO()

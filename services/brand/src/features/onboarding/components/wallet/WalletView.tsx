@@ -21,10 +21,10 @@ export default function WalletView() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end w-full gap-4 pb-2">
         <div className="flex flex-col gap-1 text-left">
           <h2 className="text-3xl font-extrabold font-jakarta text-[#131B2E] tracking-tight leading-none">
-            Billing & Wallet
+            Wallet
           </h2>
           <p className="text-xs text-[#454656] font-medium mt-1">
-            Overview of available balance, limits, and transactions history.
+            Fund campaigns, manage automatic refills, and review every charge.
           </p>
         </div>
         <button onClick={() => setRefunding(true)} disabled={!refunds.data}

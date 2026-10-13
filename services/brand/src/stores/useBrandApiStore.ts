@@ -104,7 +104,7 @@ const mapProduct = (item: ApiRecord, index: number, fallbackBrandName = ""): Pro
   description: typeof item.description === "string" ? item.description : "",
   brand: String(
     (item.brand && typeof item.brand === "object"
-      ? (item.brand as ApiRecord).legal_name
+      ? (item.brand as ApiRecord).name
       : undefined) ??
       fallbackBrandName ??
       item.brand_name ??
@@ -191,8 +191,8 @@ const brandNameFromState = (state: {
     state.brand ||
     state.brands.find((brand) => String(brand.id ?? "") === state.selectedBrandId);
   return String(
-    selectedBrand?.legal_name ??
-      selectedBrand?.name ??
+    selectedBrand?.name ??
+      selectedBrand?.legal_name ??
       selectedBrand?.brand_name ??
       ""
   );
@@ -626,69 +626,70 @@ export const useBrandApiStore = create<BrandApiState>()(
       selectBrand: async (brandId) => {
         set({ selectedBrandId: brandId });
         void get().loadAnalyticsDashboard();
-        const [
-          brand,
-          wallet,
-          walletTransactions,
-          products,
-          campaigns,
-          reviewCampaigns,
-          redemptions,
-          reviewQueue,
-          customers,
-          analyticsOverview,
-          analyticsRebatesSummary,
-          analyticsCampaigns,
-          analyticsProducts,
-          members,
-        ] =
-          await Promise.all([
-            networkRetry(() => apiClient.request<ApiRecord>(backendApi.brand.brandDetail(brandId))),
-            optionalRequest(() => apiClient.request<ApiRecord>(backendApi.brand.wallet(brandId)), {}),
-            optionalRequest(() => apiClient.request<unknown>(backendApi.brand.walletTransactions(brandId)), []),
-            networkRetry(() => apiClient.request<unknown>(backendApi.brand.products(brandId))),
-            optionalRequest(() => apiClient.request<unknown>(backendApi.brand.campaigns(brandId)), []),
-            optionalRequest(() => apiClient.request<unknown>(backendApi.brand.reviewCampaigns(brandId)), []),
-            optionalRequest(() => apiClient.request<unknown>(backendApi.brand.redemptions(brandId)), []),
-            optionalRequest(() => apiClient.request<unknown>(backendApi.brand.reviewQueue(brandId)), []),
-            optionalRequest(() => apiClient.request<unknown>(backendApi.brand.customers(brandId)), []),
-            optionalRequest(() => apiClient.request<ApiRecord>(backendApi.brand.analyticsOverview(brandId)), {}),
-            optionalRequest(
-              () =>
-                apiClient.request<ApiRecord>(backendApi.brand.analyticsRebatesSummary(brandId), {
-                  query: { period: "30d" },
-                }),
-              {}
-            ),
-            optionalRequest(() => apiClient.request<unknown>(backendApi.brand.analyticsCampaigns(brandId)), []),
-            optionalRequest(() => apiClient.request<unknown>(backendApi.brand.analyticsProducts(brandId)), []),
-            optionalRequest(() => apiClient.request<unknown>(backendApi.brand.members(brandId)), []),
-          ]);
+        // Each part of the workspace shows as soon as its own request returns
+        // (waiting for all of them left the dashboard empty for ~10 s). A
+        // quick switch to another brand ignores this brand's late responses.
+        const current = () => get().selectedBrandId === brandId;
+        const apply = (patch: Partial<BrandApiState>) => {
+          if (current()) set(patch);
+        };
+        const extras = [
+          optionalRequest(() => apiClient.request<ApiRecord>(backendApi.brand.wallet(brandId)), {}).then((wallet) =>
+            apply({ wallet })
+          ),
+          optionalRequest(() => apiClient.request<unknown>(backendApi.brand.walletTransactions(brandId)), []).then(
+            (rows) => apply({ walletTransactions: listResults(rows) })
+          ),
+          optionalRequest(() => apiClient.request<unknown>(backendApi.brand.campaigns(brandId)), []).then((rows) =>
+            apply({ campaigns: listResults(rows) })
+          ),
+          optionalRequest(() => apiClient.request<unknown>(backendApi.brand.reviewCampaigns(brandId)), []).then(
+            (rows) => apply({ reviewCampaigns: listResults(rows) })
+          ),
+          optionalRequest(() => apiClient.request<unknown>(backendApi.brand.redemptions(brandId)), []).then((rows) =>
+            apply({ redemptions: listResults(rows) })
+          ),
+          optionalRequest(() => apiClient.request<unknown>(backendApi.brand.reviewQueue(brandId)), []).then((rows) =>
+            apply({ reviewQueue: listResults(rows) })
+          ),
+          optionalRequest(() => apiClient.request<unknown>(backendApi.brand.customers(brandId)), []).then((rows) =>
+            apply({ customers: listResults(rows) })
+          ),
+          optionalRequest(() => apiClient.request<ApiRecord>(backendApi.brand.analyticsOverview(brandId)), {}).then(
+            (analyticsOverview) => apply({ analyticsOverview })
+          ),
+          optionalRequest(
+            () =>
+              apiClient.request<ApiRecord>(backendApi.brand.analyticsRebatesSummary(brandId), {
+                query: { period: "30d" },
+              }),
+            {}
+          ).then((analyticsRebatesSummary) => apply({ analyticsRebatesSummary })),
+          optionalRequest(() => apiClient.request<unknown>(backendApi.brand.analyticsCampaigns(brandId)), []).then(
+            (rows) => apply({ analyticsCampaigns: listResults(rows) })
+          ),
+          optionalRequest(() => apiClient.request<unknown>(backendApi.brand.analyticsProducts(brandId)), []).then(
+            (rows) => apply({ analyticsProducts: listResults(rows) })
+          ),
+          optionalRequest(() => apiClient.request<unknown>(backendApi.brand.members(brandId)), []).then((rows) =>
+            apply({ members: listResults(rows) })
+          ),
+        ];
+        const [brand, products] = await Promise.all([
+          networkRetry(() => apiClient.request<ApiRecord>(backendApi.brand.brandDetail(brandId))),
+          networkRetry(() => apiClient.request<unknown>(backendApi.brand.products(brandId))),
+        ]);
         const mappedProducts = listResults(products).map((product, index) =>
           mapProduct(
             product,
             index,
-            String(brand.legal_name ?? brand.name ?? brand.brand_name ?? "")
+            String(brand.name ?? brand.legal_name ?? brand.brand_name ?? "")
           )
         );
+        apply({ brand, products: mappedProducts });
         const reviews = await loadReviewsForProducts(mappedProducts);
-        set({
-          brand,
-          wallet,
-          walletTransactions: listResults(walletTransactions),
-          products: mappedProducts,
-          campaigns: listResults(campaigns),
-          reviewCampaigns: listResults(reviewCampaigns),
-          redemptions: listResults(redemptions),
-          reviewQueue: listResults(reviewQueue),
-          reviews,
-          customers: listResults(customers),
-          analyticsOverview,
-          analyticsRebatesSummary,
-          analyticsCampaigns: listResults(analyticsCampaigns),
-          analyticsProducts: listResults(analyticsProducts),
-          members: listResults(members),
-        });
+        apply({ reviews });
+        await Promise.all(extras);
       },
       loadProducts: async (brandId = get().selectedBrandId || undefined) => {
         if (!brandId) return;

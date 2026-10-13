@@ -55,11 +55,6 @@ export default function WalletOverview({ onViewAll }: WalletOverviewProps) {
             <span className="text-xs font-medium text-[#CACDFF]">Funds available for new rebate claims and review opportunities.</span>
           </div>
 
-          <div className="flex flex-col items-end self-end text-right opacity-60 z-10 relative mt-4">
-            <span className="text-[10px] font-medium tracking-[2.4px] text-white uppercase">Sovereign ID</span>
-            <span className="font-mono text-sm tracking-widest text-white mt-1">**** {String(wallet?.id ?? "0000").slice(0, 4)}</span>
-          </div>
-
           <div className="z-10 relative mt-6 flex flex-col sm:flex-row gap-3 sm:items-center">
             <div className="relative w-full sm:w-44">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-white/70">$</span>

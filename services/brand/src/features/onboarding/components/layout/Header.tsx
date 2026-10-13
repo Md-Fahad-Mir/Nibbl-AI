@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
-import { LogOut, Menu, Settings, UserRound } from "lucide-react";
+import { LogOut, Menu, Settings, UserRound, WalletMinimal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
@@ -28,6 +28,8 @@ interface HeaderProps {
   /** Current plan name, shown once and linked to Plans (Master: Dashboard Home). */
   planName?: string;
   onOpenPlans?: () => void;
+  /** Brand name from Brand Settings (Master: header shows the brand). */
+  brandName?: string;
 }
 
 export default function Header({
@@ -42,6 +44,7 @@ export default function Header({
   onOpenWallet,
   planName,
   onOpenPlans,
+  brandName,
 }: HeaderProps) {
   const router = useRouter();
   const logout = useBrandApiStore((state) => state.logout);
@@ -95,33 +98,31 @@ export default function Header({
           )}
         </button>
 
-        {/* Current plan → Plans */}
+        {/* Available Funds → Wallet */}
+        <button
+          type="button"
+          onClick={onOpenWallet}
+          className="flex items-center gap-2 font-manrope bg-transparent border-none cursor-pointer"
+          title="Open Wallet"
+        >
+          <WalletMinimal className="w-5 h-5 text-[#454656]" />
+          <span className="flex flex-col items-start">
+            <span className="text-[10px] font-semibold text-[#454656] leading-none">Available Funds</span>
+            <span className="text-sm font-extrabold text-[#131B2E] leading-none mt-1">{walletBalance}</span>
+          </span>
+        </button>
+
+        {/* Current plan, shown once → Plans */}
         {planName && (
           <button
             type="button"
             onClick={onOpenPlans}
-            className="hidden sm:flex flex-col items-end font-manrope bg-transparent border-none cursor-pointer"
+            className="hidden sm:inline-flex items-center h-8 px-4 rounded-full border border-[#001BD2]/40 text-xs font-bold text-[#001BD2] bg-white cursor-pointer hover:bg-[#F2F3FF]"
             title="Open Plans"
           >
-            <span className="text-[10px] font-bold text-[#454656] tracking-wider uppercase">Plan</span>
-            <span className="text-sm font-extrabold text-[#001BD2] leading-none mt-0.5">{planName}</span>
+            {planName} Plan
           </button>
         )}
-
-        {/* Wallet Balance Tracker */}
-        <button
-          type="button"
-          onClick={onOpenWallet}
-          className="flex flex-col items-end font-manrope bg-transparent border-none cursor-pointer"
-          title="Open Wallet"
-        >
-          <span className="text-[10px] font-bold text-[#454656] tracking-wider uppercase">
-            Available Funds
-          </span>
-          <span className="text-sm font-extrabold text-[#131B2E] leading-none mt-0.5">
-            {walletBalance}
-          </span>
-        </button>
 
         {/* Vertical Divider */}
         <div className="w-[1px] h-8 bg-[#C5C5D9]/15"></div>
@@ -139,10 +140,10 @@ export default function Header({
         >
           <div className="flex flex-col items-end font-manrope">
             <span className="text-xs font-bold text-[#131B2E] leading-none">
-              {userName}
+              {brandName || userName}
             </span>
             <span className="text-[10px] text-[#454656] mt-0.5 font-medium">
-              {userRole}
+              {brandName && planName ? `${planName} Plan` : userRole}
             </span>
           </div>
           <div className="w-10 h-10 rounded-full border-2 border-[#E2E7FF] overflow-hidden flex items-center justify-center bg-white shadow-sm flex-shrink-0">

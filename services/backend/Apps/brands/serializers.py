@@ -58,6 +58,8 @@ class BrandUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Brand
         fields = [
+            # The brand name shoppers and Nibbl see (Master: Brand Settings name).
+            "name",
             "legal_name",
             "description",
             "website",

@@ -67,8 +67,13 @@ const mapCampaign = (campaign: ApiRecord, metrics?: ApiRecord): Campaign => {
 
 type Screen = { name: "list" } | { name: "builder"; campaign: ApiRecord | null } | { name: "detail"; id: string };
 
-export default function RebatesView({ onOpenPlans }: { onOpenPlans?: () => void } = {}) {
-  const [screen, setScreen] = useState<Screen>({ name: "list" });
+export default function RebatesView({
+  onOpenPlans,
+  initialCampaignId = "",
+}: { onOpenPlans?: () => void; initialCampaignId?: string } = {}) {
+  const [screen, setScreen] = useState<Screen>(
+    initialCampaignId ? { name: "detail", id: initialCampaignId } : { name: "list" }
+  );
   const apiCampaigns = useBrandApiStore((state) => state.campaigns);
   const analyticsCampaigns = useBrandApiStore((state) => state.analyticsCampaigns);
 

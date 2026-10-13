@@ -40,7 +40,7 @@ export default function BrandProfileTab() {
   const [saving, setSaving] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
-  const brandName = draft.brandName ?? String(brand?.legal_name ?? brand?.name ?? "");
+  const brandName = draft.brandName ?? String(brand?.name || brand?.legal_name || "");
   const description = draft.description ?? String(brand?.description ?? "");
   const website = draft.website ?? String(brand?.website ?? "");
   const email = draft.email ?? String(brand?.contact_email ?? "");
@@ -75,7 +75,7 @@ export default function BrandProfileTab() {
       setMessage("");
 
       const formData = new FormData();
-      formData.append("legal_name", brandName.trim());
+      formData.append("name", brandName.trim());
       formData.append("description", description.trim());
       formData.append("website", normalizeWebsite(website));
       formData.append("contact_email", email.trim());

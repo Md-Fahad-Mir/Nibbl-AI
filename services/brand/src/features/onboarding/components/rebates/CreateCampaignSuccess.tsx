@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Info } from "lucide-react";
 
 interface CreateCampaignSuccessProps {
   onFinish: () => void;
@@ -167,7 +167,7 @@ export default function CreateCampaignSuccess({ onFinish }: CreateCampaignSucces
 
           {/* Working Preview details box */}
           <div className="w-full max-w-[394.66px] bg-white border border-[#DAE2FD] rounded-[32px] p-6 shadow-sm flex flex-row gap-3 text-left mt-4">
-            <span className="text-blue-500 text-sm">ℹ️</span>
+            <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
             <div className="flex flex-col">
               <h4 className="font-jakarta font-bold text-sm text-[#131B2E]">Working Preview</h4>
               <p className="text-xs text-[#454656] font-normal leading-[20px] mt-1">

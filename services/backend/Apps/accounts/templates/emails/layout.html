@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>{{ subject }}</title>
+</head>
+<body style="margin:0;padding:0;background:#F4F5FB;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{{ preheader }}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5FB;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+        <tr>
+          <td align="center" style="padding:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:26px;font-weight:bold;letter-spacing:-0.5px;color:#2D3142;">
+            nibbl<span style="color:#D63D9C;">AI</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#FFFFFF;border-radius:16px;border:1px solid #E6E8F5;padding:36px 32px;font-family:Arial,Helvetica,sans-serif;color:#1F1D2E;">
+            <h1 style="margin:0 0 12px;font-size:22px;line-height:1.3;color:#131B2E;">{{ heading }}</h1>
+            {% if greeting %}<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#454656;">{{ greeting }}</p>{% endif %}
+            <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#454656;">{{ intro }}</p>
+            {% if code %}
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="background:#F2F3FF;border-radius:12px;padding:20px;font-family:'Courier New',Courier,monospace;font-size:34px;font-weight:bold;letter-spacing:10px;color:{{ accent }};">{{ code }}</td>
+              </tr>
+            </table>
+            {% endif %}
+            {% if button_url %}
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+              <tr>
+                <td align="center" style="border-radius:10px;background:{{ accent }};">
+                  <a href="{{ button_url }}" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:bold;color:#FFFFFF;text-decoration:none;border-radius:10px;">{{ button_label }}</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:20px 0 0;font-size:12px;line-height:1.5;color:#94A3B8;word-break:break-all;">
+              Button not working? Copy this link into your browser:<br>
+              <a href="{{ button_url }}" style="color:{{ accent }};">{{ button_url }}</a>
+            </p>
+            {% endif %}
+            {% if note %}<p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#64748B;">{{ note }}</p>{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:20px 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#94A3B8;">
+            You're receiving this email because of activity on your Nibbl account.<br>
+            &copy; Nibbl &middot; joinnibbl.com
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

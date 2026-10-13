@@ -18,7 +18,7 @@ SHOPPER_ACCENT = "#3E3EDF"
 BRAND_ACCENT = "#001BD2"
 
 
-def _html(subject: str, *, heading: str, intro: str, accent: str = SHOPPER_ACCENT, **extra) -> str:
+def branded_html(subject: str, *, heading: str, intro: str, accent: str = SHOPPER_ACCENT, **extra) -> str:
     """The branded HTML version of an email; the plain-text body stays the fallback."""
     context = {"subject": subject, "heading": heading, "intro": intro, "accent": accent,
                "preheader": extra.pop("preheader", intro), **extra}
@@ -38,7 +38,7 @@ def send_email_code(*, to_email: str, code: str, purpose_label: str) -> None:
             getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"),
             [to_email],
             fail_silently=False,
-            html_message=_html(
+            html_message=branded_html(
                 subject, heading=f"Your {purpose_label} code",
                 intro="Enter this code to continue. It expires shortly.",
                 code=code, preheader=f"Your code is {code}",
@@ -71,7 +71,7 @@ def send_email_link(*, to_email: str, url: str) -> None:
             getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"),
             [to_email],
             fail_silently=False,
-            html_message=_html(
+            html_message=branded_html(
                 subject, heading="Verify your work email", accent=BRAND_ACCENT,
                 intro="Confirm your work email to finish setting up your brand account.",
                 button_label="Verify email", button_url=url,
@@ -108,7 +108,7 @@ def send_referral_invite(
             getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"),
             [to_email],
             fail_silently=False,
-            html_message=_html(
+            html_message=branded_html(
                 subject, heading=f"{inviter_name} invited you to Nibbl", greeting=greeting,
                 intro=f"{inviter_name} thinks you'll love Nibbl — upload receipts, earn cash. "
                       f"Sign up with their referral code {referral_code}.",
@@ -136,7 +136,7 @@ def send_magic_link(*, to_email: str, url: str) -> None:
             getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"),
             [to_email],
             fail_silently=False,
-            html_message=_html(
+            html_message=branded_html(
                 subject, heading="Sign in to Nibbl", accent=BRAND_ACCENT,
                 intro="Use this secure link to sign in to your Nibbl brand workspace.",
                 button_label="Sign in", button_url=url,

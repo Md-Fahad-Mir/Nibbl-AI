@@ -102,9 +102,9 @@
 - Prod access via SSM, Stripe configured on prod (test keys), CI build optimization, backend health-check fix
 
 ## On hold (waiting on others)
-- **Twilio test** — account approved (active, Full); test SMS to a Bangladesh number blocked by Verify Geo-Permissions (error 60605). Alex to allow Bangladesh (or test with a US phone), then retest SMS withdrawals
+- **Twilio test — DONE 2026-10-13.** Real $1 website withdrawal on prod: amount → locked PayPal → SMS code to a Bangladesh phone → confirm → Requested (Ready for Batch)
 - **Mobile withdrawal verify UI** — app dev (API doc handed off)
-- **Stripe go-live keys** — Alex sent the live keys + webhook secret; the switch is on our side (see below), pending a go-ahead
+- **Stripe go-live keys** — decision 2026-10-13: stay in Stripe test mode for testing; swap to Alex's live keys at go-live (see below). Tested on prod in test mode 2026-10-13: $10 top-up (card 4242) credited by webhook; auto-refill enabled in the UI and its saved-card charge credited the wallet; the job skips brands with no recent spend. Alex's sandbox keys have no sandbox webhook secret, so they can't replace our test account without one
 - **Push/FCM** — Alex can't issue a service-account key; needs Workload Identity Federation (see below)
 
 ## Client integration items (credentials doc, received 2026-10-10) — to do when we pick them up

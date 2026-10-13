@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { ApiError, ApiRecord } from "@/lib/api/backendApi";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
+import { Check, Lock, X } from "lucide-react";
 
 export interface PayoutOption {
   id: string;
@@ -33,7 +34,7 @@ const secondary = "h-11 rounded-[10px] bg-[#EEF0FF] text-[#3E3EDF] text-[15px] f
 const Locked = ({ method }: { method?: PayoutOption }) => (
   <div className="flex items-center justify-between border border-gray-100 rounded-[10px] px-3 py-2.5">
     <span className="text-[14px] text-[#1F1D1D]"><b>{providerName(method)}</b> · {method?.handle}</span>
-    <span className="text-[12px] text-[#8A8A8A]">🔒 Locked</span>
+    <span className="text-[12px] text-[#8A8A8A] flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Locked</span>
   </div>
 );
 
@@ -178,12 +179,12 @@ export default function WithdrawFlow({
         <div className={card}>
           <Header title="Confirm Withdrawal" onClose={onClose} />
           <dl className="flex flex-col border border-gray-100 rounded-[10px] divide-y divide-gray-100 text-[14px]">
-            {[
+            {([
               ["Amount", `$${value.toFixed(2)}`],
               ["Send to", `${providerName(method)} · ${method?.handle ?? ""}`],
-              ["Payout method", "🔒 Locked"],
+              ["Payout method", <span key="locked" className="inline-flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Locked</span>],
               ["Wallet balance after request", `$${after.toFixed(2)}`],
-            ].map(([label, v]) => (
+            ] as [string, ReactNode][]).map(([label, v]) => (
               <div key={label} className="flex justify-between gap-3 px-3 py-2.5">
                 <dt className="text-[#8A8A8A]">{label}</dt>
                 <dd className="text-[#1F1D1D] font-medium text-right">{v}</dd>
@@ -236,7 +237,7 @@ export default function WithdrawFlow({
     <div className={shell}>
       <div className={card}>
         <div className="flex flex-col items-center gap-1 text-center">
-          <span className="w-12 h-12 rounded-full bg-[#EEF0FF] text-[#3E3EDF] text-[22px] flex items-center justify-center">✓</span>
+          <span className="w-12 h-12 rounded-full bg-[#EEF0FF] text-[#3E3EDF] text-[22px] flex items-center justify-center"><Check className="w-6 h-6" strokeWidth={3} /></span>
           <h3 className="text-[18px] font-semibold text-[#1F1D1D]">Withdrawal requested</h3>
           <span className="text-[26px] font-semibold text-[#1F1D1D]">${value.toFixed(2)}</span>
           <span className="text-[13px] text-[#8A8A8A]">to {providerName(method)} · {method?.handle}</span>
@@ -246,7 +247,7 @@ export default function WithdrawFlow({
             <li key={s.label} className="flex items-center gap-3">
               <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] ${
                 s.done ? "bg-[#3E3EDF] text-white" : s.current ? "border-2 border-[#3E3EDF]" : "border-2 border-gray-200"
-              }`}>{s.done ? "✓" : ""}</span>
+              }`}>{s.done ? <Check className="w-3 h-3" strokeWidth={3} /> : null}</span>
               <span className={`text-[14px] ${s.done || s.current ? "text-[#1F1D1D] font-medium" : "text-[#8A8A8A]"}`}>
                 {s.label}
                 {s.at ? <span className="ml-2 text-[12px] font-normal text-[#8A8A8A]">{new Date(String(s.at)).toLocaleString()}</span> : null}
@@ -266,7 +267,7 @@ function Header({ title, onClose }: { title: string; onClose: () => void }) {
   return (
     <div className="flex justify-between items-center">
       <h3 className="text-[18px] font-semibold text-[#1F1D1D]">{title}</h3>
-      <button onClick={onClose} aria-label="Close" className="text-[#8A8A8A] cursor-pointer">✕</button>
+      <button onClick={onClose} aria-label="Close" className="text-[#8A8A8A] cursor-pointer"><X className="w-5 h-5" /></button>
     </div>
   );
 }

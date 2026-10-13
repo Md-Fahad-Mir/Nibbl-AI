@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { imageUrl, rewardLabel, unavailableReason } from "../lib/offerMappers";
+import { Flame } from "lucide-react";
 
 interface CampaignCard {
   id: string;
@@ -128,7 +129,7 @@ export default function RewardsSection({
                     <span className="h-7 px-3 rounded-lg bg-[#EEEAFE] text-[#3E3EDF] text-[13px] font-semibold flex items-center">{card.reward}</span>
                   )}
                   {card.goingFast && (
-                    <span className="h-7 px-2 rounded-lg bg-[#FFF1E6] text-[#E0700B] text-[12px] font-semibold flex items-center">🔥 Going fast</span>
+                    <span className="h-7 px-2 rounded-lg bg-[#FFF1E6] text-[#E0700B] text-[12px] font-semibold flex items-center"><Flame className="w-3.5 h-3.5 mr-1" /> Going fast</span>
                   )}
                 </div>
                 {card.retailers.length > 0 && (

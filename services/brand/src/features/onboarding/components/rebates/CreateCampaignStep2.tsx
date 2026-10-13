@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
+import { Check } from "lucide-react";
 
 interface ProductItem {
   id: string;
@@ -45,7 +46,7 @@ export default function CreateCampaignStep2({ onBack, onContinue, initialSelecte
           <div key={s.step} className="relative z-10 flex flex-col items-center gap-2 min-w-0">
             <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
               s.active ? "bg-[#001BD2] text-white shadow-[0_0_0_8px_#DFE0FF]" : s.done ? "bg-[#DAE2FD] text-[#001BD2]" : "bg-[#DAE2FD] text-[#454656]"
-            }`}>{s.done ? "✓" : s.step}</span>
+            }`}>{s.done ? <Check className="w-4 h-4" /> : s.step}</span>
             <span className={s.active ? "text-[#001BD2] text-xs text-center" : "text-slate-400 text-xs text-center"}>{s.title}</span>
           </div>
         ))}
@@ -90,7 +91,7 @@ export default function CreateCampaignStep2({ onBack, onContinue, initialSelecte
               <div className={`absolute top-4 right-4 w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
                 isSelected ? "bg-[#001BD2] border-[#001BD2] text-white" : "border-slate-300 bg-white"
               }`}>
-                {isSelected && <span className="text-[10px] font-bold">✓</span>}
+                {isSelected && <Check className="w-3 h-3" />}
               </div>
 
               {/* Product Visual */}

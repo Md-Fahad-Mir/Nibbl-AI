@@ -20,6 +20,7 @@ import PlansView from "./plans/PlansView";
 import BrandCheckout from "./checkout/BrandCheckout";
 import { Product } from "../utils/mockData";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
+import { Info } from "lucide-react";
 
 
 type ProductViewMode = "list" | "details" | "add" | "edit";
@@ -287,7 +288,7 @@ export default function OnboardingView() {
         {adminBrandId && (
           <div className="bg-[#001BD2] text-white text-sm px-4 md:px-8 py-2.5 flex flex-wrap items-center justify-between gap-2">
             <span>
-              ⓘ <b>Nibbl Admin Mode</b> — Viewing {String(brand?.name ?? "this brand")}. Every action is logged.
+              <Info className="w-4 h-4 inline-block align-[-3px] mr-1" /><b>Nibbl Admin Mode</b> — Viewing {String(brand?.name ?? "this brand")}. Every action is logged.
             </span>
             <button onClick={() => void logout().then(() => window.close())}
               className="text-xs font-bold underline cursor-pointer bg-transparent border-none text-white">Exit Admin Mode</button>

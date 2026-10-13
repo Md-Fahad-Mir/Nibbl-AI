@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
+import { CircleDollarSign, Hourglass, MessageCircle, Star, Timer } from "lucide-react";
 
 interface ReviewChatModalProps {
   opportunity: ApiRecord;
@@ -31,7 +32,7 @@ const ProductLine = ({ product }: { product: ApiRecord }) => (
       {[product.size_label, product.category && `Category: ${String(product.category)}`].filter(Boolean).map(String).join(" · ")}
     </span>
     {Number(product.review_count) > 0 && (
-      <span className="text-xs text-gray-500">★ {String(product.avg_rating)} · {String(product.review_count)} reviews</span>
+      <span className="text-xs text-gray-500 flex items-center gap-1"><Star className="w-3 h-3 fill-[#FFB701] text-[#FFB701]" /> {String(product.avg_rating)} · {String(product.review_count)} reviews</span>
     )}
   </div>
 );
@@ -269,13 +270,13 @@ export default function ReviewChatModal({ opportunity, onClose, onSubmitted }: R
               <ProductLine product={product} />
             </div>
             {[
-              ["💲", `$${reward} reward`],
-              ["⏳", `${String(overview?.days_left ?? 30)} days left`],
-              ["⏱️", `About ${String(overview?.estimated_minutes ?? 2)} minutes`],
-              ["💬", `${String(overview?.question_count ?? 5)} conversational questions based on this product.`],
-            ].map(([icon, text]) => (
-              <div key={text} className="flex items-center gap-3 border border-gray-100 rounded-xl p-3 text-sm text-[#1F1D1D]">
-                <span>{icon}</span>{text}
+              [CircleDollarSign, `$${reward} reward`],
+              [Hourglass, `${String(overview?.days_left ?? 30)} days left`],
+              [Timer, `About ${String(overview?.estimated_minutes ?? 2)} minutes`],
+              [MessageCircle, `${String(overview?.question_count ?? 5)} conversational questions based on this product.`],
+            ].map(([Icon, text]) => (
+              <div key={String(text)} className="flex items-center gap-3 border border-gray-100 rounded-xl p-3 text-sm text-[#1F1D1D]">
+                <Icon className="w-5 h-5 text-[#3E3EDF] flex-shrink-0" />{String(text)}
               </div>
             ))}
             <button className={primary} onClick={() => setStage("chat")}>Begin Review</button>
@@ -314,7 +315,9 @@ export default function ReviewChatModal({ opportunity, onClose, onSubmitted }: R
                     <div className="flex gap-1">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <button key={star} onClick={() => setRating(star)} aria-label={`${star} stars`}
-                          className={`text-3xl leading-none cursor-pointer ${star <= rating ? "text-[#FFB701]" : "text-gray-300"}`}>★</button>
+                          className="cursor-pointer">
+                          <Star className={`w-8 h-8 ${star <= rating ? "fill-[#FFB701] text-[#FFB701]" : "text-gray-300"}`} />
+                        </button>
                       ))}
                     </div>
                     <span className="text-xs text-gray-500">You&apos;ll always receive ${reward} for your honest review — no matter your rating.</span>

@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
-import { Pencil, Rocket } from "lucide-react";
+import { Check, Pencil, Rocket } from "lucide-react";
 
 interface RewardTier {
   id: string;
@@ -77,7 +77,7 @@ export default function CreateCampaignStep3({
           { step: "4", title: "Review & publish", active: false },
         ].map((s) => (
           <div key={s.step} className="relative z-10 flex flex-col items-center gap-2 min-w-0">
-            <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${s.active ? "bg-[#001BD2] text-white shadow-[0_0_0_8px_#DFE0FF]" : "bg-[#DAE2FD] text-[#001BD2]"}`}>{s.done && !s.active ? "✓" : s.step}</span>
+            <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${s.active ? "bg-[#001BD2] text-white shadow-[0_0_0_8px_#DFE0FF]" : "bg-[#DAE2FD] text-[#001BD2]"}`}>{s.done && !s.active ? <Check className="w-4 h-4" /> : s.step}</span>
             <span className={s.active ? "text-[#001BD2] text-xs text-center" : "text-slate-400 text-xs text-center"}>{s.title}</span>
           </div>
         ))}

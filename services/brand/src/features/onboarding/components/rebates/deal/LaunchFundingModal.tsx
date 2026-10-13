@@ -5,6 +5,7 @@ import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 import { SavedCard, useBrandApiStore } from "@/stores/useBrandApiStore";
 import FundWalletModal from "../../wallet/FundWalletModal";
 import { formatMoney } from "../../../utils/backendMappers";
+import { Lock, X } from "lucide-react";
 
 /** Ask the backend whether a campaign can be submitted (Master ⑪). */
 export async function launchReady(brandId: string, campaignId: string): Promise<boolean> {
@@ -119,7 +120,7 @@ export default function LaunchFundingModal({ campaignId, campaignName, onClose, 
             <h2 className="font-jakarta text-xl font-extrabold text-[#131B2E]">Fund your campaign before launch</h2>
             <p className="text-sm text-[#454656]">{campaignName} · Rebate campaign</p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="text-[#94A3B8] text-lg cursor-pointer">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-[#94A3B8] text-lg cursor-pointer"><X className="w-5 h-5" /></button>
         </div>
         {!state ? (
           <p className="text-sm text-[#64748B]">{error || "Loading…"}</p>
@@ -174,7 +175,7 @@ export default function LaunchFundingModal({ campaignId, campaignName, onClose, 
               Save Campaign as Draft
             </button>
             <p className="text-[11px] text-center text-[#64748B]">
-              🔒 This campaign will not launch until the Wallet requirement is met and auto-replenishment is enabled.
+              <Lock className="w-3.5 h-3.5 inline-block align-[-2px] mr-1" />This campaign will not launch until the Wallet requirement is met and auto-replenishment is enabled.
             </p>
           </>
         )}

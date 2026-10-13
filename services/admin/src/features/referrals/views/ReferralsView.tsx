@@ -7,7 +7,7 @@ import { Header } from "@/features/dashboard/components/Header";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
-import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
+import { CheckIcon, Pager, usePaged } from "@/features/dashboard/components/AdminPage";
 
 const TABS = [
   { value: "flagged", label: "Flagged" },
@@ -68,7 +68,7 @@ const ReferralCard = ({ referral, onChanged }: { referral: ApiRecord; onChanged:
       <ol className="grid grid-cols-1 sm:grid-cols-5 gap-2">
         {steps.map((s) => (
           <li key={String(s.key)} className={`rounded-lg px-3 py-2 text-xs ${s.done ? "bg-emerald-50 text-emerald-800" : "bg-[#F6F6FB] text-[#9A9AB0]"}`}>
-            {s.done ? "✓ " : ""}{String(s.label)}
+            {s.done ? <CheckIcon className="w-3.5 h-3.5 mr-1" /> : null}{String(s.label)}
           </li>
         ))}
       </ol>

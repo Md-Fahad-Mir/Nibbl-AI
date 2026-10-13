@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
+import { Check, Copy } from "lucide-react";
 
 interface CreateCampaignSuccessProps {
   onFinish: () => void;
@@ -62,7 +63,7 @@ export default function CreateCampaignSuccess({ onFinish }: CreateCampaignSucces
                 onClick={handleCopy}
                 className="absolute right-2 top-2 px-4 h-9 bg-[#001BD2] hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-1 border-none"
               >
-                <span>📋</span>
+                <Copy className="w-3.5 h-3.5" />
                 <span>{copied ? "Copied!" : "Copy"}</span>
               </button>
             </div>
@@ -131,7 +132,7 @@ export default function CreateCampaignSuccess({ onFinish }: CreateCampaignSucces
                     </div>
                   </div>
                   <div className="w-10 h-10 bg-[#001BD2]/10 rounded-full flex items-center justify-center">
-                    <span className="text-[#001BD2] text-sm">✓</span>
+                    <Check className="w-4 h-4 text-[#001BD2]" />
                   </div>
                 </div>
 

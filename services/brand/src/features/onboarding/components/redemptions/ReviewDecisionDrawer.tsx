@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { ApiRecord } from "@/lib/api/backendApi";
 import { ReviewSelection, useBrandApiStore } from "@/stores/useBrandApiStore";
+import { Check, X } from "lucide-react";
 
 export const REJECTION_REASONS: { value: string; label: string }[] = [
   { value: "outside_period", label: "Purchase outside reservation period" },
@@ -194,7 +195,7 @@ export default function ReviewDecisionDrawer({ item, onClose, onApprove, onRejec
                 {String(receipt.user_name || "Customer")} · {String(receipt.user_email ?? "")}
               </h3>
             </div>
-            <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-slate-50 cursor-pointer text-lg font-bold">✕</button>
+            <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-slate-50 cursor-pointer text-lg font-bold flex items-center justify-center"><X className="w-5 h-5" /></button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5 text-left">
@@ -345,7 +346,7 @@ export default function ReviewDecisionDrawer({ item, onClose, onApprove, onRejec
                   className="flex-1 h-12 bg-[#001BD2] hover:opacity-95 text-white font-extrabold text-sm rounded-full disabled:opacity-40 cursor-pointer"
                   title={reward === null ? "Confirm the mapping to calculate the reward first" : ""}
                 >
-                  ✓ Approve {reward !== null ? `· ${money(reward)}` : ""}
+                  <Check className="w-4 h-4 inline-block align-[-3px] mr-1" />Approve {reward !== null ? `· ${money(reward)}` : ""}
                 </button>
                 <button
                   onClick={() => { setMode("reject"); setError(""); }}

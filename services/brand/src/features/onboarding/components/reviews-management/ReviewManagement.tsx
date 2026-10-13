@@ -5,6 +5,7 @@ import { ApiRecord, API_BASE_URL, tokenStorage } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatDate, formatInteger, formatMoney } from "../../utils/backendMappers";
 import Pager from "@/components/shared/Pager";
+import { Check, Circle, CircleCheck, Star, X } from "lucide-react";
 
 interface ReviewManagementProps {
   onBack: () => void;
@@ -47,15 +48,16 @@ const cardClass = "bg-white border border-[#EAEDFF] rounded-[20px] p-5 shadow-sm
 const headingClass = "text-xs font-bold text-[#454656] uppercase tracking-wider";
 
 const Stars = ({ rating }: { rating: number }) => (
-  <span className="text-[#F59E0B] tracking-tight whitespace-nowrap" aria-label={`${rating} stars`}>
-    {"★".repeat(rating)}
-    <span className="text-slate-200">{"★".repeat(Math.max(0, 5 - rating))}</span>
+  <span className="inline-flex items-center gap-0.5 whitespace-nowrap" aria-label={`${rating} stars`}>
+    {[1, 2, 3, 4, 5].map((n) => (
+      <Star key={n} className={`w-3.5 h-3.5 ${n <= rating ? "text-[#F59E0B] fill-[#F59E0B]" : "text-slate-200 fill-slate-200"}`} />
+    ))}
   </span>
 );
 
 const VerifiedBadge = () => (
   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#15803D] bg-emerald-50 rounded-full px-2 py-0.5">
-    ✓ Verified Purchase
+    <Check className="w-3 h-3" /> Verified Purchase
   </span>
 );
 
@@ -103,7 +105,7 @@ function ReviewDetails({ review, onClose }: { review: ApiRecord; onClose: () => 
     <aside className={`${cardClass} flex flex-col gap-4 text-sm lg:sticky lg:top-4`}>
       <div className="flex justify-between items-start">
         <h3 className="font-jakarta text-lg font-bold text-[#131B2E]">Review Details</h3>
-        <button onClick={onClose} aria-label="Close" className="text-[#94A3B8] hover:text-[#131B2E] text-lg cursor-pointer">✕</button>
+        <button onClick={onClose} aria-label="Close" className="text-[#94A3B8] hover:text-[#131B2E] text-lg cursor-pointer"><X className="w-5 h-5" /></button>
       </div>
       <div className="flex flex-col gap-1">
         <span className="font-bold text-[#131B2E]">{String(review.product_name ?? "")}</span>
@@ -167,7 +169,7 @@ function ReviewDetails({ review, onClose }: { review: ApiRecord; onClose: () => 
               <ul className="mt-2 flex flex-col gap-1 text-xs">
                 {checks.map((c) => (
                   <li key={String(c.label)} className={c.ok ? "text-[#15803D]" : "text-[#94A3B8]"}>
-                    {c.ok ? "✓" : "○"} <span className="text-[#454656]">{String(c.label)}</span>
+                    {c.ok ? <CircleCheck className="w-3.5 h-3.5 inline-block align-[-2px] mr-1" /> : <Circle className="w-3.5 h-3.5 inline-block align-[-2px] mr-1" />}<span className="text-[#454656]">{String(c.label)}</span>
                   </li>
                 ))}
               </ul>
@@ -189,7 +191,7 @@ function ReviewDetails({ review, onClose }: { review: ApiRecord; onClose: () => 
             <p className="text-xs text-[#94A3B8] mt-1">Shown for service recovery purposes only. Do not share or use for marketing.</p>
           </>
         ) : (
-          <p className="text-xs text-[#94A3B8] mt-2">On your plan, the customer&apos;s email is shown only for 1–3★ reviews.</p>
+          <p className="text-xs text-[#94A3B8] mt-2">On your plan, the customer&apos;s email is shown only for 1–3 star reviews.</p>
         )}
       </div>
     </aside>
@@ -449,7 +451,7 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
             className={`${selectClass} lg:col-span-1`} />
           <select value={rating} onChange={(e) => setRating(e.target.value)} className={selectClass} aria-label="Rating">
             <option value="">All Ratings</option>
-            {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r}★</option>)}
+            {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} star{r === 1 ? "" : "s"}</option>)}
           </select>
           <select value={retailer} onChange={(e) => setRetailer(e.target.value)} className={selectClass} aria-label="Retailer">
             <option value="">All Retailers</option>

@@ -37,7 +37,7 @@ export default function InviteUserModal({ onClose, onSend }: InviteUserModalProp
         {/* Modal Header */}
         <div className="bg-[#F2F3FF] px-8 py-5 flex justify-between items-center border-b border-[#C5C5D9]/15">
           <h3 className="font-jakarta font-extrabold text-lg text-[#131B2E] tracking-tight">Invite Team Member</h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-white hover:bg-slate-50 border-none cursor-pointer flex items-center justify-center text-slate-500 font-bold">✕</button>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-white hover:bg-slate-50 border-none cursor-pointer flex items-center justify-center text-slate-500 font-bold"><X className="w-4 h-4" /></button>
         </div>
 
         {/* Modal Body */}

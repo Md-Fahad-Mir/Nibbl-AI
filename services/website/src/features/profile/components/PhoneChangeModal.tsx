@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
+import { Lock } from "lucide-react";
 
 /** A verified phone is locked (account security). The shopper asks Nibbl to
  *  change it; once approved they verify the new number by SMS. */
@@ -46,7 +47,7 @@ export default function PhoneChangeModal({ phone, onClose }: { phone: string; on
         <h3 className="text-[18px] font-semibold text-[#1F1D1D]">Phone number</h3>
         <div className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
           <span>{phone}</span>
-          <span className="text-[#00A671] font-medium">🔒 Verified · locked</span>
+          <span className="text-[#00A671] font-medium flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Verified · locked</span>
         </div>
         <p className="text-[13px] text-[#575757]">
           Your verified phone is locked for your security. To use a different number, request a change — Nibbl reviews it,

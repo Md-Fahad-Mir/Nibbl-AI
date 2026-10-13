@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
+import { BadgeCheck, Star } from "lucide-react";
 
 const SORTS = [
   { value: "newest", label: "Newest" },
@@ -83,7 +84,7 @@ export default function ProductReviews({ productId }: { productId: string }) {
                 const n = Number(distribution[String(star)] ?? 0);
                 return (
                   <div key={star} className="flex items-center gap-2 text-xs text-[#575757]">
-                    <span className="w-6">{star}★</span>
+                    <span className="w-7 flex items-center gap-0.5">{star}<Star className="w-3 h-3 fill-[#FFB701] text-[#FFB701]" /></span>
                     <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div className="h-full bg-[#FFB701]" style={{ width: `${count ? (n * 100) / count : 0}%` }} />
                     </div>
@@ -128,7 +129,7 @@ export default function ProductReviews({ productId }: { productId: string }) {
                 <span className="text-[16px] font-medium text-[#1F1D1D]">
                   {String(review.display_name || "Verified shopper")}
                   {Boolean(review.verified_purchase) && (
-                    <span className="ml-2 text-[11px] font-semibold text-[#00A671]">✓ Verified purchase</span>
+                    <span className="ml-2 inline-flex items-center gap-1 text-[11px] font-semibold text-[#00A671]"><BadgeCheck className="w-3.5 h-3.5" /> Verified purchase</span>
                   )}
                 </span>
                 <Stars rating={Number(review.rating ?? 0)} />

@@ -2,6 +2,7 @@
 
 import { ApiRecord } from "@/lib/api/backendApi";
 import { STATUS_BADGE, money, shortDate } from "./WalletActivity";
+import { Check, X } from "lucide-react";
 
 const DETAIL_LABELS: [string, string][] = [
   ["reward_type", "Reward type"],
@@ -24,7 +25,7 @@ export default function RewardDetailsModal({ item, onClose }: { item: ApiRecord;
           <h3 className="text-[18px] font-semibold text-[#1F1D1D]">
             {item.type === "withdrawal" ? "Withdrawal details" : "Reward details"}
           </h3>
-          <button onClick={onClose} aria-label="Close" className="text-[#8A8A8A] cursor-pointer">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-[#8A8A8A] cursor-pointer"><X className="w-5 h-5" /></button>
         </div>
         <div className="flex items-center gap-3">
           {Boolean(item.image) && (
@@ -45,7 +46,7 @@ export default function RewardDetailsModal({ item, onClose }: { item: ApiRecord;
               <span className={`mt-0.5 w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[11px] ${
                 step.done ? "bg-[#3E3EDF] text-white" : step.current ? "border-2 border-[#3E3EDF]" : "border-2 border-gray-200"
               }`}>
-                {step.done ? "✓" : ""}
+                {step.done ? <Check className="w-3 h-3" strokeWidth={3} /> : null}
               </span>
               <div className="flex flex-col">
                 <span className={`text-[14px] font-medium ${step.done || step.current ? "text-[#1F1D1D]" : "text-[#8A8A8A]"}`}>

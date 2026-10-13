@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
-import { LogOut, Settings, UserRound } from "lucide-react";
+import { LogOut, Menu, Settings, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 
@@ -61,7 +61,7 @@ export default function Header({
           onClick={onToggleSidebar}
           className="md:hidden w-10 h-10 rounded-xl border border-[#C5C5D9]/20 hover:bg-[#E2E7FF]/30 flex items-center justify-center flex-shrink-0 cursor-pointer text-[#131B2E] text-lg font-bold"
         >
-          ☰
+          <Menu className="w-5 h-5" />
         </button>
         <div className="w-full relative">
           <input

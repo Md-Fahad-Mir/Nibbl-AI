@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 
 interface SuspendCustomerModalProps {
   isOpen: boolean;
@@ -29,7 +30,7 @@ export default function SuspendCustomerModal({
           <h3 className="font-jakarta font-extrabold text-xl text-[#131B2E]">
             {isSuspended ? `Lift the ban on ${customerName}?` : `Ban ${customerName}?`}
           </h3>
-          <button onClick={onClose} aria-label="Close" className="text-[#94A3B8] cursor-pointer">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-[#94A3B8] cursor-pointer"><X className="w-5 h-5" /></button>
         </div>
         {isSuspended ? (
           <p className="text-sm text-[#454656]">{customerName} will be able to claim {brandName} offers and receive review opportunities again.</p>

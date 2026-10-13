@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatMoney } from "../../utils/backendMappers";
+import { Check, HeartHandshake, type LucideIcon, Star, TrendingUp, Users } from "lucide-react";
 
 export const ACTIVATED_KEY = "nibbl-just-activated";
 
-const TOOLKIT = [
-  ["👥", "Acquire new customers", "Reach new shoppers with verified offers."],
-  ["💜", "Reconnect with opted-in customers", "Bring shoppers back with new campaigns."],
-  ["📈", "Build repeat engagement", "Run products and rebates to drive loyalty."],
-  ["⭐", "Generate verified reviews", "Collect authentic shopper feedback."],
+const TOOLKIT: [LucideIcon, string, string][] = [
+  [Users, "Acquire new customers", "Reach new shoppers with verified offers."],
+  [HeartHandshake, "Reconnect with opted-in customers", "Bring shoppers back with new campaigns."],
+  [TrendingUp, "Build repeat engagement", "Run products and rebates to drive loyalty."],
+  [Star, "Generate verified reviews", "Collect authentic shopper feedback."],
 ];
 const STEPS = [
   "Add your first product",
@@ -46,7 +47,7 @@ export default function AccountActivated({ onDone, onBilling }: { onDone: () => 
   return (
     <div className="w-full max-w-[960px] mx-auto flex flex-col gap-6 font-manrope text-center">
       <div className="flex flex-col items-center gap-2">
-        <span className="w-16 h-16 rounded-full bg-emerald-500 text-white text-3xl flex items-center justify-center">✓</span>
+        <span className="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center"><Check className="w-8 h-8" /></span>
         <h1 className="font-jakarta text-3xl font-extrabold text-[#131B2E]">Welcome to Nibbl, {String(brand?.name ?? "")}</h1>
         <p className="text-sm text-[#454656] max-w-[520px]">
           Your {String(plan.name ?? "")} plan is active. You can now add products, create campaigns, and explore your dashboard.
@@ -64,9 +65,9 @@ export default function AccountActivated({ onDone, onBilling }: { onDone: () => 
         <h2 className="font-jakarta font-bold text-[#131B2E]">Your growth toolkit</h2>
         <p className="text-xs text-[#64748B] -mt-2">Tools to help you drive trial, velocity, and shopper engagement.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {TOOLKIT.map(([icon, title, text]) => (
+          {TOOLKIT.map(([Icon, title, text]) => (
             <div key={title} className="border border-[#F1F2FA] rounded-xl p-3">
-              <div className="text-xl">{icon}</div>
+              <Icon className="w-6 h-6 text-[#001BD2]" />
               <div className="text-sm font-bold text-[#131B2E] mt-1">{title}</div>
               <div className="text-xs text-[#64748B]">{text}</div>
             </div>

@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useMemo, useState } from "react";
-import { Clock, DollarSign, GripVertical, Lock, MessageSquare, Plus, Search, ShieldCheck, Sparkles, Star, Upload, X } from "lucide-react";
+import { Check, Clock, DollarSign, GripVertical, Info, Lock, MessageSquare, Plus, Search, ShieldCheck, Sparkles, Star, Upload, X } from "lucide-react";
 import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import TestReviewChatModal from "./TestReviewChatModal";
@@ -241,7 +241,7 @@ export default function ReviewCampaignBuilder({ campaign, onCancel, onSaved }: R
               ))}
             </div>
             {!chosen.length && <p className="text-xs text-[#94A3B8]">Search above to add products from your Product Library.</p>}
-            <p className="text-xs text-[#454656] bg-[#F2F3FF] rounded-lg px-3 py-2">ⓘ Each verified receipt match may create one opportunity per eligible product.</p>
+            <p className="text-xs text-[#454656] bg-[#F2F3FF] rounded-lg px-3 py-2"><Info className="w-3.5 h-3.5 inline-block align-[-2px] mr-1" />Each verified receipt match may create one opportunity per eligible product.</p>
           </Section>
 
           <Section n={3} title="Optional Brand Question Pool" badge="Optional" actions={
@@ -305,7 +305,7 @@ export default function ReviewCampaignBuilder({ campaign, onCancel, onSaved }: R
                 </div>
               </div>
             </div>
-            <p className="text-xs text-[#454656] bg-[#F2F3FF] rounded-lg px-3 py-2">ⓘ Cooldown is enforced separately per eligible product and checked before an opportunity is created.</p>
+            <p className="text-xs text-[#454656] bg-[#F2F3FF] rounded-lg px-3 py-2"><Info className="w-3.5 h-3.5 inline-block align-[-2px] mr-1" />Cooldown is enforced separately per eligible product and checked before an opportunity is created.</p>
           </Section>
 
           <section className="bg-white border border-[#EAEDFF] rounded-[20px] p-6 flex flex-col gap-4 shadow-sm">
@@ -355,7 +355,7 @@ export default function ReviewCampaignBuilder({ campaign, onCancel, onSaved }: R
                 <span className="flex items-center gap-1"><DollarSign className="w-4 h-4 text-[#001BD2]" /> $1 reward</span>
                 <span className="flex items-center gap-1"><Clock className="w-4 h-4 text-[#001BD2]" /> 30 days left</span>
               </div>
-              <div className="text-xs font-bold text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">✓ Purchase verified</div>
+              <div className="text-xs font-bold text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2"><Check className="w-3.5 h-3.5 inline-block align-[-2px] mr-1" />Purchase verified</div>
               <div className="h-10 rounded-xl bg-[#001BD2] text-white text-sm font-bold flex items-center justify-center">Claim $1</div>
               <p className="text-[10px] text-center text-[#64748B]">Verified Purchase · Rewarded for an honest review.</p>
             </div>

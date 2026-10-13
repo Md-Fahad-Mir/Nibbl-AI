@@ -6,6 +6,7 @@ import { ApiRecord } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import DeleteProductModal from "./DeleteProductModal";
 import { formatDate, formatInteger, formatMoney, toNumber } from "../../utils/backendMappers";
+import { Star } from "lucide-react";
 
 interface Product {
   id: string;
@@ -142,7 +143,7 @@ export default function ProductDetailsView({
               title="View this product's reviews"
               className="group flex items-center gap-1.5 text-sm font-bold text-[#131B2E] hover:text-[#001BD2] transition-colors cursor-pointer"
             >
-              <span className="text-[#F59E0B]">★</span>
+              <Star className="w-4 h-4 text-[#F59E0B] fill-[#F59E0B]" />
               <span>{product.avgRating?.toFixed(1)}</span>
               <span className="text-xs font-semibold text-[#64748B] group-hover:text-[#001BD2] group-hover:underline">
                 ({product.reviewCount} review{product.reviewCount === 1 ? "" : "s"})

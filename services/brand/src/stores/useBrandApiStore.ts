@@ -289,14 +289,12 @@ interface BrandApiState {
   reviews: ApiRecord[];
   customers: ApiRecord[];
   analyticsOverview: ApiRecord | null;
-  analyticsRebatesSummary: ApiRecord | null;
   /** Dashboard snapshots, conversion and campaign performance (Master definitions). */
   analyticsDashboard: ApiRecord | null;
   /** Dashboard date range in days (Master: default Last 30 Days). */
   dashboardDays: number;
   loadAnalyticsDashboard: (days?: number) => Promise<void>;
   analyticsCampaigns: ApiRecord[];
-  analyticsProducts: ApiRecord[];
   members: ApiRecord[];
   /** True once every part of the selected brand's workspace has loaded. */
   workspaceReady: boolean;
@@ -404,11 +402,9 @@ export const useBrandApiStore = create<BrandApiState>()(
       reviews: [],
       customers: [],
       analyticsOverview: null,
-      analyticsRebatesSummary: null,
       analyticsDashboard: null,
       dashboardDays: 30,
       analyticsCampaigns: [],
-      analyticsProducts: [],
       members: [],
       workspaceReady: false,
       notifications: [],
@@ -661,18 +657,8 @@ export const useBrandApiStore = create<BrandApiState>()(
           optionalRequest(() => apiClient.request<ApiRecord>(backendApi.brand.analyticsOverview(brandId)), {}).then(
             (analyticsOverview) => apply({ analyticsOverview })
           ),
-          optionalRequest(
-            () =>
-              apiClient.request<ApiRecord>(backendApi.brand.analyticsRebatesSummary(brandId), {
-                query: { period: "30d" },
-              }),
-            {}
-          ).then((analyticsRebatesSummary) => apply({ analyticsRebatesSummary })),
           optionalRequest(() => apiClient.request<unknown>(backendApi.brand.analyticsCampaigns(brandId)), []).then(
             (rows) => apply({ analyticsCampaigns: listResults(rows) })
-          ),
-          optionalRequest(() => apiClient.request<unknown>(backendApi.brand.analyticsProducts(brandId)), []).then(
-            (rows) => apply({ analyticsProducts: listResults(rows) })
           ),
           optionalRequest(() => apiClient.request<unknown>(backendApi.brand.members(brandId)), []).then((rows) =>
             apply({ members: listResults(rows) })
@@ -1095,10 +1081,8 @@ export const useBrandApiStore = create<BrandApiState>()(
           reviews: [],
           customers: [],
           analyticsOverview: null,
-          analyticsRebatesSummary: null,
           analyticsDashboard: null,
           analyticsCampaigns: [],
-          analyticsProducts: [],
           members: [],
           notifications: [],
           workspaceReady: false,

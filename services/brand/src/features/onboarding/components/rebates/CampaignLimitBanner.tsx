@@ -28,25 +28,25 @@ export default function CampaignLimitBanner({ onOpenPlans }: { onOpenPlans?: () 
   const used = Number(plan.active_campaigns_used ?? 0);
   const limit = Number(plan.active_campaign_limit ?? 0);
   const full = limit > 0 && used >= limit;
+  // Master plans: Starter 1 → Pro 3 → Scale 10 active rebate campaigns.
+  const next = limit < 3 ? "Pro for up to 3" : limit < 10 ? "Scale for up to 10" : "";
 
   return (
-    <div className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl px-5 py-3 font-manrope border ${
-      full ? "bg-amber-50 border-amber-200" : "bg-white border-[#EAEDFF]"
-    }`}>
-      <div className="flex flex-col gap-1.5 min-w-[220px] flex-1">
-        <span className="text-sm text-[#131B2E]">
-          <b>{used} of {limit}</b> active campaign{limit === 1 ? "" : "s"} used on the {String(plan.plan_name ?? "")} plan
-          {full && <span className="text-amber-800"> — activate another by upgrading or pausing one.</span>}
-        </span>
-        <div className="h-1.5 w-full max-w-[320px] bg-[#EAEDFF] rounded-full overflow-hidden">
-          <div className={`h-full rounded-full ${full ? "bg-amber-500" : "bg-[#001BD2]"}`}
-            style={{ width: `${limit ? Math.min(100, (used / limit) * 100) : 0}%` }} />
-        </div>
-      </div>
-      {onOpenPlans && (
-        <button onClick={onOpenPlans}
-          className="h-9 px-4 rounded-full bg-[#001BD2] text-white text-xs font-bold cursor-pointer">
-          Upgrade
+    <div
+      className={`flex flex-col justify-center rounded-xl px-4 py-2 font-manrope border ${
+        full ? "bg-amber-50 border-amber-200" : "bg-[#F2F3FF] border-[#EAEDFF]"
+      }`}
+    >
+      <span className="text-sm font-bold text-[#131B2E]">
+        {used} of {limit} active campaign{limit === 1 ? "" : "s"} used
+      </span>
+      {next && onOpenPlans && (
+        <button
+          type="button"
+          onClick={onOpenPlans}
+          className="text-xs font-semibold text-[#001BD2] underline underline-offset-2 text-left bg-transparent border-none p-0 cursor-pointer"
+        >
+          Upgrade to {next}
         </button>
       )}
     </div>

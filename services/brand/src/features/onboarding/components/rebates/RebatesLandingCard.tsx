@@ -1,109 +1,149 @@
-import { Pencil } from "lucide-react";
+/* eslint-disable @next/next/no-img-element */
+import { CalendarDays, ImageIcon, Info, Pencil } from "lucide-react";
 import NibblReviewComment from "./NibblReviewComment";
+import { formatMoney } from "../../utils/backendMappers";
 
-interface Campaign {
+export type RebateTab =
+  | "Draft"
+  | "Pending Review"
+  | "Scheduled"
+  | "Active"
+  | "Paused"
+  | "Changes Requested"
+  | "Ended";
+
+export interface RebateCampaignCard {
   id: string;
-  name: string;
-  category: string;
-  scope: string;
+  tab: RebateTab;
+  statusLabel: string;
+  headline: string;
+  description: string;
+  image: string;
+  dates: string;
+  claims: number;
+  activeClaims: number;
+  pendingReview: number;
+  redemptions: number;
+  redemptionRate: number | null;
+  rewardSpend: number;
   cycleClaims: number;
   capacity: number;
-  redemptions: number;
-  rewardSpend: number;
-  status: "ACTIVE" | "PAUSED" | "COMPLETED" | "IN_REVIEW";
-  // Nibbl approval label, e.g. "Pending review" (rebate campaigns).
-  reviewLabel?: string;
+  // Same rule as the campaign page: no edits while in review, rejected or ended.
+  canEdit: boolean;
   // Nibbl comment when changes were requested or the campaign was rejected.
   reviewComment?: string;
 }
 
-interface RebatesLandingCardProps {
-  campaign: Campaign;
-  onEdit: (camp: Campaign) => void;
-}
+const PILL: Record<RebateTab, string> = {
+  Active: "bg-emerald-50 text-emerald-700",
+  Scheduled: "bg-[#E2E7FF] text-[#001BD2]",
+  Paused: "bg-amber-50 text-amber-700",
+  "Pending Review": "bg-amber-50 text-amber-700",
+  "Changes Requested": "bg-red-50 text-red-700",
+  Draft: "bg-slate-100 text-slate-600",
+  Ended: "bg-slate-100 text-slate-500",
+};
+const DOT: Record<RebateTab, string> = {
+  Active: "bg-emerald-500",
+  Scheduled: "bg-[#001BD2]",
+  Paused: "bg-amber-500",
+  "Pending Review": "bg-amber-500",
+  "Changes Requested": "bg-red-500",
+  Draft: "bg-slate-400",
+  Ended: "bg-slate-400",
+};
 
-export default function RebatesLandingCard({ campaign, onEdit }: RebatesLandingCardProps) {
-  const cycleRatio = campaign.capacity ? campaign.cycleClaims / campaign.capacity : 0;
-  const isNearLimit = cycleRatio >= 0.8; // "Going fast" threshold
-  const isPaused = campaign.status === "PAUSED";
-  const isCompleted = campaign.status === "COMPLETED";
-  const inReview = campaign.status === "IN_REVIEW";
+const Metric = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex flex-col gap-0.5 px-3 py-2">
+    <span className="text-[11px] text-[#64748B]">{label}</span>
+    <span className="text-base font-extrabold text-[#131B2E]">{value}</span>
+  </div>
+);
 
-  const progressBg = isPaused || isCompleted || inReview
-    ? "bg-slate-200"
-    : isNearLimit
-      ? "bg-[#BA1A1A]"
-      : "bg-[#001BD2]";
+/** Master Rebate Campaigns card: image, results, current-cycle claims. */
+export default function RebatesLandingCard({
+  campaign,
+  onView,
+  onEdit,
+}: {
+  campaign: RebateCampaignCard;
+  onView: () => void;
+  onEdit: () => void;
+}) {
+  const ratio = campaign.capacity ? Math.min(1, campaign.cycleClaims / campaign.capacity) : 0;
+  const live = campaign.tab === "Active";
 
   return (
-    <div className="bg-white border border-[#C5C5D9]/10 rounded-[20px] p-6 flex flex-col justify-between min-h-[230px] font-jakarta shadow-sm hover:shadow-md transition-shadow relative">
-      {/* Top Header Row */}
-      <div className="flex justify-between items-start w-full">
-        <span className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase flex items-center gap-1 ${
-          inReview
-            ? "bg-amber-50 text-amber-700"
-            : isPaused
-            ? "bg-slate-100 text-slate-500"
-            : isCompleted
-              ? "bg-[#FEF2F2] text-[#DC2626]"
-              : "bg-[#E2E7FF] text-[#001BD2]"
-        }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${
-            inReview
-              ? "bg-amber-500"
-              : isPaused
-              ? "bg-slate-400"
-              : isCompleted
-                ? "bg-[#DC2626]"
-                : "bg-[#001BD2]"
-          }`}></span>
-          {campaign.reviewLabel ?? campaign.status.replace("_", " ")}
+    <div className="bg-white border border-[#C5C5D9]/20 rounded-[20px] p-4 flex flex-col gap-3 shadow-sm font-manrope">
+      <div className="relative h-44 rounded-2xl bg-[#F2F3FF] overflow-hidden flex items-center justify-center">
+        {campaign.image ? (
+          <img src={campaign.image} alt="" className="h-full w-full object-contain" />
+        ) : (
+          <ImageIcon className="w-10 h-10 text-[#C5C5D9]" />
+        )}
+        <span className={`absolute left-3 top-3 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase flex items-center gap-1.5 ${PILL[campaign.tab]}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${DOT[campaign.tab]}`} />
+          {campaign.statusLabel}
         </span>
-        {/* Edit Circular Action Button */}
-        <button
-          onClick={() => onEdit(campaign)}
-          className="w-8 h-8 rounded-full bg-[#001BD2] hover:bg-blue-700 transition-colors flex items-center justify-center shadow-md active:scale-95 cursor-pointer"
-          aria-label="View campaign"
-        >
-          <Pencil className="w-3.5 h-3.5 text-white" strokeWidth={2.4} />
-        </button>
       </div>
 
-      {/* Campaign Info */}
-      <div className="flex flex-col gap-1 mt-4">
-        <h3 className="text-lg font-bold text-[#131B2E] tracking-tight">{campaign.name}</h3>
-        <span className="text-xs text-[#64748B] font-medium leading-none">
-          {campaign.category} • {campaign.scope}
+      <div className="flex flex-col gap-1">
+        <h3 className="text-lg font-bold font-jakarta text-[#131B2E] leading-snug">{campaign.headline}</h3>
+        {campaign.description && <p className="text-sm text-[#454656] line-clamp-2">{campaign.description}</p>}
+        <span className="flex items-center gap-1.5 text-xs text-[#64748B] mt-1">
+          <CalendarDays className="w-3.5 h-3.5" /> {campaign.dates}
         </span>
         <NibblReviewComment comment={campaign.reviewComment} compact />
       </div>
 
-      {/* Grid boxes info */}
-      <div className="grid grid-cols-2 gap-4 mt-4 font-manrope">
-        <div className="bg-[#FAF8FF] p-3 rounded-xl border border-[#C5C5D9]/5 flex flex-col gap-0.5">
-          <span className="text-[9px] font-bold text-[#454656]/50 uppercase tracking-wider">REDEMPTIONS</span>
-          <span className="text-sm font-extrabold text-[#131B2E]">{campaign.redemptions}</span>
-        </div>
-        <div className="bg-[#FAF8FF] p-3 rounded-xl border border-[#C5C5D9]/5 flex flex-col gap-0.5">
-          <span className="text-[9px] font-bold text-[#454656]/50 uppercase tracking-wider">REWARD SPEND</span>
-          <span className="text-sm font-extrabold text-[#131B2E]">${campaign.rewardSpend.toFixed(2)}</span>
-        </div>
+      <div className="grid grid-cols-3 border border-[#EAEDFF] rounded-xl divide-x divide-[#EAEDFF]">
+        <Metric label="Claims" value={String(campaign.claims)} />
+        <Metric label="Active Claims" value={String(campaign.activeClaims)} />
+        <Metric label="Pending Review" value={String(campaign.pendingReview)} />
+      </div>
+      <div className="grid grid-cols-3 border border-[#EAEDFF] rounded-xl divide-x divide-[#EAEDFF] -mt-1">
+        <Metric label="Redemptions" value={String(campaign.redemptions)} />
+        <Metric
+          label="Redemption Rate"
+          value={campaign.redemptionRate === null ? "—" : `${campaign.redemptionRate.toFixed(1)}%`}
+        />
+        <Metric label="Reward Spend" value={formatMoney(campaign.rewardSpend)} />
       </div>
 
-      {/* Current 25-hour cycle claims */}
-      <div className="flex flex-col gap-1.5 mt-4 font-manrope">
-        <div className="flex justify-between items-center text-[10px] font-bold text-[#454656]">
-          <span>CURRENT CYCLE CLAIMS</span>
-          <span className="text-[#131B2E]">
-            {campaign.cycleClaims} of {campaign.capacity || "—"}
-          </span>
-        </div>
-        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
-          <div
-            className={`absolute left-0 top-0 bottom-0 rounded-full transition-all duration-300 ${progressBg}`}
-            style={{ width: `${Math.min(cycleRatio * 100, 100)}%` }}
-          ></div>
-        </div>
+      <div className="flex items-center gap-3 text-sm text-[#454656]">
+        <span className="whitespace-nowrap">
+          Current Cycle Claims: <b className="text-[#131B2E]">{campaign.cycleClaims} of {campaign.capacity || "—"}</b>
+        </span>
+        <span className="flex-1 h-2 bg-[#EAEDFF] rounded-full overflow-hidden">
+          <span
+            className={`block h-full rounded-full ${live ? "bg-[#001BD2]" : "bg-slate-300"}`}
+            style={{ width: `${ratio * 100}%` }}
+          />
+        </span>
+      </div>
+
+      <p className="flex items-center gap-2 rounded-xl bg-[#F2F3FF] px-3 py-2 text-[11px] text-[#454656]">
+        <Info className="w-3.5 h-3.5 text-[#001BD2] flex-shrink-0" />
+        Higher redemption rates can improve visibility in Nibbl discovery.
+      </p>
+
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={onEdit}
+          disabled={!campaign.canEdit}
+          title={campaign.canEdit ? "" : "This campaign can't be edited right now"}
+          className="h-11 rounded-xl bg-[#F2F3FF] text-[#001BD2] text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Pencil className="w-4 h-4" /> Edit Campaign
+        </button>
+        <button
+          type="button"
+          onClick={onView}
+          className="h-11 rounded-xl bg-[#001BD2] text-white text-sm font-bold cursor-pointer"
+        >
+          View Details
+        </button>
       </div>
     </div>
   );

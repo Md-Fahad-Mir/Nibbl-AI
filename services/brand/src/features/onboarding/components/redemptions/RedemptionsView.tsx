@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { AlertCircle, X } from "lucide-react";
 import RedemptionsStats from "./RedemptionsStats";
-import RedemptionsTable from "./RedemptionsTable";
+import RedemptionsTable, { RedemptionTab } from "./RedemptionsTable";
+import type { RedemptionItem } from "./types";
 import RedemptionDetailsView from "./RedemptionDetailsView";
 import ReviewDecisionDrawer from "./ReviewDecisionDrawer";
 import type { ReviewSelection } from "@/stores/useBrandApiStore";
@@ -11,38 +12,6 @@ import { ApiRecord, apiClient, backendApi, backendAssetUrl } from "@/lib/api/bac
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatDate, formatMoney, formatTime, toNumber } from "../../utils/backendMappers";
 import { downloadCsv } from "../wallet/WeeklyStatements";
-
-interface RedemptionItem {
-  id: string;
-  userName: string;
-  userEmail: string;
-  userAvatar?: string;
-  userIdCode: string;
-  redemptionsCount: number;
-  reviewsCount: number;
-  campaignName: string;
-  subBrand: string;
-  receiptThumbnailUrl: string;
-  claimedTierLabel: string;
-  claimedTierValue: string;
-  submittedDate: string;
-  submittedTime: string;
-  submittedAt?: string;
-  receiptId?: string;
-  receiptImageUrl?: string;
-  receiptMerchant?: string;
-  receiptPurchasedAt?: string;
-  receiptTotal?: string;
-  receiptLineItems?: ApiRecord[];
-  status: "Pending" | "Approved" | "Rejected" | "Expired" | "Manual Review";
-  issue?: string;
-  priority?: "High" | "Medium";
-  // Manual review: the raw queue item, its auto-approval deadline, and how
-  // an approved redemption was decided.
-  reviewItem?: Record<string, unknown>;
-  deadlineAt?: string;
-  approvalLabel?: string;
-}
 
 const receiptFallback = "/redemption/receipe.svg";
 const receiptPreviewFallback = "/redemption/EvedenceSectionReceipe.svg";
@@ -63,6 +32,10 @@ const mapIssuedRedemption = (item: ApiRecord): RedemptionItem => ({
   claimedTierLabel: String(item.approval_label ?? "Rewards"),
   approvalLabel: item.approval_label ? String(item.approval_label) : undefined,
   claimedTierValue: formatMoney(item.reward_amount),
+  receiptMerchant: item.receipt_merchant ? String(item.receipt_merchant) : undefined,
+  receiptPurchasedAt: typeof item.receipt_purchased_at === "string" ? item.receipt_purchased_at : undefined,
+  receiptTotal: item.receipt_total != null ? formatMoney(item.receipt_total) : undefined,
+  receiptItemCount: toNumber(item.receipt_item_count) || undefined,
   submittedDate: formatDate(item.issued_at ?? item.created_at),
   submittedTime: formatTime(item.issued_at ?? item.created_at),
   submittedAt: typeof (item.issued_at ?? item.created_at) === "string"
@@ -98,6 +71,7 @@ const mapReviewQueueItem = (item: ApiRecord): RedemptionItem | null => {
     receiptPurchasedAt: typeof purchasedAt === "string" ? purchasedAt : undefined,
     receiptTotal: receipt.total != null ? formatMoney(receipt.total) : undefined,
     receiptLineItems: Array.isArray(receipt.line_items) ? receipt.line_items as ApiRecord[] : [],
+    receiptItemCount: Array.isArray(receipt.line_items) ? receipt.line_items.length : undefined,
     claimedTierLabel: "Rewards",
     claimedTierValue: formatMoney(receipt.reward_amount),
     submittedDate: formatDate(uploadedAt),
@@ -174,6 +148,7 @@ export default function RedemptionsView() {
   const [selectedItem, setSelectedItem] = useState<RedemptionItem | null>(null);
   const [actionError, setActionError] = useState("");
   const [rejectedItems, setRejectedItems] = useState<RedemptionItem[]>([]);
+  const [activeTab, setActiveTab] = useState<RedemptionTab>("All");
   const issuedRedemptions = useBrandApiStore((state) => state.redemptions);
   const reviewQueue = useBrandApiStore((state) => state.reviewQueue);
   const selectedBrandId = useBrandApiStore((state) => state.selectedBrandId);
@@ -228,12 +203,11 @@ export default function RedemptionsView() {
     setSelectedItem(null);
   };
 
-  // Row approve/reject buttons open the review drawer.
-  const openReview = (id: string) => {
-    const item = redemptions.find((r) => r.id === id);
-    if (item) void handleViewDetails(item);
-  };
-  const pendingCount = redemptions.filter((r) => r.status === "Manual Review").length;
+  const countOf = (status: RedemptionItem["status"]) => redemptions.filter((r) => r.status === status).length;
+  const totalPaid = issuedRedemptions.reduce((sum, redemption) => sum + toNumber(redemption.reward_amount), 0);
+  const exportCsv = () =>
+    selectedBrandId &&
+    void downloadCsv(`/brands/${selectedBrandId}/redemptions/export/`, "redemptions.csv").catch(() => undefined);
 
   const isDetailsPage = selectedItem && (
     selectedItem.status === "Approved" ||
@@ -253,35 +227,20 @@ export default function RedemptionsView() {
   return (
     <div className="flex flex-col gap-8 w-full animate-slide-up text-left font-manrope">
       
-      {/* Header Area */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end w-full gap-4">
-        <div className="flex flex-col gap-1.5 text-left">
-          <div className="flex items-center gap-3">
-            <h2 className="text-3xl font-extrabold font-jakarta text-[#131B2E] tracking-tight leading-none">
-              Redemptions
-            </h2>
-            <span className="bg-[#001BD2]/10 text-[#001BD2] font-bold text-xs px-3 py-1 rounded-full flex items-center leading-none mt-0.5">
-              {redemptions.length}
-            </span>
-          </div>
-          <p className="text-[#454656] text-sm md:text-base font-medium mt-1">
-            Manage and verify cashback claims across all active campaigns.
-          </p>
-          <button
-            type="button"
-            onClick={() =>
-              selectedBrandId &&
-              void downloadCsv(`/brands/${selectedBrandId}/redemptions/export/`, "redemptions.csv").catch(() => undefined)
-            }
-            className="self-start mt-2 h-9 px-4 rounded-full bg-[#E2E7FF] text-[#001BD2] text-xs font-bold cursor-pointer"
-          >
-            Export CSV
-          </button>
-        </div>
-
-        {/* Stats stack next to header */}
-        <RedemptionsStats />
+      <div className="flex flex-col gap-1 text-left">
+        <h2 className="text-3xl font-extrabold font-jakarta text-[#131B2E] tracking-tight leading-none">Redemptions</h2>
+        <p className="text-[#454656] text-sm font-medium mt-1">
+          Manage and verify cashback claims across all active campaigns.
+        </p>
       </div>
+
+      <RedemptionsStats
+        pending={countOf("Manual Review")}
+        approved={countOf("Approved")}
+        rejected={countOf("Rejected")}
+        totalPaid={totalPaid}
+        onOpenPending={() => setActiveTab("Pending Review")}
+      />
 
       {actionError && (
         <div className="bg-[#FFF5F5] border border-[#FFD6D6] text-[#BA1A1A] text-sm font-semibold rounded-2xl px-5 py-4 flex items-start justify-between gap-4 shadow-sm">
@@ -305,20 +264,12 @@ export default function RedemptionsView() {
         </div>
       )}
 
-      {pendingCount > 0 && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold rounded-2xl px-5 py-4">
-          {pendingCount} receipt{pendingCount === 1 ? "" : "s"} awaiting your review. A receipt in manual review is
-          approved automatically at the campaign&apos;s maximum reward exactly 7 days after submission if you don&apos;t
-          approve or reject it before then. Automatic approval doesn&apos;t create a product alias.
-        </div>
-      )}
-
-      {/* Main Redemptions List Table */}
       <RedemptionsTable
         redemptions={redemptions}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         onViewDetails={handleViewDetails}
-        onApprove={openReview}
-        onReject={openReview}
+        onExport={exportCsv}
       />
 
       {/* Manual review decision drawer */}

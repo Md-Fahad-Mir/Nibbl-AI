@@ -67,6 +67,7 @@ class DashboardTests(APITestCase):
         conv = data["conversion"]
         self.assertEqual((conv["rebate_views"], conv["view_to_claim_rate"]), (4, 50.0))
         self.assertEqual((conv["new_customers"], conv["returning_customers"]), (2, 0))
+        self.assertEqual(conv["unique_customers"], 2)
         row = data["campaigns"][0]
         self.assertEqual((row["claims"], row["redemptions"], row["performance"]["status"]), (2, 1, "building_data"))
 
@@ -93,6 +94,7 @@ class DashboardTests(APITestCase):
         self._cycles([6] * 7)
         perf = cycle_performance(self.campaign)
         self.assertEqual((perf["status"], perf["completed_cycles"], perf["average_fill_hours"]), ("exhausted_early", 7, 6.0))
+        self.assertEqual(perf["average_claims_per_cycle"], float(self.campaign.claim_capacity))
         self.assertIn("25%", perf["recommendation"])
 
     def test_cycle_status_on_pace_and_behind(self):

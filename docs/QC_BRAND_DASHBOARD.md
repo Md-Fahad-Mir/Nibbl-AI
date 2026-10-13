@@ -38,11 +38,11 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 
 | # | Item | Master | Live | Status |
 |---|---|---|---|---|
-| R1 | Page title | "Rebate Campaigns" + subtitle | "Rebates" with "Overview > Rebates" breadcrumb | Open |
-| R2 | Status tabs | All, Draft, Pending Review, Scheduled, Active, Paused, Changes Requested, Ended — each with a count | Running, In Review, Paused, Completed (no counts, no All) | Open |
-| R3 | Campaign slots | "2 of 3 active campaigns used · Upgrade to Scale for up to 10" box | Yellow banner | Open |
-| R4 | Campaign card | Image, status pill, headline, description, dates, Claims / Active Claims / Pending Review / Redemptions / Redemption Rate / Reward Spend, Current Cycle Claims bar, info line, Edit Campaign + View Details, "…" menu | No image or dates; only Redemptions + Reward Spend; edit icon only | Open |
-| R5 | Old summary block | Not in Master | "Rebate Campaign Performance" (Total Cashback, Avg. Claim Time, Active Users, "Budget savings") | Open — remove |
+| R1 | Page title | "Rebate Campaigns" + subtitle | "Rebates" with "Overview > Rebates" breadcrumb | Fixed |
+| R2 | Status tabs | All, Draft, Pending Review, Scheduled, Active, Paused, Changes Requested, Ended — each with a count | Running, In Review, Paused, Completed (no counts, no All) | Fixed |
+| R3 | Campaign slots | "2 of 3 active campaigns used · Upgrade to Scale for up to 10" box | Yellow banner | Fixed |
+| R4 | Campaign card | Image, status pill, headline, description, dates, Claims / Active Claims / Pending Review / Redemptions / Redemption Rate / Reward Spend, Current Cycle Claims bar, info line, Edit Campaign + View Details, "…" menu | No image or dates; only Redemptions + Reward Spend; edit icon only | Fixed |
+| R5 | Old summary block | Not in Master | "Rebate Campaign Performance" (Total Cashback, Avg. Claim Time, Active Users, "Budget savings") | Fixed |
 | R6 | Builder sections ①–⑧ | All present | All present and working | OK |
 | R7 | Builder layout | Save Draft / Submit for Nibbl Review at top; locked System Rules Summary table; Featured Retailers box; cooldown as options; rich live preview (slider, Where to Buy, eligibility rows, Going fast) | Buttons at bottom; rules as bullets; simplified preview | Open |
 | R8 | Suggested wording before a product is picked | — | "Buy one eligible this product product…" | Fixed |
@@ -52,11 +52,11 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 
 | # | Item | Master | Live | Status |
 |---|---|---|---|---|
-| X1 | Summary row | Pending Manual Review (auto-approves after 7 days), Approved, Rejected, Total Paid | Manual Queue + Total Paid only | Open |
-| X2 | Tabs | All, Pending Review (n), Approved, Rejected, Expired | Approved, Rejected, Manual Review | Open |
-| X3 | Filters | Search + Campaign, Product, Status, Submitted Date, Clear Filters | Search + Campaign + Product | Open |
-| X4 | Priority queue banner | "Pending review queue (n) … auto-approves using the campaign's maximum eligible reward" | Missing | Open |
-| X5 | Table | Receipt summary (retailer · date · items · total), "Auto-approves in N days", Review Receipt / View Details | Receipt thumbnail only; no countdown | Open |
+| X1 | Summary row | Pending Manual Review (auto-approves after 7 days), Approved, Rejected, Total Paid | Manual Queue + Total Paid only | Fixed |
+| X2 | Tabs | All, Pending Review (n), Approved, Rejected, Expired | Approved, Rejected, Manual Review | Fixed |
+| X3 | Filters | Search + Campaign, Product, Status, Submitted Date, Clear Filters | Search + Campaign + Product | Fixed |
+| X4 | Priority queue banner | "Pending review queue (n) … auto-approves using the campaign's maximum eligible reward" | Missing | Fixed |
+| X5 | Table | Receipt summary (retailer · date · items · total), "Auto-approves in N days", Review Receipt / View Details | Receipt thumbnail only; no countdown | Fixed |
 | X6 | Manual receipt review screen (mockup 14) | Seven panels | Built earlier — re-check | Open |
 
 ## Review Campaigns (mockups 16–17)
@@ -71,10 +71,10 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 
 | # | Item | Master | Live | Status |
 |---|---|---|---|---|
-| A1 | Title | "Analytics Overview — Understand your costs, results, and where to improve." + "Data through …" | "Analytics Hub" + overview/Rebates/Reviews/Products tabs | Open |
-| A2 | Cost & Results | Total Spend, Avg. Cost per Rebate, Avg. Cost per Review, Completed Rebates, Completed Reviews, Unique Customers (icons + info) | Rebate/Review Brand Cost, Redemptions, Reviews Completed | Open |
-| A3 | Customer & Conversion | Total Views, View-to-Claim Rate, New-to-Brand %, Returning % | Counts instead of % for new/returning | Open |
-| A4 | Campaign Performance | Image, Avg. Claims / Cycle, Claim Limit / Cycle, Avg. Time to Exhaust, Status, Recommendation + footnote | No Avg. Claims / Claim Limit columns | Open |
+| A1 | Title | "Analytics Overview — Understand your costs, results, and where to improve." + "Data through …" | "Analytics Hub" + overview/Rebates/Reviews/Products tabs | Fixed |
+| A2 | Cost & Results | Total Spend, Avg. Cost per Rebate, Avg. Cost per Review, Completed Rebates, Completed Reviews, Unique Customers (icons + info) | Rebate/Review Brand Cost, Redemptions, Reviews Completed | Fixed |
+| A3 | Customer & Conversion | Total Views, View-to-Claim Rate, New-to-Brand %, Returning % | Counts instead of % for new/returning | Fixed |
+| A4 | Campaign Performance | Image, Avg. Claims / Cycle, Claim Limit / Cycle, Avg. Time to Exhaust, Status, Recommendation + footnote | No Avg. Claims / Claim Limit columns | Fixed |
 
 ## Customers (mockups 22–23)
 

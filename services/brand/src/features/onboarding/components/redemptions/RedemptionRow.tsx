@@ -2,53 +2,23 @@
 "use client";
 
 import { autoApproveCountdown } from "./ReviewDecisionDrawer";
+import { formatDate } from "../../utils/backendMappers";
+import type { RedemptionItem } from "./types";
 
-interface RedemptionItem {
-  id: string;
-  userName: string;
-  userEmail: string;
-  userAvatar?: string;
-  userIdCode: string;
-  redemptionsCount: number;
-  reviewsCount: number;
-  campaignName: string;
-  subBrand: string;
-  receiptThumbnailUrl: string;
-  claimedTierLabel: string;
-  claimedTierValue: string;
-  submittedDate: string;
-  submittedTime: string;
-  submittedAt?: string;
-  receiptId?: string;
-  receiptImageUrl?: string;
-  receiptMerchant?: string;
-  receiptPurchasedAt?: string;
-  receiptTotal?: string;
-  receiptLineItems?: Record<string, unknown>[];
-  status: "Pending" | "Approved" | "Rejected" | "Expired" | "Manual Review";
-  issue?: string;
-  priority?: "High" | "Medium";
-  // Manual review: the raw queue item, its auto-approval deadline, and how
-  // an approved redemption was decided.
-  reviewItem?: Record<string, unknown>;
-  deadlineAt?: string;
-  approvalLabel?: string;
-}
-
-interface RedemptionRowProps {
-  redemption: RedemptionItem;
-  isManualReviewTab: boolean;
-  onViewDetails: (item: RedemptionItem) => void;
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
-}
+const STATUS_TEXT: Record<RedemptionItem["status"], string> = {
+  Approved: "Approved",
+  Rejected: "Rejected",
+  Expired: "Expired",
+  Pending: "Pending",
+  "Manual Review": "Pending Review",
+};
 
 const statusStyles: Record<RedemptionItem["status"], string> = {
   Approved: "bg-[#F0FDF4] text-[#16A34A]",
   Rejected: "bg-[#FDF2F2] text-[#BA1A1A]",
   Expired: "bg-[#F8FAFC] text-[#64748B]",
   Pending: "bg-[#E2E7FF] text-[#001BD2]",
-  "Manual Review": "bg-[#FFFBEB] text-[#D97706]",
+  "Manual Review": "bg-[#FFF7ED] text-[#D97706]",
 };
 
 const statusDotStyles: Record<RedemptionItem["status"], string> = {
@@ -59,165 +29,97 @@ const statusDotStyles: Record<RedemptionItem["status"], string> = {
   "Manual Review": "bg-[#D97706]",
 };
 
+/** Master Redemptions table row: customer, campaign, submitted, receipt
+ *  summary, reward, status and the next action. */
 export default function RedemptionRow({
   redemption,
-  isManualReviewTab,
   onViewDetails,
-  onApprove,
-  onReject,
-}: RedemptionRowProps) {
-  const displayName = redemption.userName || redemption.userEmail;
-  const initials = displayName
+}: {
+  redemption: RedemptionItem;
+  onViewDetails: (item: RedemptionItem) => void;
+}) {
+  const pending = redemption.status === "Manual Review";
+  const displayName = redemption.userName && redemption.userName !== "Customer" ? redemption.userName : redemption.userEmail;
+  const initials = (displayName || "")
     .split(/[\s@.]+/)
     .filter(Boolean)
     .map((part) => part[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const avatar = redemption.userAvatar ? (
-    <img
-      src={redemption.userAvatar}
-      alt={displayName || "Customer"}
-      className="w-full h-full object-cover"
-    />
-  ) : (
-    initials || "U"
-  );
+  const details = [
+    redemption.receiptPurchasedAt ? formatDate(redemption.receiptPurchasedAt) : "",
+    redemption.receiptItemCount ? `${redemption.receiptItemCount} item${redemption.receiptItemCount === 1 ? "" : "s"}` : "",
+    redemption.receiptTotal ?? "",
+  ].filter(Boolean);
+  const statusNote = pending
+    ? autoApproveCountdown(redemption.deadlineAt)
+    : redemption.status === "Approved"
+      ? redemption.approvalLabel
+      : redemption.status === "Rejected" && redemption.issue
+        ? `Reason: ${redemption.issue}`
+        : "";
 
   return (
-    <tr className="border-b border-[#C5C5D9]/10 hover:bg-[#F2F3FF]/30 transition-colors text-sm text-[#454656] font-manrope">
-      <td className="p-5 text-left">
+    <tr className={`border-b border-[#EAEDFF] text-sm text-[#454656] ${pending ? "bg-[#FFFBF2]" : "hover:bg-[#F2F3FF]/30"}`}>
+      <td className="p-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-[#001BD2] text-white font-extrabold text-xs flex items-center justify-center">
-            {avatar}
-          </div>
-          <div className="flex flex-col text-left min-w-0">
-            {displayName ? (
-              <span className="font-bold text-[#131B2E] truncate">
-                {displayName}
-              </span>
+            {redemption.userAvatar ? (
+              <img src={redemption.userAvatar} alt="" className="w-full h-full object-cover" />
             ) : (
-              <span className="font-bold text-[#454656]/60">No customer info</span>
-            )}
-            {redemption.userName && redemption.userEmail && (
-              <span className="text-xs text-[#454656]/70 mt-0.5 truncate">
-                {redemption.userEmail}
-              </span>
-            )}
-            {isManualReviewTab && redemption.userIdCode && (
-              <span className="text-[11px] text-[#454656]/60 font-semibold mt-0.5">
-                ID: {redemption.userIdCode}
-              </span>
+              initials || "U"
             )}
           </div>
+          <span className="font-semibold text-[#131B2E] truncate max-w-[200px]">{displayName || "No customer info"}</span>
         </div>
       </td>
-
-      <td className="p-5 text-left">
+      <td className="p-4">
         <div className="flex flex-col text-xs gap-0.5">
           <span className="font-bold text-[#001BD2]">{redemption.campaignName}</span>
-          {redemption.subBrand && (
-            <span className="text-slate-400 font-medium">{redemption.subBrand}</span>
-          )}
+          {redemption.subBrand && <span className="text-slate-400">{redemption.subBrand}</span>}
         </div>
       </td>
-
-      {isManualReviewTab ? (
-        <>
-          <td className="p-5 text-left">
-            <div className="flex flex-col items-start gap-0.5">
-              <span className="font-bold text-[#131B2E] text-xs">
-                {redemption.issue || "Manual review needed"}
-              </span>
-            </div>
-          </td>
-          <td className="p-5 text-left">
-            <div className="flex flex-col gap-0.5">
-              <span className="font-medium text-[#131B2E] text-xs">
-                {redemption.submittedDate}, {redemption.submittedTime}
-              </span>
-              {redemption.deadlineAt && (
-                <span className="text-[11px] font-bold text-[#D97706]">
-                  {autoApproveCountdown(redemption.deadlineAt)}
-                </span>
-              )}
-            </div>
-          </td>
-          <td className="p-5 text-right">
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => onViewDetails(redemption)}
-                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center cursor-pointer border-none bg-transparent"
-                title="View Details"
-              >
-                <img src="/redemption/viewIcon.svg" alt="View" className="w-[18px] h-[18px]" />
-              </button>
-              <button
-                onClick={() => onApprove(redemption.id)}
-                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center cursor-pointer border-none bg-transparent"
-                title="Approve"
-              >
-                <img src="/redemption/ActionIcon.svg" alt="Approve" className="w-[18px] h-[12.5px]" />
-              </button>
-              <button
-                onClick={() => onReject(redemption.id)}
-                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center cursor-pointer border-none bg-transparent"
-                title="Reject"
-              >
-                <img src="/redemption/BlockIcon.svg" alt="Reject" className="w-[13.3px] h-[16.6px]" />
-              </button>
-            </div>
-          </td>
-        </>
-      ) : (
-        <>
-          <td className="p-5 text-center">
-            <button
-              onClick={() => onViewDetails(redemption)}
-              className="w-11 h-[58px] bg-[#EAEDFF] rounded-lg overflow-hidden flex items-center justify-center border border-slate-100 shadow-sm cursor-pointer hover:scale-105 transition-transform mx-auto p-0"
-              title="View receipt"
-            >
-              <img
-                src={redemption.receiptThumbnailUrl}
-                alt="Receipt"
-                className="w-full h-full object-contain bg-white"
-              />
-            </button>
-          </td>
-          <td className="p-5 text-left">
-            <span className="font-jakarta font-bold text-base text-[#131B2E]">
-              {redemption.claimedTierValue}
+      <td className="p-4">
+        <div className="flex flex-col text-xs gap-0.5">
+          <span className="font-semibold text-[#131B2E]">{redemption.submittedDate}</span>
+          <span className="text-slate-400">{redemption.submittedTime}</span>
+        </div>
+      </td>
+      <td className="p-4">
+        <div className="flex items-center gap-3">
+          <img
+            src={redemption.receiptThumbnailUrl}
+            alt=""
+            className="w-9 h-12 rounded-md border border-slate-100 object-contain bg-white flex-shrink-0"
+          />
+          <div className="flex flex-col text-xs gap-0.5">
+            <span className="font-semibold text-[#131B2E]">
+              {redemption.receiptMerchant || (pending ? "Receipt scanned" : "Receipt reviewed")}
             </span>
-          </td>
-          <td className="p-5 text-left">
-            <div className="flex flex-col text-xs gap-0.5">
-              <span className="font-semibold text-[#131B2E]">
-                {redemption.submittedDate}
-              </span>
-              <span className="text-slate-400 font-medium">
-                {redemption.submittedTime}
-              </span>
-            </div>
-          </td>
-          <td className="p-5 text-right">
-            <div className="flex justify-end">
-              <span
-                className={`${statusStyles[redemption.status]} text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 w-fit`}
-              >
-                <span
-                  className={`${statusDotStyles[redemption.status]} w-1.5 h-1.5 rounded-full`}
-                />
-                {redemption.status}
-              </span>
-            </div>
-            {redemption.approvalLabel && redemption.status === "Approved" && (
-              <span className="block mt-1 text-[10px] font-semibold text-[#454656]/70">
-                {redemption.approvalLabel}
-              </span>
-            )}
-          </td>
-        </>
-      )}
+            <span className="text-slate-400">{details.length ? details.join(" · ") : "Details unverified"}</span>
+          </div>
+        </div>
+      </td>
+      <td className="p-4 font-bold text-[#131B2E]">{pending ? "Pending" : redemption.claimedTierValue}</td>
+      <td className="p-4">
+        <span className={`${statusStyles[redemption.status]} text-[11px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 w-fit`}>
+          <span className={`${statusDotStyles[redemption.status]} w-1.5 h-1.5 rounded-full`} />
+          {STATUS_TEXT[redemption.status]}
+        </span>
+        {statusNote && <span className="block mt-1 text-[11px] text-[#64748B] max-w-[220px]">{statusNote}</span>}
+      </td>
+      <td className="p-4 text-right">
+        <button
+          type="button"
+          onClick={() => onViewDetails(redemption)}
+          className={`h-9 px-4 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap ${
+            pending ? "bg-[#001BD2] text-white" : "border border-[#001BD2] text-[#001BD2] bg-white"
+          }`}
+        >
+          {pending ? "Review Receipt" : "View Details"}
+        </button>
+      </td>
     </tr>
   );
 }

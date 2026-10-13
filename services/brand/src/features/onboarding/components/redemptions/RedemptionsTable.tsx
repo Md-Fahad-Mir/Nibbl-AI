@@ -1,51 +1,29 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useMemo, useState } from "react";
+import { Clock, Download, Info, Search } from "lucide-react";
 import { ApiRecord } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import RedemptionRow from "./RedemptionRow";
+import type { RedemptionItem } from "./types";
 
-interface RedemptionItem {
-  id: string;
-  userName: string;
-  userEmail: string;
-  userAvatar?: string;
-  userIdCode: string;
-  redemptionsCount: number;
-  reviewsCount: number;
-  campaignName: string;
-  subBrand: string;
-  receiptThumbnailUrl: string;
-  claimedTierLabel: string;
-  claimedTierValue: string;
-  submittedDate: string;
-  submittedTime: string;
-  submittedAt?: string;
-  receiptId?: string;
-  receiptImageUrl?: string;
-  receiptMerchant?: string;
-  receiptPurchasedAt?: string;
-  receiptTotal?: string;
-  receiptLineItems?: Record<string, unknown>[];
-  status: "Pending" | "Approved" | "Rejected" | "Expired" | "Manual Review";
-  issue?: string;
-  priority?: "High" | "Medium";
-  // Manual review: the raw queue item, its auto-approval deadline, and how
-  // an approved redemption was decided.
-  reviewItem?: Record<string, unknown>;
-  deadlineAt?: string;
-  approvalLabel?: string;
-}
+export type RedemptionTab = "All" | "Pending Review" | "Approved" | "Rejected" | "Expired";
+export const REDEMPTION_TABS: RedemptionTab[] = ["All", "Pending Review", "Approved", "Rejected", "Expired"];
+
+const STATUS_FOR_TAB: Record<Exclude<RedemptionTab, "All">, RedemptionItem["status"]> = {
+  "Pending Review": "Manual Review",
+  Approved: "Approved",
+  Rejected: "Rejected",
+  Expired: "Expired",
+};
 
 interface RedemptionsTableProps {
   redemptions: RedemptionItem[];
+  activeTab: RedemptionTab;
+  onTabChange: (tab: RedemptionTab) => void;
   onViewDetails: (item: RedemptionItem) => void;
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
+  onExport: () => void;
 }
-
-type VisibleTab = "Approved" | "Rejected" | "Manual Review";
 
 const dateFilters = ["Last 7 Days", "Last 30 Days", "Last 90 Days", "All Time"] as const;
 const DAYS: Record<string, number> = { "Last 7 Days": 7, "Last 30 Days": 30, "Last 90 Days": 90 };
@@ -56,23 +34,21 @@ const productIdsOf = (campaign: ApiRecord) =>
     .filter(Boolean);
 
 const filterClass =
-  "h-10 px-3 bg-white border border-[#C5C5D9]/30 rounded-xl text-xs font-semibold text-[#131B2E] outline-none focus:border-[#001BD2]";
-const tabs: VisibleTab[] = ["Approved", "Rejected", "Manual Review"];
+  "h-10 px-3 bg-white border border-[#C5C5D9]/40 rounded-xl text-xs font-semibold text-[#131B2E] outline-none focus:border-[#001BD2]";
+const label = "flex flex-col gap-1 text-[11px] font-semibold text-[#454656]";
 
+/** Master Redemptions ②–⑥: status tabs, search and filters, priority queue,
+ *  table, pagination and export. */
 export default function RedemptionsTable({
   redemptions,
+  activeTab,
+  onTabChange,
   onViewDetails,
-  onApprove,
-  onReject,
+  onExport,
 }: RedemptionsTableProps) {
-  const [activeTab, setActiveTab] = useState<VisibleTab>("Approved");
-  const [dateFilter, setDateFilter] = useState<(typeof dateFilters)[number]>(
-    "Last 30 Days"
-  );
-  const [showDate, setShowDate] = useState(false);
+  const [dateFilter, setDateFilter] = useState<(typeof dateFilters)[number]>("Last 30 Days");
   const [page, setPage] = useState(1);
   const [now] = useState(() => Date.now());
-  // Master Redemptions ③: search + campaign, product, status and date filters.
   const [search, setSearch] = useState("");
   const [campaignFilter, setCampaignFilter] = useState("");
   const [productFilter, setProductFilter] = useState("");
@@ -80,24 +56,26 @@ export default function RedemptionsTable({
   const products = useBrandApiStore((state) => state.products);
 
   const campaignNames = useMemo(
-    () => Array.from(new Set([
-      ...campaigns.map((c) => String(c.name ?? "")),
-      ...redemptions.map((r) => r.campaignName),
-    ].filter(Boolean))).sort(),
+    () =>
+      Array.from(
+        new Set([...campaigns.map((c) => String(c.name ?? "")), ...redemptions.map((r) => r.campaignName)].filter(Boolean))
+      ).sort(),
     [campaigns, redemptions]
   );
 
+  const pending = redemptions.filter((r) => r.status === "Manual Review");
+  const count = (tab: RedemptionTab) =>
+    tab === "All" ? redemptions.length : redemptions.filter((r) => r.status === STATUS_FOR_TAB[tab]).length;
+
   const filtered = useMemo(() => {
-    let next = redemptions.filter((redemption) => redemption.status === activeTab);
-    // Receipts awaiting review are never hidden by the date filter — each
-    // one has an auto-approval deadline the brand must act before.
+    let next = activeTab === "All" ? redemptions : redemptions.filter((r) => r.status === STATUS_FOR_TAB[activeTab]);
+    // Receipts awaiting review are never hidden by the date filter — each has
+    // an auto-approval deadline the brand must act before.
     const days = DAYS[dateFilter];
-    if (days && activeTab !== "Manual Review") {
-      next = next.filter((redemption) => {
-        const source =
-          redemption.submittedAt ||
-          `${redemption.submittedDate} ${redemption.submittedTime}`;
-        const timestamp = new Date(source).getTime();
+    if (days) {
+      next = next.filter((r) => {
+        if (r.status === "Manual Review") return true;
+        const timestamp = new Date(r.submittedAt || `${r.submittedDate} ${r.submittedTime}`).getTime();
         return Number.isNaN(timestamp) || timestamp >= now - days * 24 * 60 * 60 * 1000;
       });
     }
@@ -112,139 +90,150 @@ export default function RedemptionsTable({
     const q = search.trim().toLowerCase();
     if (q) {
       next = next.filter((r) =>
-        [r.userName, r.userEmail, r.campaignName, r.receiptMerchant ?? ""].some((v) => v.toLowerCase().includes(q))
+        [r.userName, r.userEmail, r.campaignName, r.receiptMerchant ?? "", r.receiptId ?? ""].some((v) =>
+          v.toLowerCase().includes(q)
+        )
       );
     }
-    return next;
+    // Oldest pending receipts first (Master: priority queue), then newest.
+    return [...next].sort((a, b) => {
+      const ap = a.status === "Manual Review";
+      const bp = b.status === "Manual Review";
+      if (ap !== bp) return ap ? -1 : 1;
+      const at = new Date(a.submittedAt ?? 0).getTime();
+      const bt = new Date(b.submittedAt ?? 0).getTime();
+      return ap ? at - bt : bt - at;
+    });
   }, [activeTab, campaignFilter, campaigns, dateFilter, now, productFilter, redemptions, search]);
 
-  const isManualReview = activeTab === "Manual Review";
-  const title =
-    activeTab === "Manual Review"
-      ? "Manual Review Queue"
-      : activeTab === "Rejected"
-        ? "Rejected Receipts"
-        : "Completed Redemptions";
-  const itemsPerPage = 5;
-  const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+  const perPage = 6;
+  const totalPages = Math.ceil(filtered.length / perPage) || 1;
   const currentPage = Math.min(page, totalPages);
-  const paginated = filtered.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
-  const selectTab = (tab: VisibleTab) => {
-    setActiveTab(tab);
-    setPage(1);
-  };
-
-  const selectDateFilter = (value: (typeof dateFilters)[number]) => {
-    setDateFilter(value);
-    setShowDate(false);
-    setPage(1);
+  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const reset = () => setPage(1);
+  const clearFilters = () => {
+    setSearch("");
+    setCampaignFilter("");
+    setProductFilter("");
+    setDateFilter("Last 30 Days");
+    onTabChange("All");
+    reset();
   };
 
   return (
-    <div className="flex flex-col gap-6 w-full font-manrope">
-      <div className="bg-white border border-[#C5C5D9]/10 shadow-sm rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center w-full gap-4 relative">
-        <div className="bg-[#F2F3FF] p-1 rounded-full flex items-center gap-1.5 overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => selectTab(tab)}
-              className={`px-5 py-2 text-xs font-bold rounded-full transition-all border-none cursor-pointer ${
-                activeTab === tab
-                  ? "bg-white text-[#001BD2] shadow-sm"
-                  : "text-[#454656] hover:text-slate-700"
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-        <div className="relative">
+    <div className="flex flex-col gap-4 w-full font-manrope">
+      <div className="bg-white border border-[#EAEDFF] rounded-2xl p-3 flex flex-wrap gap-2">
+        {REDEMPTION_TABS.map((tab) => (
           <button
-            onClick={() => setShowDate(!showDate)}
-            className="bg-[#F2F3FF] px-4 py-2.5 rounded-full text-xs font-bold text-[#454656] flex items-center gap-2 border-none cursor-pointer"
+            key={tab}
+            onClick={() => {
+              onTabChange(tab);
+              reset();
+            }}
+            className={`h-10 px-5 rounded-full text-sm font-semibold flex items-center gap-2 cursor-pointer ${
+              activeTab === tab ? "bg-[#001BD2] text-white" : "bg-[#F2F3FF] text-[#454656] hover:bg-[#E2E7FF]"
+            }`}
           >
-            <img src="/redemption/dateIcno.svg" alt="Date" className="w-[14px] h-[14px]" />
-            {dateFilter}
-            <span>v</span>
+            {tab}
+            {tab === "Pending Review" && count(tab) > 0 && (
+              <span className={`min-w-6 h-6 px-1.5 rounded-full text-xs font-bold flex items-center justify-center ${
+                activeTab === tab ? "bg-white/25" : "bg-[#E2E7FF] text-[#001BD2]"
+              }`}>
+                {count(tab)}
+              </span>
+            )}
           </button>
-          {showDate && (
-            <div className="absolute right-0 mt-2 w-40 bg-white border border-slate-200 shadow-lg rounded-xl py-1 z-30">
-              {dateFilters.map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => selectDateFilter(filter)}
-                  className="w-full text-left px-4 py-2 text-xs font-semibold hover:bg-slate-50 border-none bg-transparent cursor-pointer text-[#131B2E]"
-                >
-                  {filter}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
-        <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Search customer, email, campaign or retailer…" className={filterClass} />
-        <select value={campaignFilter} onChange={(e) => { setCampaignFilter(e.target.value); setPage(1); }}
-          className={filterClass} aria-label="Campaign">
-          <option value="">All Campaigns</option>
-          {campaignNames.map((name) => <option key={name} value={name}>{name}</option>)}
-        </select>
-        <select value={productFilter} onChange={(e) => { setProductFilter(e.target.value); setPage(1); }}
-          className={filterClass} aria-label="Product">
-          <option value="">All Products</option>
-          {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+      <div className="bg-white border border-[#EAEDFF] rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-3 items-end">
+        <label className={label}>
+          <span className="sr-only">Search</span>
+          <span className="relative">
+            <Search className="w-4 h-4 text-[#94A3B8] absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                reset();
+              }}
+              placeholder="Search by customer, campaign, product or receipt ID…"
+              className={`${filterClass} w-full pl-9`}
+            />
+          </span>
+        </label>
+        <label className={label}>
+          Campaign
+          <select value={campaignFilter} onChange={(e) => { setCampaignFilter(e.target.value); reset(); }} className={filterClass}>
+            <option value="">All Campaigns</option>
+            {campaignNames.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </label>
+        <label className={label}>
+          Product
+          <select value={productFilter} onChange={(e) => { setProductFilter(e.target.value); reset(); }} className={filterClass}>
+            <option value="">All Products</option>
+            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
+        <label className={label}>
+          Status
+          <select value={activeTab} onChange={(e) => { onTabChange(e.target.value as RedemptionTab); reset(); }} className={filterClass}>
+            {REDEMPTION_TABS.map((tab) => (
+              <option key={tab} value={tab}>{tab === "All" ? "All Statuses" : tab}</option>
+            ))}
+          </select>
+        </label>
+        <label className={label}>
+          Submitted Date
+          <select value={dateFilter} onChange={(e) => { setDateFilter(e.target.value as (typeof dateFilters)[number]); reset(); }} className={filterClass}>
+            {dateFilters.map((filter) => <option key={filter} value={filter}>{filter}</option>)}
+          </select>
+        </label>
+        <button type="button" onClick={clearFilters} className="h-10 px-2 text-xs font-bold text-[#001BD2] cursor-pointer">
+          Clear Filters
+        </button>
       </div>
 
-      <div className="w-full bg-white border border-[#C5C5D9]/10 shadow-sm rounded-[22px] overflow-hidden flex flex-col">
-        <div className="bg-[#F2F3FF] px-8 py-4.5 flex justify-between items-center w-full border-b border-[#C5C5D9]/5">
-          <h3 className="font-jakarta font-bold text-base text-[#131B2E]">
-            {title}
-          </h3>
+      {pending.length > 0 && (activeTab === "All" || activeTab === "Pending Review") && (
+        <div className="bg-[#EEF0FF] border border-[#DAE2FD] rounded-2xl p-4 flex flex-wrap items-center gap-4">
+          <Clock className="w-6 h-6 text-[#001BD2] flex-shrink-0" />
+          <div className="flex-1 min-w-[240px]">
+            <p className="text-sm font-bold text-[#131B2E]">Pending review queue ({pending.length})</p>
+            <p className="text-xs text-[#454656]">
+              Oldest first. Review within 7 days; otherwise the submission auto-approves using the campaign&apos;s
+              maximum eligible reward. Auto-approval does not create or save a product alias.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-[#454656] max-w-[360px] border-l border-[#DAE2FD] pl-4">
+            <Info className="w-4 h-4 text-[#001BD2] flex-shrink-0" />
+            No brand decision by the 7-day deadline = customer auto-approved. The claim slot then releases. No mapping
+            or alias is created.
+          </div>
         </div>
+      )}
+
+      <div className="w-full bg-white border border-[#EAEDFF] shadow-sm rounded-[20px] overflow-hidden flex flex-col">
         <div className="w-full overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="w-full border-collapse min-w-[980px]">
             <thead>
-              <tr className="border-b border-[#C5C5D9]/10 bg-[#FAF8FF]">
-                <th className="p-5 text-left text-[10px] font-bold tracking-wider text-[#454656] uppercase">User</th>
-                <th className="p-5 text-left text-[10px] font-bold tracking-wider text-[#454656] uppercase">Campaign</th>
-                <th className={`p-5 text-[10px] font-bold tracking-wider text-[#454656] uppercase ${isManualReview ? "text-left" : "text-center"}`}>
-                  {isManualReview ? "Issue" : "Receipt"}
-                </th>
-                <th className="p-5 text-left text-[10px] font-bold tracking-wider text-[#454656] uppercase">
-                  {isManualReview ? "Submitted Date" : "Reward"}
-                </th>
-                <th className="p-5 text-left text-[10px] font-bold tracking-wider text-[#454656] uppercase">
-                  {isManualReview ? "Actions" : "Submitted Date"}
-                </th>
-                {!isManualReview && (
-                  <th className="p-5 text-right text-[10px] font-bold tracking-wider text-[#454656] uppercase">Status</th>
-                )}
+              <tr className="border-b border-[#EAEDFF] bg-[#FAF8FF] text-[10px] font-bold tracking-wider text-[#454656] uppercase">
+                <th className="p-4 text-left">Customer</th>
+                <th className="p-4 text-left">Campaign</th>
+                <th className="p-4 text-left">Submitted</th>
+                <th className="p-4 text-left">Receipt Summary</th>
+                <th className="p-4 text-left">Reward</th>
+                <th className="p-4 text-left">Status</th>
+                <th className="p-4 text-right">Action</th>
               </tr>
             </thead>
             <tbody>
               {paginated.map((redemption) => (
-                <RedemptionRow
-                  key={redemption.id}
-                  redemption={redemption}
-                  isManualReviewTab={isManualReview}
-                  onViewDetails={onViewDetails}
-                  onApprove={onApprove}
-                  onReject={onReject}
-                />
+                <RedemptionRow key={redemption.id} redemption={redemption} onViewDetails={onViewDetails} />
               ))}
               {paginated.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={isManualReview ? 5 : 6}
-                    className="p-12 text-center text-sm font-semibold text-slate-400"
-                  >
+                  <td colSpan={7} className="p-12 text-center text-sm font-semibold text-slate-400">
                     No redemptions match the current selection.
                   </td>
                 </tr>
@@ -252,12 +241,19 @@ export default function RedemptionsTable({
             </tbody>
           </table>
         </div>
-        <div className="px-8 py-5 border-t border-[#C5C5D9]/10 bg-[#F2F3FF]/30 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-bold text-[#454656] uppercase tracking-wider font-manrope">
+        <div className="px-6 py-4 border-t border-[#EAEDFF] flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-semibold text-[#454656]">
           <span>
-            Showing {paginated.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}-
-            {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} results
+            Showing {paginated.length > 0 ? (currentPage - 1) * perPage + 1 : 0}-
+            {Math.min(currentPage * perPage, filtered.length)} of {filtered.length} results
           </span>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onExport}
+              className="h-8 px-3 mr-2 rounded-lg border border-[#C5C5D9]/40 bg-white text-[#001BD2] font-bold flex items-center gap-1.5 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" /> Export CSV
+            </button>
             <button
               disabled={currentPage === 1}
               onClick={() => setPage(currentPage - 1)}
@@ -265,21 +261,19 @@ export default function RedemptionsTable({
             >
               &lt;
             </button>
-            {Array.from({ length: totalPages }, (_, index) => index + 1).map(
-              (pageNumber) => (
-                <button
-                  key={pageNumber}
-                  onClick={() => setPage(pageNumber)}
-                  className={`w-8 h-8 rounded-full font-bold flex items-center justify-center border cursor-pointer ${
-                    currentPage === pageNumber
-                      ? "bg-[#001BD2] text-white border-[#001BD2]"
-                      : "bg-white text-[#131B2E] border-[#C5C5D9]/20 hover:bg-slate-50"
-                  }`}
-                >
-                  {pageNumber}
-                </button>
-              )
-            )}
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+              <button
+                key={pageNumber}
+                onClick={() => setPage(pageNumber)}
+                className={`w-8 h-8 rounded-full font-bold flex items-center justify-center border cursor-pointer ${
+                  currentPage === pageNumber
+                    ? "bg-[#001BD2] text-white border-[#001BD2]"
+                    : "bg-white text-[#131B2E] border-[#C5C5D9]/20 hover:bg-slate-50"
+                }`}
+              >
+                {pageNumber}
+              </button>
+            ))}
             <button
               disabled={currentPage === totalPages}
               onClick={() => setPage(currentPage + 1)}

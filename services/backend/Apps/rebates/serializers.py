@@ -78,6 +78,31 @@ class RedemptionSerializer(serializers.ModelSerializer):
         return None
 
 
+class BrandRedemptionListSerializer(RedemptionSerializer):
+    """Brand Redemptions list (Master Receipt Summary column): retailer,
+    purchase date, item count and total from the receipt. Brand-only — the
+    shopper's redemption responses are unchanged."""
+
+    receipt_merchant = serializers.CharField(source="receipt.merchant", read_only=True, default="")
+    receipt_purchased_at = serializers.DateTimeField(source="receipt.purchased_at", read_only=True, default=None)
+    receipt_total = serializers.DecimalField(
+        source="receipt.total", max_digits=14, decimal_places=2, read_only=True, default=None
+    )
+    receipt_item_count = serializers.SerializerMethodField()
+
+    class Meta(RedemptionSerializer.Meta):
+        fields = RedemptionSerializer.Meta.fields + [
+            "receipt_merchant",
+            "receipt_purchased_at",
+            "receipt_total",
+            "receipt_item_count",
+        ]
+        read_only_fields = fields
+
+    def get_receipt_item_count(self, obj) -> int:
+        return obj.receipt.line_items.count() if obj.receipt_id else 0
+
+
 class BrandRedemptionDetailSerializer(serializers.ModelSerializer):
     """Brand-scoped single redemption with nested campaign, customer and receipt.
 

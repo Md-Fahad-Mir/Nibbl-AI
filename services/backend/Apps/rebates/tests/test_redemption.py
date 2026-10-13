@@ -112,6 +112,12 @@ class HappyPathTests(APITestCase):
             reverse("v1:rebates:brand-redemption-list", args=[brand.id])
         )
         self.assertEqual(len(brand_hist.data), 1)
+        # Receipt summary for the brand list (Master Redemptions table).
+        row = brand_hist.data[0]
+        self.assertEqual(row["receipt_item_count"], 1)
+        self.assertIn("receipt_total", row)
+        self.assertIn("receipt_merchant", row)
+        self.assertNotIn("receipt_merchant", listing.data["results"][0])  # shopper response unchanged
 
         # CSV export: identity follows the plan (anonymized here unless full access).
         export = self.client.get(reverse("v1:rebates:brand-redemption-export", args=[brand.id]))

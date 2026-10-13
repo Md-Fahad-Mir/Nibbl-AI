@@ -49,13 +49,13 @@ class RedemptionDetailView(APIView):
 class BrandRedemptionListView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(responses={200: s.RedemptionSerializer(many=True)})
+    @extend_schema(responses={200: s.BrandRedemptionListSerializer(many=True)})
     def get(self, request, brand_id):
         brand = get_brand_or_404(brand_id)
         require_membership(request.user, brand)
         return Response(
-            s.RedemptionSerializer(
-                redemptions_for_brand(brand), many=True, context={"request": request}
+            s.BrandRedemptionListSerializer(
+                redemptions_for_brand(brand).select_related("receipt"), many=True, context={"request": request}
             ).data
         )
 

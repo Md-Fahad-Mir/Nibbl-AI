@@ -5,62 +5,67 @@ import CampaignDetail from "./deal/CampaignDetail";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { ApiRecord } from "@/lib/api/backendApi";
 import { toNumber } from "../../utils/backendMappers";
+import type { RebateCampaignCard, RebateTab } from "./RebatesLandingCard";
 
-interface Campaign {
-  id: string;
-  name: string;
-  category: string;
-  scope: string;
-  cycleClaims: number;
-  capacity: number;
-  redemptions: number;
-  rewardSpend: number;
-  status: "ACTIVE" | "PAUSED" | "COMPLETED" | "IN_REVIEW";
-  // Nibbl approval label, e.g. "Pending review" (rebate campaigns).
-  reviewLabel?: string;
-  // Nibbl comment when changes were requested or the campaign was rejected.
-  reviewComment?: string;
-}
-
-// display_status (backend) → landing tab.
-const TAB_FOR_STATUS: Record<string, Campaign["status"]> = {
-  active: "ACTIVE",
-  scheduled: "ACTIVE",
-  paused: "PAUSED",
-  approved: "PAUSED",
-  draft: "PAUSED",
-  ended: "COMPLETED",
-  pending_review: "IN_REVIEW",
-  changes_requested: "IN_REVIEW",
-  rejected: "IN_REVIEW",
+// display_status (backend) → Master status tab and pill label.
+const TAB_FOR_STATUS: Record<string, RebateTab> = {
+  draft: "Draft",
+  pending_review: "Pending Review",
+  approved: "Scheduled",
+  scheduled: "Scheduled",
+  active: "Active",
+  paused: "Paused",
+  changes_requested: "Changes Requested",
+  rejected: "Changes Requested",
+  ended: "Ended",
 };
 
 const LABELS: Record<string, string> = {
   draft: "Draft",
-  pending_review: "Pending review",
-  changes_requested: "Changes requested",
-  rejected: "Rejected",
+  pending_review: "Pending Review",
   approved: "Approved",
   scheduled: "Scheduled",
+  active: "Active",
+  paused: "Paused",
+  changes_requested: "Changes Requested",
+  rejected: "Rejected",
   ended: "Ended",
 };
 
 const campaignId = (campaign: ApiRecord) => String(campaign.id ?? campaign.campaign_id ?? "");
 
-const mapCampaign = (campaign: ApiRecord, metrics?: ApiRecord): Campaign => {
+const day = (value: unknown) =>
+  value ? new Date(String(value)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+
+const dateRange = (campaign: ApiRecord) => {
+  // Campaigns launched without a planned start date show when they went live.
+  const start = day(campaign.start_at || campaign.activated_at);
+  const end = day(campaign.end_at);
+  if (!start) return "Start date not set";
+  return end ? `${start} – ${end}` : `${start} – No end date`;
+};
+
+const mapCampaign = (campaign: ApiRecord, metrics: ApiRecord | undefined, productImages: Map<string, string>): RebateCampaignCard => {
   const display = String(campaign.display_status ?? "draft");
-  const label = LABELS[display] ?? (campaign.pending_revision ? "Changes pending review" : undefined);
+  const productIds = Array.isArray(campaign.products) ? campaign.products.map(String) : [];
+  const rate = metrics?.redemption_rate;
   return {
-    id: String(campaign.id),
-    name: String(campaign.name ?? "Untitled rebate campaign"),
-    category: String(campaign.product_name ?? "Products"),
-    scope: String(campaign.offer_headline || campaign.description || ""),
+    id: campaignId(campaign),
+    tab: TAB_FOR_STATUS[display] ?? "Draft",
+    statusLabel: campaign.pending_revision && display === "active" ? "Active · Changes Pending" : LABELS[display] ?? "Draft",
+    headline: String(campaign.offer_headline || campaign.name || "Untitled rebate campaign"),
+    description: String(campaign.offer_description || ""),
+    image: String(campaign.image_url || productIds.map((id) => productImages.get(id)).find(Boolean) || ""),
+    dates: dateRange(campaign),
+    claims: toNumber(metrics?.reservations),
+    activeClaims: toNumber(metrics?.active_reservations),
+    pendingReview: toNumber(metrics?.pending_review),
+    redemptions: toNumber(metrics?.redemptions),
+    redemptionRate: rate === null || rate === undefined ? null : toNumber(rate),
+    rewardSpend: toNumber(metrics?.reward_spend),
     cycleClaims: toNumber(campaign.current_cycle_claims),
     capacity: toNumber(campaign.claim_capacity),
-    redemptions: toNumber(metrics?.redemptions),
-    rewardSpend: toNumber(metrics?.reward_spend),
-    status: TAB_FOR_STATUS[display] ?? "PAUSED",
-    reviewLabel: label,
+    canEdit: !["pending_review", "rejected", "ended"].includes(display),
     reviewComment: String(campaign.review_comment ?? "") || undefined,
   };
 };
@@ -76,11 +81,21 @@ export default function RebatesView({
   );
   const apiCampaigns = useBrandApiStore((state) => state.campaigns);
   const analyticsCampaigns = useBrandApiStore((state) => state.analyticsCampaigns);
+  const products = useBrandApiStore((state) => state.products);
 
+  // Archived campaigns stay out of the list (same as the dashboard).
+  const visible = useMemo(
+    () => apiCampaigns.filter((campaign) => String(campaign.status ?? "") !== "archived"),
+    [apiCampaigns]
+  );
   const campaigns = useMemo(() => {
     const metricsByCampaign = new Map(analyticsCampaigns.map((metrics) => [campaignId(metrics), metrics]));
-    return apiCampaigns.map((campaign) => mapCampaign(campaign, metricsByCampaign.get(campaignId(campaign))));
-  }, [analyticsCampaigns, apiCampaigns]);
+    const productImages = new Map(products.map((product) => [String(product.id), String(product.imageSrc || "")]));
+    return visible.map((campaign) =>
+      mapCampaign(campaign, metricsByCampaign.get(campaignId(campaign)), productImages)
+    );
+  }, [analyticsCampaigns, products, visible]);
+  const rawById = useMemo(() => new Map(visible.map((campaign) => [campaignId(campaign), campaign])), [visible]);
 
   return (
     <div className="w-full">
@@ -88,7 +103,11 @@ export default function RebatesView({
         <RebatesLanding
           campaigns={campaigns}
           onCreateNew={() => setScreen({ name: "builder", campaign: null })}
-          onEditCampaign={(camp) => setScreen({ name: "detail", id: camp.id })}
+          onViewCampaign={(id) => setScreen({ name: "detail", id })}
+          onEditCampaign={(id) => {
+            const campaign = rawById.get(id);
+            if (campaign) setScreen({ name: "builder", campaign });
+          }}
           onOpenPlans={onOpenPlans}
         />
       )}

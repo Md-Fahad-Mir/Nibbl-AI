@@ -64,16 +64,20 @@ def cycle_performance(campaign: Campaign, now=None) -> dict:
     anchor = campaign.activated_at
     if not capacity or anchor is None or anchor > now:
         return {"status": "building_data", "completed_cycles": 0, "average_fill_hours": None,
+                "average_claims_per_cycle": None,
                 "recommendation": "Wait for more activity before assigning a status."}
     completed = int((now - anchor) / deals.CYCLE)
-    if completed < MIN_CYCLES:
-        return {"status": "building_data", "completed_cycles": completed, "average_fill_hours": None,
-                "recommendation": "Wait for more activity before assigning a status."}
-
     end = anchor + deals.CYCLE * completed
     claims = Reservation.objects.filter(
         campaign=campaign, created_at__gte=anchor, created_at__lt=end
     ).order_by("created_at").values_list("created_at", flat=True)
+    # Master Campaign Performance: average claims per completed cycle.
+    per_cycle_average = round(len(claims) / completed, 1) if completed else None
+    if completed < MIN_CYCLES:
+        return {"status": "building_data", "completed_cycles": completed, "average_fill_hours": None,
+                "average_claims_per_cycle": per_cycle_average,
+                "recommendation": "Wait for more activity before assigning a status."}
+
     per_cycle: dict[int, list] = {}
     for created in claims:
         per_cycle.setdefault(int((created - anchor) / deals.CYCLE), []).append(created)
@@ -93,7 +97,7 @@ def cycle_performance(campaign: Campaign, now=None) -> dict:
     else:
         status, advice = "on_pace", "No change recommended."
     return {"status": status, "completed_cycles": completed, "average_fill_hours": average,
-            "recommendation": advice}
+            "average_claims_per_cycle": per_cycle_average, "recommendation": advice}
 
 
 def brand_dashboard(brand, days: int = 30, now=None) -> dict:
@@ -188,6 +192,11 @@ def brand_dashboard(brand, days: int = 30, now=None) -> dict:
             "view_to_claim_rate": _rate(claims.count(), views),
             "new_customers": len(claimers - returning),
             "returning_customers": len(returning),
+            # Shoppers who claimed a rebate or completed a review in the period.
+            "unique_customers": len(
+                claimers | set(Review.objects.filter(brand=brand, created_at__gte=start, created_at__lt=now)
+                               .values_list("user_id", flat=True))
+            ),
         },
         "campaigns": campaigns,
     }

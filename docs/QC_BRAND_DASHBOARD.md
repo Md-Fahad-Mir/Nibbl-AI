@@ -32,7 +32,7 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 | # | Item | Status |
 |---|---|---|
 | P1 | Cards, Add/Edit Product, aliases, categories, DELETE confirm | OK |
-| P2 | Card "…" menu; rating shown as "3" instead of "3.0" | Open (minor) |
+| P2 | Card "…" menu; rating shown as "3" instead of "3.0" | Fixed |
 
 ## Rebate Campaigns (mockups 3–5)
 
@@ -44,7 +44,7 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 | R4 | Campaign card | Image, status pill, headline, description, dates, Claims / Active Claims / Pending Review / Redemptions / Redemption Rate / Reward Spend, Current Cycle Claims bar, info line, Edit Campaign + View Details, "…" menu | No image or dates; only Redemptions + Reward Spend; edit icon only | Fixed |
 | R5 | Old summary block | Not in Master | "Rebate Campaign Performance" (Total Cashback, Avg. Claim Time, Active Users, "Budget savings") | Fixed |
 | R6 | Builder sections ①–⑧ | All present | All present and working | OK |
-| R7 | Builder layout | Save Draft / Submit for Nibbl Review at top; locked System Rules Summary table; Featured Retailers box; cooldown as options; rich live preview (slider, Where to Buy, eligibility rows, Going fast) | Buttons at bottom; rules as bullets; simplified preview | Open |
+| R7 | Builder layout | Save Draft / Submit for Nibbl Review at top; locked System Rules Summary table; Featured Retailers box; cooldown as options; rich live preview (slider, Where to Buy, eligibility rows, Going fast) | Buttons at bottom; rules as bullets; simplified preview | Fixed (top Save Draft / Submit, locked System Rules Summary table, cooldown options, Master live preview). Featured retailers stay as stars in the retailer picker |
 | R8 | Suggested wording before a product is picked | — | "Buy one eligible this product product…" | Fixed |
 | R9 | Campaign detail (results, cycle, Meta Pixel, link + QR, summary) | Present | Present | OK |
 
@@ -64,8 +64,8 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 | # | Item | Status |
 |---|---|---|
 | V1 | Create Review Campaign ①–⑤ + live preview | OK |
-| V2 | Review Management: KPI icons/trends, product images, Verified Purchase badge, row detail drawer, reward column shows "—" | Open |
-| V3 | Review Campaigns landing title "Review Performance" vs Master naming "Review Campaigns" | Open |
+| V2 | Review Management: KPI icons/trends, product images, Verified Purchase badge, row detail drawer, reward column shows "—" | Fixed (KPI icons, product thumbnails, row arrow; drawer existed). Reward shows — only for old test reviews made without a campaign |
+| V3 | Review Campaigns landing title "Review Performance" vs Master naming "Review Campaigns" | Fixed |
 
 ## Analytics (mockup 21)
 

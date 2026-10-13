@@ -69,34 +69,30 @@ export const suggestedWording = (
   };
 };
 
-/** Locked system rules shown to the brand (not editable). */
-export const systemRules = (dealType: DealType, maxRebate: string, fixedReward: string, quantity: number) => {
-  const cap = money(maxRebate);
+/** Master "System Rules Summary (Locked)": offer type, required quantity,
+ *  reward and maximum reward per approved redemption. */
+export const rulesSummary = (
+  dealType: DealType,
+  maxRebate: string,
+  fixedReward: string,
+  quantity: number
+): [string, string][] => {
+  const cap = `${money(maxRebate)} per approved redemption`;
+  const label = DEAL_TYPES.find((d) => d.value === dealType)?.label ?? dealType;
   switch (dealType) {
     case "free":
-      return [
-        "Requires 1 eligible product on the receipt.",
-        `Pays the verified purchase price of one eligible product, up to ${cap}.`,
-        "One reward per approved redemption.",
-      ];
+      return [["Offer Type", label], ["Required Quantity", "1 eligible product"],
+        ["Reward", `Verified purchase price, up to ${money(maxRebate)}`], ["Maximum Reward", cap]];
     case "bogo_free":
-      return [
-        "Requires 2 eligible products on the same receipt.",
-        `Pays the price of the lower-priced eligible product, up to ${cap}.`,
-        "One reward per approved redemption.",
-      ];
+      return [["Offer Type", label], ["Required Quantity", "2 eligible products on the same receipt"],
+        ["Reward", "Verified price of the lower-priced eligible product"], ["Maximum Reward", cap]];
     case "bogo_half":
-      return [
-        "Requires 2 eligible products on the same receipt.",
-        `Pays 50% of the lower-priced eligible product, up to ${cap}.`,
-        "One reward per approved redemption.",
-      ];
+      return [["Offer Type", label], ["Required Quantity", "2 eligible products on the same receipt"],
+        ["Reward", "50% of the verified lower-priced eligible product"], ["Maximum Reward", cap]];
     default:
-      return [
-        `Requires ${quantity} eligible product${quantity === 1 ? "" : "s"} on the same receipt.`,
-        `Pays a fixed ${money(fixedReward)} once the quantity is verified.`,
-        "One reward per approved redemption.",
-      ];
+      return [["Offer Type", label],
+        ["Required Quantity", `${quantity} eligible product${quantity === 1 ? "" : "s"}${quantity === 1 ? "" : " on the same receipt"}`],
+        ["Reward", `Fixed ${money(fixedReward)}`], ["Maximum Reward", `${money(fixedReward)} per approved redemption`]];
   }
 };
 

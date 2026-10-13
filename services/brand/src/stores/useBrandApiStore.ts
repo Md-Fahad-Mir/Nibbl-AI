@@ -280,7 +280,6 @@ interface BrandApiState {
   brandApplications: ApiRecord[];
   brand: ApiRecord | null;
   wallet: ApiRecord | null;
-  walletTransactions: ApiRecord[];
   products: Product[];
   campaigns: ApiRecord[];
   reviewCampaigns: ApiRecord[];
@@ -393,7 +392,6 @@ export const useBrandApiStore = create<BrandApiState>()(
       brandApplications: [],
       brand: null,
       wallet: null,
-      walletTransactions: [],
       products: [],
       campaigns: [],
       reviewCampaigns: [],
@@ -635,9 +633,6 @@ export const useBrandApiStore = create<BrandApiState>()(
         const extras = [
           optionalRequest(() => apiClient.request<ApiRecord>(backendApi.brand.wallet(brandId)), {}).then((wallet) =>
             apply({ wallet })
-          ),
-          optionalRequest(() => apiClient.request<unknown>(backendApi.brand.walletTransactions(brandId)), []).then(
-            (rows) => apply({ walletTransactions: listResults(rows) })
           ),
           optionalRequest(() => apiClient.request<unknown>(backendApi.brand.campaigns(brandId)), []).then((rows) =>
             apply({ campaigns: listResults(rows) })
@@ -1005,11 +1000,8 @@ export const useBrandApiStore = create<BrandApiState>()(
       refreshWallet: async () => {
         const brandId = get().selectedBrandId;
         if (!brandId) return;
-        const [wallet, transactions] = await Promise.all([
-          apiClient.request<ApiRecord>(backendApi.brand.wallet(brandId)),
-          apiClient.request<unknown>(backendApi.brand.walletTransactions(brandId)),
-        ]);
-        set({ wallet, walletTransactions: listResults(transactions) });
+        const wallet = await apiClient.request<ApiRecord>(backendApi.brand.wallet(brandId));
+        set({ wallet });
       },
       createSetupIntent: async () => {
         const brandId = get().selectedBrandId;
@@ -1072,7 +1064,6 @@ export const useBrandApiStore = create<BrandApiState>()(
           brandApplications: [],
           brand: null,
           wallet: null,
-          walletTransactions: [],
           products: [],
           campaigns: [],
           reviewCampaigns: [],

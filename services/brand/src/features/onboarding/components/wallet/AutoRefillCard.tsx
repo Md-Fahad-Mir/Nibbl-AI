@@ -74,14 +74,14 @@ export default function AutoRefillCard() {
   };
 
   return (
-    <div className="w-full bg-white border border-[#C5C5D9]/10 shadow-[0px_1px_2px_rgba(0,0,0,0.05)] rounded-[32px] p-8 flex flex-col gap-6">
+    <div className="w-full bg-white border border-[#EAEDFF] rounded-2xl p-6 flex flex-col gap-6 font-manrope">
       {showSaveCard && (
         <SaveCardModal onClose={() => setShowSaveCard(false)} onSaved={handleCardSaved} />
       )}
 
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col text-left">
-          <span className="font-bold text-[#131B2E] text-lg">Automatic Refill</span>
+          <span className="font-jakarta font-bold text-xl text-[#001BD2]">Automatic Refill</span>
           <span className="text-xs text-[#454656] font-medium mt-1">
             Nibbl tops up your wallet from a saved card when Available Funds reach
             25% of your estimated 7-day spend.

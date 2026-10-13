@@ -204,21 +204,28 @@ export default function CustomersView() {
         />
       ) : (
         <div className="flex flex-col gap-8 w-full">
+          <CustomerMetrics
+            optedIn={customers.filter((c) => c.consent === "Opted In").length}
+            openClaims={customers.filter((c) => c.openClaim).length}
+            activeCooldowns={customers.filter((c) => c.inCooldown).length}
+            conversion={conversion}
+          />
+          
           {/* Filters Row */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="bg-white border border-[#EAEDFF] rounded-2xl p-4 flex flex-col gap-3">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, email or phone"
-            className="h-10 w-64 px-4 rounded-full border border-[#C5C5D9]/30 bg-white text-sm outline-none focus:border-[#001BD2]"
+            className="h-11 w-full px-4 rounded-xl border border-[#C5C5D9]/40 bg-white text-sm outline-none focus:border-[#001BD2]"
           />
-          <div className="bg-[#F2F3FF] p-1.5 rounded-full flex flex-wrap items-center gap-1.5 w-fit border border-[#C5C5D9]/5">
+          <div className="flex flex-wrap items-center gap-2">
             {FILTER_TABS.map(tab => (
               <button
                 key={tab}
                 onClick={() => setFilterTab(tab)}
-                className={`px-6 py-2 text-xs font-bold rounded-full transition-all border-none cursor-pointer ${
-                  filterTab === tab ? "bg-white text-[#001BD2] shadow-sm" : "text-[#454656] hover:text-slate-700"
+                className={`px-5 py-2 text-xs font-bold rounded-lg transition-all border cursor-pointer ${
+                  filterTab === tab ? "bg-[#001BD2] border-[#001BD2] text-white" : "bg-white border-[#DAE2FD] text-[#001BD2] hover:bg-[#F2F3FF]"
                 }`}
               >
                 {tab}
@@ -227,13 +234,6 @@ export default function CustomersView() {
           </div>
           </div>
 
-          <CustomerMetrics
-            optedIn={customers.filter((c) => c.consent === "Opted In").length}
-            openClaims={customers.filter((c) => c.openClaim).length}
-            activeCooldowns={customers.filter((c) => c.inCooldown).length}
-            conversion={conversion}
-          />
-          
           <CustomerLedger
             customers={filtered}
             onSelectCustomer={setSelectedCust}

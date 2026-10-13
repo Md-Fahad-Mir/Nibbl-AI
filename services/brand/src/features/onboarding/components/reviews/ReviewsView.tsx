@@ -40,14 +40,19 @@ type View =
 interface ReviewsViewProps {
   initialProductFilter?: string;
   onFilterConsumed?: () => void;
+  /** Opens this review campaign's page directly (Dashboard campaign links). */
+  initialCampaignId?: string;
 }
 
 export default function ReviewsView({
   initialProductFilter = "",
   onFilterConsumed,
+  initialCampaignId = "",
 }: ReviewsViewProps = {}) {
   const [view, setView] = useState<View>(
-    initialProductFilter ? { name: "management" } : { name: "landing" }
+    initialCampaignId
+      ? { name: "detail", campaignId: initialCampaignId }
+      : initialProductFilter ? { name: "management" } : { name: "landing" }
   );
   // Captured once at mount so clearing the parent intent can't reset it.
   const [managementFilter] = useState(initialProductFilter);

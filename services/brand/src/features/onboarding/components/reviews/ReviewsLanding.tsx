@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatInteger, formatMoney, toNumber } from "../../utils/backendMappers";
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, Info, Plus } from "lucide-react";
 
 interface CampaignItem {
   id: string;
@@ -140,7 +140,7 @@ export default function ReviewsLanding({ campaigns, onCreateNew, onViewDetail, o
 
       {/* Description text */}
       <span className="text-[10px] text-slate-400 font-bold tracking-wide -mt-2">
-        ℹ️ All activity is based on verified purchases from submitted receipts.
+        <Info className="w-3 h-3 inline-block align-[-2px] mr-1" />All activity is based on verified purchases from submitted receipts.
       </span>
 
       {/* Table grid */}

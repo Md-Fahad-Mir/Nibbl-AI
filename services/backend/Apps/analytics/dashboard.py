@@ -150,7 +150,10 @@ def brand_dashboard(brand, days: int = 30, now=None) -> dict:
     period_reviews = Review.objects.filter(brand=brand, created_at__gte=start, created_at__lt=now)
     for rc in ReviewCampaign.objects.filter(brand=brand).exclude(status=ReviewCampaign.Status.ARCHIVED):
         r_invitations = sessions.filter(review_campaign=rc).count()
-        r_completed = period_reviews.filter(review_campaign=rc).count()
+        rc_reviews = period_reviews.filter(review_campaign=rc)
+        r_completed = rc_reviews.count()
+        # Spend = shopper reward + plan review fee of each review completed in the period.
+        paid = rc_reviews.aggregate(reward=Sum("session__reward_amount"), fee=Sum("session__fee_amount"))
         campaigns.append({
             "id": str(rc.id),
             "name": rc.name,
@@ -159,6 +162,7 @@ def brand_dashboard(brand, days: int = 30, now=None) -> dict:
             "invitations": r_invitations,
             "completed": r_completed,
             "completion_rate": _rate(r_completed, r_invitations),
+            "spend": str(((paid["reward"] or ZERO) + (paid["fee"] or ZERO)).quantize(CENT)),
         })
 
     return {

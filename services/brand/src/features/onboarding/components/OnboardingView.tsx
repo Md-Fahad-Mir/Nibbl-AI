@@ -20,6 +20,7 @@ import PlansView from "./plans/PlansView";
 import BrandCheckout from "./checkout/BrandCheckout";
 import { Product } from "../utils/mockData";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
+import { formatMoney } from "../utils/backendMappers";
 import { Info } from "lucide-react";
 
 
@@ -103,6 +104,8 @@ export default function OnboardingView() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [reviewProductFilter, setReviewProductFilter] = useState("");
+  // Dashboard campaign links open that campaign's page once.
+  const [openCampaign, setOpenCampaign] = useState<{ type: "REBATE" | "REVIEW"; id: string } | null>(null);
   const {
     products: apiProducts,
     campaigns: rebateCampaigns,
@@ -147,11 +150,11 @@ export default function OnboardingView() {
     selectedProduct || (viewMode !== "details" && viewMode !== "edit") ? viewMode : "list";
   const selectedBrand = brands.find((item) => String(item.id ?? "") === selectedBrandId);
   const workspaceBrandName = String(
-    brand?.legal_name ||
-      brand?.name ||
+    brand?.name ||
+      brand?.legal_name ||
       brand?.brand_name ||
-      selectedBrand?.legal_name ||
       selectedBrand?.name ||
+      selectedBrand?.legal_name ||
       selectedBrand?.brand_name ||
       ""
   );
@@ -176,6 +179,7 @@ export default function OnboardingView() {
 
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
+    setOpenCampaign(null);
     if (typeof window !== "undefined") {
       localStorage.setItem(activeTabStorageKey, tab);
     }
@@ -264,7 +268,8 @@ export default function OnboardingView() {
       <div className="flex-grow min-w-0 flex flex-col relative">
         <Header
           notifications={apiNotifications}
-          walletBalance={`$${String(wallet?.reward_available ?? wallet?.available ?? wallet?.balance ?? "0.00")}`}
+          walletBalance={formatMoney(wallet?.reward_available ?? wallet?.available ?? wallet?.balance ?? 0)}
+          brandName={workspaceBrandName}
           onOpenWallet={() => setActiveTab("Wallet")}
           planName={
             brand?.plan && typeof brand.plan === "object"
@@ -319,13 +324,28 @@ export default function OnboardingView() {
           ) : (
             <>
               {visibleTab === "Dashboard" && (
-                <DashboardView onNavigate={(tab) => { setActiveTab(tab); setViewMode("list"); }} />
+                <DashboardView
+                  onNavigate={(tab) => { setActiveTab(tab); setViewMode("list"); }}
+                  onOpenCampaign={(type, id) => {
+                    setActiveTab(type === "REBATE" ? "Rebate" : "Reviews");
+                    setOpenCampaign({ type, id });
+                    setViewMode("list");
+                  }}
+                />
               )}
           
-              {visibleTab === "Rebate" && <RebatesView onOpenPlans={() => setActiveTab("Plans")} />}
+              {visibleTab === "Rebate" && (
+                <RebatesView
+                  key={openCampaign?.type === "REBATE" ? openCampaign.id : "list"}
+                  onOpenPlans={() => setActiveTab("Plans")}
+                  initialCampaignId={openCampaign?.type === "REBATE" ? openCampaign.id : ""}
+                />
+              )}
           
               {visibleTab === "Reviews" && (
                 <ReviewsView
+                  key={openCampaign?.type === "REVIEW" ? openCampaign.id : "landing"}
+                  initialCampaignId={openCampaign?.type === "REVIEW" ? openCampaign.id : ""}
                   initialProductFilter={reviewProductFilter}
                   onFilterConsumed={() => setReviewProductFilter("")}
                 />

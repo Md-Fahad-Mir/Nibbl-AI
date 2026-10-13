@@ -51,9 +51,6 @@ export default function CustomerLedger({ customers, onSelectCustomer }: Customer
       <div className="bg-[#F2F3FF] px-8 py-5 border-b border-[#C5C5D9]/10 flex justify-between items-center gap-4">
         <div className="flex items-center gap-3">
           <h3 className="font-jakarta font-bold text-lg text-[#131B2E]">Customers</h3>
-          <span className="bg-[#DFE0FF] text-[#0B22D9] text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-            Live Data
-          </span>
         </div>
         <div className="flex items-center gap-2">
           <button className="w-8 h-8 rounded-lg hover:bg-slate-200 border-none cursor-pointer flex items-center justify-center text-[#454656]">

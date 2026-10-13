@@ -38,24 +38,26 @@ export const suggestedWording = (
   fixedReward: string,
   quantity: number
 ): { headline: string; description: string } => {
-  const name = productName || "this product";
+  // Before a product is picked the wording stays generic ("eligible product").
+  const name = productName || "product";
+  const lead = productName ? `${productName} ` : "";
   const cap = money(maxRebate);
   if (dealType === "free") {
     return {
       headline: `Free ${name} up to ${cap}`,
-      description: `Buy one eligible ${name} product and receive the verified purchase price back, up to ${cap}.`,
+      description: `Buy one eligible ${lead}product and receive the verified purchase price back, up to ${cap}.`,
     };
   }
   if (dealType === "bogo_free") {
     return {
       headline: `Buy 1 ${name}, Get 1 Free`,
-      description: `Buy two eligible ${name} products and receive the lower-priced product free, up to ${cap}.`,
+      description: `Buy two eligible ${lead}products and receive the lower-priced product free, up to ${cap}.`,
     };
   }
   if (dealType === "bogo_half") {
     return {
       headline: `Buy 1 ${name}, Get 1 50% Off`,
-      description: `Buy two eligible ${name} products and receive 50% back on the lower-priced product, up to ${cap}.`,
+      description: `Buy two eligible ${lead}products and receive 50% back on the lower-priced product, up to ${cap}.`,
     };
   }
   const reward = money(fixedReward);
@@ -63,7 +65,7 @@ export const suggestedWording = (
   const receipt = quantity === 1 ? "" : " on the same receipt";
   return {
     headline: `Buy ${quantity} ${name}, Get ${reward} Back`,
-    description: `Buy ${WORDS[quantity] ?? quantity} eligible ${name} ${noun}${receipt} and receive ${reward} back.`,
+    description: `Buy ${WORDS[quantity] ?? quantity} eligible ${lead}${noun}${receipt} and receive ${reward} back.`,
   };
 };
 

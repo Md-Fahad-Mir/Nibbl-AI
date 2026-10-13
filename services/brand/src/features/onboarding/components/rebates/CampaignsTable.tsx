@@ -2,6 +2,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { ApiRecord, backendAssetUrl } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatInteger, formatMoney, titleCase, toNumber } from "../../utils/backendMappers";
@@ -15,8 +16,12 @@ type DashboardCampaign = {
   status: string;
   spend: number;
   activity: string;
-  activitySub: string;
   thumbnail: string;
+};
+
+const count = (value: unknown, noun: string) => {
+  const n = toNumber(value);
+  return `${formatInteger(n)} ${noun}${n === 1 ? "" : "s"}`;
 };
 
 const campaignId = (campaign: ApiRecord) =>
@@ -82,7 +87,13 @@ const inlineProductImage = (campaign: ApiRecord) => {
     : "";
 };
 
-export default function CampaignsTable() {
+export default function CampaignsTable({
+  onOpenCampaign,
+  onViewAll,
+}: {
+  onOpenCampaign?: (type: "REBATE" | "REVIEW", id: string) => void;
+  onViewAll?: () => void;
+} = {}) {
   const [typeFilter, setTypeFilter] = useState<CampaignTypeFilter>("All Types");
   const [showTypeFilter, setShowTypeFilter] = useState(false);
   const [page, setPage] = useState(1);
@@ -127,8 +138,7 @@ export default function CampaignsTable() {
           type: "REBATE" as const,
           status: statusText(campaign),
           spend: toNumber(metrics?.total_spend),
-          activity: `${formatInteger(claims)} Claims`,
-          activitySub: `${formatInteger(redemptions)} Redemptions`,
+          activity: `${count(claims, "claim")} · ${count(redemptions, "redemption")}`,
           thumbnail: thumbnailForCampaign(campaign, "/Auth/rebateImage.svg"),
         };
       }),
@@ -139,9 +149,8 @@ export default function CampaignsTable() {
           name: String(campaign.name ?? "Untitled review campaign"),
           type: "REVIEW" as const,
           status: statusText(campaign),
-          spend: toNumber(campaign.daily_budget),
-          activity: `${formatInteger(results?.invitations)} Invitations`,
-          activitySub: `${formatInteger(results?.completed)} Completed`,
+          spend: toNumber(results?.spend),
+          activity: `${count(results?.invitations, "invitation")} · ${count(results?.completed, "review")}`,
           thumbnail: thumbnailForCampaign(campaign, "/Auth/reviewImage.svg"),
         };
       }),
@@ -240,14 +249,13 @@ export default function CampaignsTable() {
                         className="w-10 h-10 object-cover"
                       />
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold text-[#131B2E]">
-                        {row.name}
-                      </span>
-                      <span className="text-[10px] text-[#454656] mt-0.5">
-                        ID: {row.id.slice(0, 8)}
-                      </span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onOpenCampaign?.(row.type, row.id)}
+                      className="text-sm font-bold text-[#001BD2] underline underline-offset-2 text-left cursor-pointer bg-transparent border-none p-0"
+                    >
+                      {row.name}
+                    </button>
                   </div>
                 </td>
                 <td className="px-8">
@@ -269,21 +277,16 @@ export default function CampaignsTable() {
                   </span>
                 </td>
                 <td className="px-8 text-right">
-                  <div className="flex flex-col items-end">
-                    <span className="text-sm font-bold text-[#131B2E]">
-                      {row.activity}
-                    </span>
-                    <span className="text-[10px] text-[#454656] mt-0.5">
-                      {row.activitySub}
-                    </span>
-                  </div>
+                  <span className="text-sm font-semibold text-[#131B2E] whitespace-nowrap">
+                    {row.activity}
+                  </span>
                 </td>
               </tr>
             ))}
             {visibleRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-8 py-12 text-center text-sm font-semibold text-slate-400">
-                  No active campaigns match the selected filters.
+                  No campaigns match the selected filter.
                 </td>
               </tr>
             )}
@@ -294,9 +297,18 @@ export default function CampaignsTable() {
         <div className="flex justify-between items-center px-8 py-4 bg-[#F2F3FF] border-t border-[#C5C5D9]/5">
           <span className="text-[10px] font-manrope font-bold text-[#454656] tracking-wider uppercase">
             SHOWING {visibleRows.length ? pageStart + 1 : 0}-
-            {Math.min(pageStart + visibleRows.length, activeRows.length)} OF {activeRows.length} ACTIVE CAMPAIGNS
+            {Math.min(pageStart + visibleRows.length, activeRows.length)} OF {activeRows.length} CAMPAIGNS
           </span>
           <div className="flex items-center gap-1">
+            {onViewAll && (
+              <button
+                type="button"
+                onClick={onViewAll}
+                className="mr-4 flex items-center gap-1 text-xs font-bold text-[#001BD2] cursor-pointer bg-transparent border-none"
+              >
+                View All Campaigns <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setPage((value) => Math.max(1, value - 1))}

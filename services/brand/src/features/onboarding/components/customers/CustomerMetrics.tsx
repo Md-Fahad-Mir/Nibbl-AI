@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, Clock, Timer, TrendingUp } from "lucide-react";
+import { BarChart3, Clock, FileText, Info, Users } from "lucide-react";
 
 interface CustomerMetricsProps {
   optedIn: number;
@@ -14,10 +14,10 @@ interface CustomerMetricsProps {
  *  cooldowns and brand conversion. */
 export default function CustomerMetrics({ optedIn, openClaims, activeCooldowns, conversion }: CustomerMetricsProps) {
   const metrics = [
-    { title: "Opted-in customers", value: optedIn.toLocaleString("en-US"), sub: "Email + SMS consent for your brand", icon: <Users className="w-4 h-4 text-[#001BD2]" /> },
-    { title: "Open claims", value: openClaims.toLocaleString("en-US"), sub: "Waiting for a receipt", icon: <Clock className="w-4 h-4 text-[#006273]" /> },
-    { title: "Active cooldowns", value: activeCooldowns.toLocaleString("en-US"), sub: "Can't claim again yet", icon: <Timer className="w-4 h-4 text-[#454656]" /> },
-    { title: "Brand conversion", value: conversion, sub: "Customers with a completed rebate", icon: <TrendingUp className="w-4 h-4 text-emerald-600" /> },
+    { title: "Opted-In Customers", value: optedIn.toLocaleString("en-US"), sub: "Email + SMS consent for your brand", Icon: Users },
+    { title: "Open Claims", value: openClaims.toLocaleString("en-US"), sub: "Claims waiting for a receipt", Icon: FileText },
+    { title: "Active Cooldowns", value: activeCooldowns.toLocaleString("en-US"), sub: "Customers who can't claim again yet", Icon: Clock },
+    { title: "Brand Conversion", value: conversion, sub: "Customers with a completed rebate", Icon: BarChart3 },
   ];
 
   return (
@@ -25,15 +25,17 @@ export default function CustomerMetrics({ optedIn, openClaims, activeCooldowns, 
       {metrics.map((m) => (
         <div
           key={m.title}
-          className="bg-white border border-[#C5C5D9]/10 shadow-[0px_1px_2px_rgba(0,0,0,0.05)] rounded-[20px] p-6 flex flex-col justify-between text-left min-h-[134px]"
+          className="bg-white border border-[#EAEDFF] rounded-[20px] p-5 flex items-center gap-4 text-left"
         >
+          <span className="w-14 h-14 rounded-full bg-[#EEF0FF] text-[#001BD2] flex items-center justify-center flex-shrink-0">
+            <m.Icon className="w-7 h-7" />
+          </span>
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold text-[#454656] tracking-[0.6px] uppercase">{m.title}</span>
-            <h3 className="font-jakarta font-extrabold text-[30px] leading-[36px] text-[#131B2E] mt-2">{m.value}</h3>
-          </div>
-          <div className="flex items-center gap-1.5 mt-2">
-            {m.icon}
-            <span className="text-xs font-bold text-[#454656]">{m.sub}</span>
+            <span className="flex items-center gap-1 text-sm font-semibold text-[#001BD2]">
+              {m.title}
+              <span title={m.sub} className="cursor-help"><Info className="w-3.5 h-3.5 text-[#94A3B8]" /></span>
+            </span>
+            <span className="font-jakarta font-extrabold text-[30px] leading-[36px] text-[#131B2E]">{m.value}</span>
           </div>
         </div>
       ))}

@@ -1,163 +1,79 @@
 "use client";
 
-import { useState } from "react";
+import { Crown, Info, Lock, type LucideIcon, WalletMinimal } from "lucide-react";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
-import { formatDate, formatMoney, titleCase, toNumber } from "../../utils/backendMappers";
-import FundWalletModal from "./FundWalletModal";
-import AutoRefillCard from "./AutoRefillCard";
-import RedeemPromoCard from "./RedeemPromoCard";
+import { formatMoney, toNumber } from "../../utils/backendMappers";
+import { SectionTitle } from "./FundingAndSpending";
 
-interface WalletOverviewProps {
-  onViewAll: () => void;
-}
+const Balance = ({
+  Icon,
+  tone,
+  label,
+  value,
+  note,
+  help,
+}: {
+  Icon: LucideIcon;
+  tone: string;
+  label: string;
+  value: number;
+  note: string;
+  help: string;
+}) => (
+  <div className="border border-[#EAEDFF] rounded-xl p-5 flex items-center gap-4">
+    <span className={`w-16 h-16 rounded-full flex items-center justify-center flex-shrink-0 ${tone}`}>
+      <Icon className="w-8 h-8" />
+    </span>
+    <span className="flex flex-col gap-1 min-w-0">
+      <span className="flex items-center gap-1 text-sm font-semibold text-[#001BD2]">
+        {label}
+        <span title={help} className="cursor-help">
+          <Info className="w-3.5 h-3.5 text-[#94A3B8]" />
+        </span>
+      </span>
+      <span className="text-3xl font-extrabold text-[#131B2E]">{formatMoney(value)}</span>
+      <span className="text-xs text-[#64748B]">{note}</span>
+    </span>
+  </div>
+);
 
-export default function WalletOverview({ onViewAll }: WalletOverviewProps) {
+/** Master Wallet §1 Balances: Available Funds, Reserved Funds and one
+ *  combined Promotional Credits balance. */
+export default function WalletOverview() {
   const wallet = useBrandApiStore((state) => state.wallet);
-  const transactions = useBrandApiStore((state) => state.walletTransactions).slice(0, 5);
-  const [fundAmount, setFundAmount] = useState("250");
-  const [fundError, setFundError] = useState("");
-  const [modalAmount, setModalAmount] = useState<string | null>(null);
-  // Master balances: Available Funds (real money free for new claims —
-  // promotional credit never funds rewards), Reserved Funds, Promotional Credits.
-  const available = wallet?.reward_available ?? wallet?.available ?? wallet?.balance ?? 0;
-  const held = toNumber(wallet?.held);
-  const reservedRebates = toNumber(wallet?.reserved_rebates);
-  const reservedReviews = toNumber(wallet?.reserved_reviews);
-  const promotional = toNumber(wallet?.promotional);
-
-  const handleFundWallet = () => {
-    const amount = Number(fundAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setFundError("Enter a funding amount greater than zero.");
-      return;
-    }
-    setFundError("");
-    setModalAmount(amount.toFixed(2));
-  };
+  // Available Funds = real money free for new claims (promotional credit
+  // never funds rewards).
+  const available = toNumber(wallet?.reward_available ?? wallet?.available ?? wallet?.balance ?? 0);
 
   return (
-    <div className="flex flex-col gap-8 w-full text-left font-manrope">
-
-      {modalAmount && (
-        <FundWalletModal amount={modalAmount} onClose={() => setModalAmount(null)} />
-      )}
-
-      {/* Balance & Usage Cards Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 w-full items-stretch">
-        
-        {/* Available Balance Hero Card */}
-        <div className="lg:col-span-2 bg-gradient-to-br from-[#001BD2] to-[#2D3FEA] text-white rounded-[32px] p-10 shadow-[0px_25px_50px_-12px_rgba(0,27,210,0.2)] relative overflow-hidden flex flex-col justify-between min-h-[268px]">
-          <div className="absolute -right-10 -top-10 w-64 h-64 bg-white/10 rounded-full filter blur-xl"></div>
-          
-          <div className="flex flex-col gap-2 text-left z-10 relative">
-            <span className="text-sm font-semibold tracking-[0.7px] text-[#CACDFF] uppercase">Available Funds</span>
-            <h2 className="text-5xl md:text-6xl font-extrabold tracking-tighter text-white mt-1">{formatMoney(available)}</h2>
-            <span className="text-xs font-medium text-[#CACDFF]">Funds available for new rebate claims and review opportunities.</span>
-          </div>
-
-          <div className="z-10 relative mt-6 flex flex-col sm:flex-row gap-3 sm:items-center">
-            <div className="relative w-full sm:w-44">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-white/70">$</span>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={fundAmount}
-                onChange={(event) => setFundAmount(event.target.value)}
-                className="h-11 w-full rounded-xl border border-white/20 bg-white/10 pl-8 pr-3 text-sm font-extrabold text-white outline-none placeholder:text-white/40 focus:border-white/60"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleFundWallet}
-              className="h-11 rounded-xl bg-white px-5 text-sm font-extrabold text-[#001BD2] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Add Funds
-            </button>
-          </div>
-          {fundError && <p className="z-10 relative mt-3 text-xs font-bold text-red-100">{fundError}</p>}
-        </div>
-
-        {/* Balance breakdown (Master: Balances) */}
-        <div className="bg-white border border-[#C5C5D9]/10 shadow-[0px_1px_2px_rgba(0,0,0,0.05)] rounded-[32px] p-8 flex flex-col gap-4 min-h-[268px]">
-          <span className="font-bold text-[#131B2E] text-lg">Balance Breakdown</span>
-          {[
-            {
-              label: "Available Funds",
-              value: available,
-              note: "For new rebate claims and review opportunities.",
-            },
-            {
-              label: "Reserved Funds",
-              value: held,
-              note: `Committed to existing claims — rebates ${formatMoney(reservedRebates)} · reviews ${formatMoney(reservedReviews)}.`,
-            },
-            {
-              label: "Promotional Credits",
-              value: promotional,
-              note: "Pays eligible transaction fees and plan charges. Never pays shopper rewards; not refundable.",
-            },
-          ].map((row) => (
-            <div key={row.label} className="bg-[#F2F3FF] p-4 rounded-2xl flex flex-col gap-1 text-left">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-[#454656]/80 uppercase">{row.label}</span>
-                <span className="text-lg font-bold text-[#131B2E]">{formatMoney(row.value)}</span>
-              </div>
-              <span className="text-[11px] text-[#454656]">{row.note}</span>
-            </div>
-          ))}
-        </div>
-
+    <section className="bg-white border border-[#EAEDFF] rounded-2xl p-6 flex flex-col gap-4 font-manrope">
+      <SectionTitle title="Balances" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <Balance
+          Icon={WalletMinimal}
+          tone="bg-emerald-50 text-emerald-600"
+          label="Available Funds"
+          value={available}
+          note="Available for new claims and opportunities"
+          help="Funds available for new rebate claims and review opportunities."
+        />
+        <Balance
+          Icon={Lock}
+          tone="bg-[#F3E8FF] text-[#7C3AED]"
+          label="Reserved Funds"
+          value={toNumber(wallet?.held)}
+          note={`Committed to open claims (${formatMoney(wallet?.reserved_rebates)}) and review opportunities (${formatMoney(wallet?.reserved_reviews)})`}
+          help="Funds committed to existing claims and review opportunities."
+        />
+        <Balance
+          Icon={Crown}
+          tone="bg-[#EEF0FF] text-[#4F46E5]"
+          label="Promotional Credits"
+          value={toNumber(wallet?.promotional)}
+          note="Applies to eligible Nibbl fees and plan charges. Never funds shopper rewards; non-refundable."
+          help="Credits that may pay eligible transaction fees and plan charges."
+        />
       </div>
-
-      {/* Automatic Refill */}
-      <AutoRefillCard />
-
-      <RedeemPromoCard />
-
-      {/* Transaction History Section */}
-      <div className="w-full bg-white border border-[#C5C5D9]/10 shadow-[0px_1px_2px_rgba(0,0,0,0.05)] rounded-[32px] overflow-hidden flex flex-col">
-        <div className="px-8 py-6 flex justify-between items-center border-b border-[#C5C5D9]/5 bg-white">
-          <h3 className="font-jakarta font-bold text-lg text-[#131B2E]">Transaction History</h3>
-          <button onClick={onViewAll} className="bg-transparent border-none text-sm font-bold text-[#001BD2] hover:underline cursor-pointer">View All</button>
-        </div>
-        <div className="w-full overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-[#C5C5D9]/10 bg-[#FAF8FF]">
-                <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Date</th>
-                <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Description</th>
-                <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Amount</th>
-                <th className="p-5 text-left text-[11px] font-bold tracking-wider text-[#454656] uppercase">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((tx, i) => {
-                const signed = toNumber(tx.signed_amount ?? tx.amount);
-                return (
-                <tr key={i} className="border-b border-[#C5C5D9]/10 hover:bg-[#F2F3FF]/20 text-sm text-[#454656] transition-colors">
-                  <td className="p-5 text-left font-medium">{formatDate(tx.created_at)}</td>
-                  <td className="p-5 text-left font-bold text-[#131B2E]">{String(tx.description ?? tx.category ?? tx.entry_type ?? "Ledger entry")}</td>
-                  <td className={`p-5 text-left font-bold ${signed >= 0 ? "text-emerald-600" : "text-[#131B2E]"}`}>{formatMoney(signed)}</td>
-                  <td className="p-5 text-left">
-                    <span className="font-bold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider bg-emerald-100 text-emerald-700">
-                      {titleCase(tx.entry_type ?? "Completed")}
-                    </span>
-                  </td>
-                </tr>
-              )})}
-              {transactions.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="p-8 text-center text-sm font-semibold text-slate-400">
-                    No wallet transactions yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
+    </section>
   );
 }

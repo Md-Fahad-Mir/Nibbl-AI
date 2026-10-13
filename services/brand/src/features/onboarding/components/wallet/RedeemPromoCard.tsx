@@ -31,10 +31,10 @@ export default function RedeemPromoCard() {
   };
 
   return (
-    <div className="w-full bg-white border border-[#C5C5D9]/10 shadow-[0px_1px_2px_rgba(0,0,0,0.05)] rounded-[32px] p-8 flex flex-col gap-4">
+    <div className="w-full bg-white border border-[#EAEDFF] rounded-2xl p-6 flex flex-col gap-4 font-manrope">
       <div className="flex justify-between items-start gap-4">
         <div className="flex flex-col text-left">
-          <h3 className="font-jakarta font-bold text-lg text-[#131B2E]">Promo Code</h3>
+          <h3 className="font-jakarta font-bold text-xl text-[#001BD2]">Promo Code</h3>
           <span className="text-xs text-[#454656] font-medium mt-1">
             Redeem a code for promotional credit (covers fees &amp; subscription, not rewards).
           </span>

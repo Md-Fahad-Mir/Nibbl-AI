@@ -44,6 +44,29 @@ export default function WeeklyStatements() {
   const [weeks, setWeeks] = useState<ApiRecord[] | null>(null);
   const weeksPage = usePaged(weeks ?? []);
   const [error, setError] = useState("");
+  // Master: the detailed ledger (every deposit, reward, fee, credit, release,
+  // subscription charge, adjustment and refund) for a chosen date range.
+  const [ledgerFrom, setLedgerFrom] = useState("");
+  const [ledgerTo, setLedgerTo] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const downloadLedger = async () => {
+    if (!selectedBrandId || exporting) return;
+    setExporting(true);
+    setError("");
+    const query = new URLSearchParams(
+      Object.entries({ from: ledgerFrom, to: ledgerTo }).filter(([, value]) => value)
+    ).toString();
+    try {
+      await downloadCsv(
+        `/brands/${selectedBrandId}/wallet/transactions/export/${query ? `?${query}` : ""}`,
+        "wallet-ledger.csv"
+      );
+    } catch {
+      setError("Could not download the ledger.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     if (!selectedBrandId) return;
@@ -64,12 +87,25 @@ export default function WeeklyStatements() {
     ).catch(() => setError("Could not download the statement."));
 
   return (
-    <div className="bg-white border border-[#C5C5D9]/10 shadow-sm rounded-[24px] p-6 flex flex-col gap-4 w-full">
-      <div>
-        <h3 className="font-jakarta font-bold text-base text-[#131B2E]">Weekly Statements</h3>
-        <p className="text-xs text-[#454656] mt-1">
-          Total cash spent is your cost after promotional credits. Deposits and refunds aren&apos;t counted as spending.
-        </p>
+    <div className="bg-white border border-[#EAEDFF] rounded-2xl p-6 flex flex-col gap-4 w-full font-manrope">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-jakarta font-bold text-xl text-[#001BD2]">Weekly Statements</h3>
+          <p className="text-xs text-[#454656] mt-1">
+            Total cash spent is your cost after promotional credits. Deposits and refunds aren&apos;t counted as spending.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <input type="date" value={ledgerFrom} onChange={(e) => setLedgerFrom(e.target.value)} aria-label="Ledger from"
+            className="h-9 px-2 border border-[#C5C5D9]/40 rounded-lg text-[#131B2E]" />
+          <span className="text-[#94A3B8]">–</span>
+          <input type="date" value={ledgerTo} onChange={(e) => setLedgerTo(e.target.value)} aria-label="Ledger to"
+            className="h-9 px-2 border border-[#C5C5D9]/40 rounded-lg text-[#131B2E]" />
+          <button type="button" onClick={() => void downloadLedger()} disabled={exporting}
+            className="h-9 px-4 rounded-lg border border-[#001BD2] text-[#001BD2] font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+            <Download className="w-4 h-4" /> {exporting ? "Preparing…" : "Download Detailed Ledger"}
+          </button>
+        </div>
       </div>
       {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
       <div className="w-full overflow-x-auto">
@@ -97,8 +133,8 @@ export default function WeeklyStatements() {
                 ))}
                 <td className="py-3 text-right">
                   <button onClick={() => void download(week)} aria-label="Download statement"
-                    className="text-[#001BD2] hover:opacity-70 cursor-pointer">
-                    <Download className="w-4 h-4 inline" />
+                    className="h-7 px-3 rounded-md border border-[#001BD2]/60 text-[#001BD2] text-[11px] font-bold hover:bg-[#F2F3FF] cursor-pointer">
+                    Download
                   </button>
                 </td>
               </tr>
@@ -114,6 +150,10 @@ export default function WeeklyStatements() {
         </table>
       </div>
       <Pager paged={weeksPage} noun="weeks" />
+      <p className="text-[11px] text-[#64748B]">
+        Weekly statements summarize spending. The detailed ledger contains every deposit, reward, fee, credit, release,
+        subscription charge, adjustment and refund.
+      </p>
     </div>
   );
 }

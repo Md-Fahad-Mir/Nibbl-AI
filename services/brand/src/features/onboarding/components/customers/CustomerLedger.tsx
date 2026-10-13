@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { SlidersHorizontal, Download } from "lucide-react";
 import { customerInitials } from "../../utils/backendMappers";
+
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 export interface CustomerData {
   id: string;
@@ -52,14 +53,6 @@ export default function CustomerLedger({ customers, onSelectCustomer }: Customer
         <div className="flex items-center gap-3">
           <h3 className="font-jakarta font-bold text-lg text-[#131B2E]">Customers</h3>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="w-8 h-8 rounded-lg hover:bg-slate-200 border-none cursor-pointer flex items-center justify-center text-[#454656]">
-            <SlidersHorizontal className="w-4 h-4" />
-          </button>
-          <button className="w-8 h-8 rounded-lg hover:bg-slate-200 border-none cursor-pointer flex items-center justify-center text-[#454656]">
-            <Download className="w-4 h-4" />
-          </button>
-        </div>
       </div>
 
       {/* Ledger Table */}
@@ -107,36 +100,43 @@ export default function CustomerLedger({ customers, onSelectCustomer }: Customer
                   </div>
                 </td>
                 <td className="p-5 text-left text-xs">
-                  <div className="font-bold text-[#131B2E]">{c.brandClaims} claims</div>
-                  <div>{c.claims} rebates · {c.reviews} reviews</div>
+                  <div className="font-bold text-[#131B2E]">{plural(c.brandClaims, "claim")}</div>
+                  <div>{plural(c.claims, "rebate")} · {plural(c.reviews, "review")}</div>
                 </td>
                 <td className="p-5 text-left text-xs">
-                  <div className="font-bold text-[#131B2E]">{c.siteActivity.claims} total claims</div>
+                  <div className="font-bold text-[#131B2E]">{c.siteActivity.claims} total {c.siteActivity.claims === 1 ? "claim" : "claims"}</div>
                   <div>
                     {c.siteActivity.completionRate == null ? "—" : `${c.siteActivity.completionRate}%`} completion ·{" "}
-                    {c.siteActivity.reviews} reviews
+                    {plural(c.siteActivity.reviews, "review")}
                   </div>
                 </td>
-                <td className="p-5 text-center font-bold text-[#131B2E]">{c.openClaims}</td>
+                <td className="p-5 text-center">
+                  {c.openClaims > 0 ? (
+                    <span className="text-xs font-bold text-red-600 bg-red-50 rounded-full px-3 py-1 whitespace-nowrap">{c.openClaims} open</span>
+                  ) : (
+                    <span className="text-xs font-semibold text-[#64748B] bg-[#EEF0FF] rounded-full px-3 py-1">None</span>
+                  )}
+                </td>
                 <td className="p-5 text-left text-xs">
                   {c.cooldownDaysLeft == null ? (
                     <span className="text-slate-400">None</span>
                   ) : (
-                    <span className="font-bold text-red-600 bg-red-50 rounded-full px-2 py-1">{c.cooldownDaysLeft} days left</span>
+                    <span className="font-semibold text-[#131B2E] whitespace-nowrap">{c.cooldownDaysLeft} days left</span>
                   )}
                 </td>
                 <td className="p-5 text-left font-medium">{c.lastActivity}</td>
                 <td className="p-5 text-left">
-                  <span className={`font-bold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider ${
-                    c.status === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                  <span className={`font-bold text-xs px-3 py-1 rounded-full inline-flex items-center gap-1.5 ${
+                    c.status === "Active" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
                   }`}>
+                    <span className={`w-2 h-2 rounded-full ${c.status === "Active" ? "bg-emerald-500" : "bg-red-500"}`} />
                     {c.status === "Active" ? "Active" : "Banned"}
                   </span>
                 </td>
                 <td className="p-5 text-right">
                   <button
                     onClick={() => onSelectCustomer(c)}
-                    className="bg-[#E2E7FF] hover:bg-[#D0D7FF] text-[#001BD2] font-bold text-xs px-4 py-2 rounded-full transition-colors border-none cursor-pointer"
+                    className="border border-[#001BD2] bg-white hover:bg-[#F2F3FF] text-[#001BD2] font-bold text-xs px-5 py-2 rounded-lg transition-colors cursor-pointer"
                   >
                     View
                   </button>

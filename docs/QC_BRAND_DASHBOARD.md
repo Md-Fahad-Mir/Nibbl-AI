@@ -80,27 +80,27 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 
 | # | Item | Status |
 |---|---|---|
-| C1 | Summary cards: icons + info tooltips | Open |
+| C1 | Summary cards: icons + info tooltips | Fixed |
 | C2 | "LIVE DATA" badge (old element) | Fixed |
-| C3 | Filters button; Open Claims pill ("1 open"/None); cooldown text ("Rebate: 18 days") | Open |
-| C4 | Integrations: "Customer Integrations — Coming Soon" with logos + "API connections will be available in a future release." | Open |
+| C3 | Filters button; Open Claims pill ("1 open"/None); cooldown text ("Rebate: 18 days") | Fixed (Open Claims pill, status dot, View button). Filters button not added — the filter tabs do the same job |
+| C4 | Integrations: "Customer Integrations — Coming Soon" with logos + "API connections will be available in a future release." | Fixed |
 | C5 | Customer Profile (mockup 22) | Built earlier — re-check |
 
 ## Wallet (mockup 24)
 
 | # | Item | Status |
 |---|---|---|
-| W1 | Title "Wallet" + subtitle; Request Refund + Add Funds at top | Partly fixed (title + subtitle); top buttons in the Wallet rebuild |
+| W1 | Title "Wallet" + subtitle; Request Refund + Add Funds at top | Fixed |
 | W2 | "Sovereign ID •••• fc52" on the balance card (old element) | Fixed |
-| W3 | Transaction History table on the main page (Master: individual transactions live in the ledger download) | Open — remove |
-| W4 | Balances, Campaign Funding, Automatic Refill, Spending Overview, Weekly Statements | OK (layout polish open) |
+| W3 | Transaction History table on the main page (Master: individual transactions live in the ledger download) | Fixed |
+| W4 | Balances, Campaign Funding, Automatic Refill, Spending Overview, Weekly Statements | Fixed |
 
 ## Plans (mockup 25)
 
 | # | Item | Status |
 |---|---|---|
 | L1 | Current plan, recommendation, three plans, comparison, billing history, plan-change rules | OK (content) |
-| L2 | Layout polish: icons, "Current Plan" badge, recommendation points + Compare button, "Included for all plans" list, Schedule Upgrade/Downgrade labels, Plan Change Rules row | Open |
+| L2 | Layout polish: icons, "Current Plan" badge, recommendation points + Compare button, "Included for all plans" list, Schedule Upgrade/Downgrade labels, Plan Change Rules row | Fixed |
 
 ## Settings (mockup 26)
 

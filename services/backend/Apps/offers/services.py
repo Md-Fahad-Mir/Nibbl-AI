@@ -143,6 +143,9 @@ def resolve_offer(campaign: Campaign, user=None) -> dict:
                 "id": str(p.id),
                 "name": p.name,
                 "image": p.image_url.url if p.image_url else "",
+                # One record per flavor / size: show "Vanilla · 12 oz".
+                "flavor": p.flavor,
+                "size_label": p.size_label,
                 **product_rating_summary(p.id),
             }
             for p in campaign.products.all()

@@ -183,8 +183,13 @@ def rank(campaigns: list, user, now=None) -> list:
     return sorted(campaigns, key=lambda c: (-score(c), -c.created_at.timestamp()))
 
 
+# Master: "Display up to 24 campaigns per category."
+FEED_LIMIT = 24
+
+
 def discover(queryset, user, location: Location) -> list:
-    """Eligible (geography + campaign-level availability) and ranked."""
+    """Eligible (geography + campaign-level availability), ranked, and capped
+    at ``FEED_LIMIT`` per category tab."""
     from Apps.offers.models import ZipCode
     from Apps.offers.services import is_in_cooldown
     from Apps.reservations.models import Reservation
@@ -202,7 +207,7 @@ def discover(queryset, user, location: Location) -> list:
         )
         # Campaign-level only: another campaign from the same brand stays.
         eligible = [c for c in eligible if c.id not in claimed and not is_in_cooldown(user, c)]
-    return rank(eligible, user)
+    return rank(eligible, user)[:FEED_LIMIT]
 
 
 def going_fast_fraction() -> Decimal:

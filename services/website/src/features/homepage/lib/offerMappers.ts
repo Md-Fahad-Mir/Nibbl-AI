@@ -21,11 +21,14 @@ export interface DisplayOffer {
   goingFast: boolean;
   /** Why the offer can't be claimed right now; null when claimable. */
   unavailableReason: string | null;
-  products: { id: string; name: string; image: string | null }[];
+  /** Each product keeps its own lifetime rating (Master: no campaign rating). */
+  products: { id: string; name: string; image: string | null; variant: string; rating: number | null; reviewCount: number }[];
   /** Up to three retailers shown in the offer summary. */
   featuredRetailers: string[];
   /** Where to Buy (only the eligible retailers when one is required). */
   whereToBuy: string[];
+  /** Retailers the receipt must come from (empty = any retailer). */
+  requiredRetailers: string[];
 }
 
 const fallbackImage = "/homepage/rewardImage.svg";
@@ -120,9 +123,14 @@ export const displayOffer = (offer: ApiRecord, index = 0): DisplayOffer => ({
           id: String(product.id ?? i),
           name: text(product.name, "Eligible product"),
           image: imageUrl(product.image, "") || null,
+          variant: [product.flavor, product.size_label].filter(Boolean).map(String).join(" · "),
+          rating: product.rating == null ? null : Number(product.rating),
+          reviewCount: Number(product.review_count ?? 0),
         };
       })
     : [],
   featuredRetailers: Array.isArray(offer.featured_retailers) ? offer.featured_retailers.map(String) : [],
+  requiredRetailers: offer.retailer_required && Array.isArray(offer.eligible_retailers)
+    ? offer.eligible_retailers.map(String) : [],
   whereToBuy: Array.isArray(offer.where_to_buy) ? offer.where_to_buy.map(String) : [],
 });

@@ -30,6 +30,7 @@ const ROUTE_STORAGE_KEY = "nibbl_current_route";
 const CAMPAIGN_STORAGE_KEY = "nibbl_selected_campaign_id";
 const PROFILE_VIEW_STORAGE_KEY = "nibbl_profile_view";
 
+const publicStages = new Set<AuthStage>(["home", "claim-details", "view-details"]);
 const authenticatedStages = new Set<AuthStage>([
   "home",
   "claim-details",
@@ -96,8 +97,6 @@ export default function AuthContainer() {
   // Offer opened from a campaign link / QR (/c/<token>) while signed out:
   // shown right after sign-in.
   const [linkedCampaignId, setLinkedCampaignId] = useState<string>("");
-  // A deal opened from its public link may be viewed (and reserved) logged out.
-  const [publicDeal, setPublicDeal] = useState(false);
   const [authFlow, setAuthFlow] = useState<"signup" | "password-reset" | null>(null);
   const [passwordResetCode, setPasswordResetCode] = useState("");
   const {
@@ -128,16 +127,13 @@ export default function AuthContainer() {
         if (hasStoredAccessToken()) {
           void loadOfferDetails(linkedCampaign);
           setStage("claim-details");
-        } else if (params.get("link")) {
+        } else {
           // Logged out (Master Reserve Offer): show the deal; reserving
           // collects email + phone and signs in with an email code.
           setLinkedCampaignId(linkedCampaign);
-          setPublicDeal(true);
-          void loadPublicOffer(String(params.get("link")));
+          if (params.get("link")) void loadPublicOffer(String(params.get("link")));
+          else void loadOfferDetails(linkedCampaign);
           setStage("claim-details");
-        } else {
-          setLinkedCampaignId(linkedCampaign);
-          setStage("splash");
         }
       } else if (tab === "offer" || tab === "brand") {
         setStage("home");
@@ -183,7 +179,8 @@ export default function AuthContainer() {
 
   useEffect(() => {
     if (!hasRestoredNavigation || accessToken || !authenticatedStages.has(stage)) return;
-    if (stage === "claim-details" && publicDeal) return;
+    // Master Discovery: For You and deal pages are open to logged-out shoppers.
+    if (publicStages.has(stage)) return;
     clearStoredNavigation();
 
     const timer = window.setTimeout(() => {
@@ -191,7 +188,7 @@ export default function AuthContainer() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [accessToken, hasRestoredNavigation, stage, publicDeal]);
+  }, [accessToken, hasRestoredNavigation, stage]);
 
   useEffect(() => {
     if (!accessToken || !authenticatedStages.has(stage) || !storageAvailable()) return;

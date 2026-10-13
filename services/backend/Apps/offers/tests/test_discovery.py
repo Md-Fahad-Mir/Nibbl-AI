@@ -133,3 +133,45 @@ class DiscoveryTests(APITestCase):
         cfg.going_fast_percent = 30
         cfg.save()
         self.assertTrue(offer_services.resolve_offer(campaign)["going_fast"])
+
+
+class LoggedOutForYouTests(DiscoveryTests):
+    """Master Discovery: logged-out shoppers browse For You after sharing a
+    location; up to 24 campaigns per category; Master restriction pop-up copy."""
+
+    def test_logged_out_feed_needs_location_then_shows_campaigns(self):
+        deal = self.campaign()
+        self.client.force_authenticate(None)
+        resp, ids = self.feed()
+        self.assertEqual((resp.status_code, resp["X-Discovery-Location"], ids), (200, "required", []))
+        resp, ids = self.feed(zip=SF)
+        self.assertEqual((resp["X-Discovery-Location"], ids), (SF, [str(deal.id)]))
+        detail = self.client.get(reverse("v1:offers:details", args=[deal.id]))
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(self.client.get(reverse("v1:offers:categories")).status_code, 200)
+
+    def test_up_to_24_per_category(self):
+        for _ in range(26):
+            self.campaign()
+        resp, ids = self.feed(zip=SF, page_size=50)
+        self.assertEqual(len(ids), 24)
+
+    def test_restriction_popup_copy(self):
+        deal = self.campaign()
+        url = reverse("v1:reservations:reservation-list")
+        body = {"campaign": str(deal.id), "consent_nibbl": True, "consent_brand": False}
+        r = self.client.post(url, body, format="json")
+        self.assertEqual((r.data["code"], r.data["title"]), ("consent_required", "Consent required"))
+        self.assertIn("Acme email/SMS consent", r.data["message"])
+        body["consent_brand"] = True
+        self.client.post(url, body, format="json")
+        r = self.client.post(url, body, format="json")
+        self.assertEqual((r.data["code"], r.data["title"]), ("already_claimed", "You already claimed this campaign"))
+        self.assertIn("detail", r.data)  # existing field unchanged
+        offer_services.enter_cooldown(self.shopper, deal, days=18)
+        from Apps.reservations.models import Reservation
+
+        Reservation.objects.filter(user=self.shopper).update(status=Reservation.Status.REDEEMED)
+        r = self.client.post(url, body, format="json")
+        self.assertEqual((r.data["code"], r.data["days_remaining"]), ("cooldown", 18))
+        self.assertEqual(r.data["message"], "You can claim this campaign again in 18 days.")

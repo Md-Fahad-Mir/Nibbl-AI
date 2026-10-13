@@ -27,9 +27,12 @@ class ReservationError(Exception):
     matching pop-up: slots_full, already_claimed, cooldown, one_time_redeemed,
     not_started, paused_or_ended, capacity_reached, unavailable."""
 
-    def __init__(self, message, code: str = "unavailable"):
+    def __init__(self, message, code: str = "unavailable", campaign=None, slot_limit=None):
         super().__init__(message)
         self.code = code
+        # For the Master pop-up copy (Apps.reservations.restrictions).
+        self.campaign = campaign
+        self.slot_limit = slot_limit
 
 
 def _expiry_from(now):
@@ -63,8 +66,9 @@ def _claim_terms(campaign, user, now):
     # Cooldown starts at an approved redemption (one-time = forever).
     if is_in_cooldown(user, campaign):
         if campaign.one_time_only:
-            raise ReservationError("You've already redeemed this one-time offer.", code="one_time_redeemed")
-        raise ReservationError("You've already redeemed this offer recently.", code="cooldown")
+            raise ReservationError("You've already redeemed this one-time offer.", code="one_time_redeemed",
+                                   campaign=campaign)
+        raise ReservationError("You've already redeemed this offer recently.", code="cooldown", campaign=campaign)
     remaining = deals.capacity_remaining(campaign, now)
     if remaining is not None and remaining <= 0:
         raise ReservationError(
@@ -106,9 +110,10 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE,
         now = timezone.now()
         if campaign.status == Campaign.Status.ACTIVE and campaign.start_at and now < campaign.start_at:
             raise ReservationError(
-                f"This offer starts on {timezone.localtime(campaign.start_at):%b %d, %Y}.", code="not_started"
+                f"This offer starts on {timezone.localtime(campaign.start_at):%b %d, %Y}.", code="not_started",
+                campaign=campaign,
             )
-        raise ReservationError("This offer has been paused or has ended.", code="paused_or_ended")
+        raise ReservationError("This offer has been paused or has ended.", code="paused_or_ended", campaign=campaign)
 
     # A shopper suspended by this brand can't claim its offers.
     from Apps.brands.customers import is_suspended_from_brand
@@ -120,7 +125,8 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE,
     if Reservation.objects.filter(
         user=user, campaign=campaign, status=Reservation.Status.ACTIVE
     ).exists():
-        raise ReservationError("You already have an active claim for this offer.", code="already_claimed")
+        raise ReservationError("You already have an active claim for this offer.", code="already_claimed",
+                               campaign=campaign)
 
     # Per-shopper active-claim slot limit (e.g. 3 of 5).
     slot_limit = settings.ACTIVE_CLAIM_SLOTS
@@ -130,7 +136,7 @@ def create_reservation(*, user, campaign_id, kind=Reservation.Kind.REBATE,
         raise ReservationError(
             f"You've reached your active claim limit ({slot_limit}). Upload a "
             "receipt or let a claim expire to free up a slot.",
-            code="slots_full",
+            code="slots_full", campaign=campaign, slot_limit=slot_limit,
         )
 
     # Backend-controlled global cap on concurrent active reservations.

@@ -2,7 +2,7 @@
 
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -39,11 +39,18 @@ class ReservationListCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         # Master "Reserve Offer": two distinct checked consents are required
         # (Nibbl email + SMS, Brand email + SMS) — "Required consent" pop-up.
+        from Apps.reservations.restrictions import popup
+
         if not (serializer.validated_data["consent_nibbl"] and serializer.validated_data["consent_brand"]):
-            raise ValidationError({
+            from Apps.campaigns.models import Campaign
+
+            campaign = Campaign.objects.select_related("brand").filter(id=serializer.validated_data["campaign"]).first()
+            # A plain Response keeps numbers/dates typed (a ValidationError would stringify them).
+            return Response({
                 "detail": "Please agree to both Nibbl and brand email and SMS to claim this offer.",
                 "code": "consent_required",
-            })
+                **popup("consent_required", campaign=campaign),
+            }, status=status.HTTP_400_BAD_REQUEST)
         try:
             reservation = services.create_reservation(
                 user=request.user,
@@ -52,7 +59,11 @@ class ReservationListCreateView(APIView):
                 consent_brand=serializer.validated_data["consent_brand"],
             )
         except ReservationError as exc:
-            raise ValidationError({"detail": str(exc), "code": exc.code})
+            # `title` / `message` (+ days_remaining, starts_at, slot_limit, note)
+            # are the Master pop-up copy; `detail` stays as before.
+            return Response({"detail": str(exc), "code": exc.code,
+                             **popup(exc.code, campaign=exc.campaign, user=request.user,
+                                     slot_limit=exc.slot_limit)}, status=status.HTTP_400_BAD_REQUEST)
         risk.record(request, request.user, "claim")
         if serializer.validated_data["contact_phone"]:
             from Apps.accounts.services import remember_phone

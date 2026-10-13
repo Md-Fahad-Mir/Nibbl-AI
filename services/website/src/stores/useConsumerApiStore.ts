@@ -104,6 +104,22 @@ const listResults = (response: unknown): ApiRecord[] => {
   return [];
 };
 
+// Master Discovery: a logged-out shopper's location lives in their browser
+// (the saved-location API needs an account); sent to the feed as ?zip= or
+// ?lat=&lng=.
+type GuestLocation = { zip?: string; lat?: number; lng?: number };
+const GUEST_LOCATION_KEY = "nibbl-guest-location";
+const readGuestLocation = (): GuestLocation | null => {
+  try {
+    const raw = typeof window !== "undefined" ? window.localStorage.getItem(GUEST_LOCATION_KEY) : null;
+    return raw ? (JSON.parse(raw) as GuestLocation) : null;
+  } catch {
+    return null;
+  }
+};
+// Master: "Display up to 24 campaigns per category" — one vertical list.
+const FEED_PAGE_SIZE = 24;
+
 const paginationMeta = (response: unknown, page: number): PaginationState => {
   if (response && typeof response === "object" && !Array.isArray(response)) {
     const record = response as {
@@ -378,11 +394,35 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
       },
       loadHome: async (search, category, page = 1) => {
         set({ status: "loading", error: null });
+        if (!tokenStorage.getAccess()) {
+          // Logged out: For You only (no wallet, notifications or saved location).
+          const guest = readGuestLocation();
+          try {
+            const [offers, categories] = await Promise.all([
+              guest
+                ? nibblApi.offers({ page, page_size: FEED_PAGE_SIZE, search, ...guest,
+                    category: category === "All" ? undefined : category })
+                : Promise.resolve({ count: 0, next: null, previous: null, results: [] }),
+              nibblApi.offerCategories(),
+            ]);
+            set({
+              discoveryLocation: guest ? { zip: guest.zip || "your location", state: "" } : null,
+              offers: listResults(offers),
+              offerPagination: paginationMeta(offers, page),
+              categories: ["All", ...categories.map((item) => String(item.category || "")).filter(Boolean)],
+              status: "success",
+            });
+          } catch (error) {
+            set({ status: "error", error: readError(error) });
+          }
+          return;
+        }
         try {
           const [wallet, offers, categories, unread, config, location] = await Promise.all([
             nibblApi.wallet(),
             nibblApi.offers({
               page,
+              page_size: FEED_PAGE_SIZE,
               search,
               category: category === "All" ? undefined : category,
             }),
@@ -414,6 +454,17 @@ export const useConsumerApiStore = create<ConsumerApiState>()(
         }
       },
       saveDiscoveryLocation: async (body) => {
+        if (!tokenStorage.getAccess()) {
+          // Validate with the feed itself, then remember it in this browser.
+          await nibblApi.offers({ page_size: 1, ...body });
+          try {
+            window.localStorage.setItem(GUEST_LOCATION_KEY, JSON.stringify(body));
+          } catch {
+            // Private mode: location just isn't remembered.
+          }
+          await get().loadHome();
+          return;
+        }
         const saved = await nibblApi.saveDiscoveryLocation(body);
         set({ discoveryLocation: saved.location });
         await get().loadHome();

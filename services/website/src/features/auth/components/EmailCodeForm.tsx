@@ -18,6 +18,15 @@ interface EmailCodeFormProps {
   onCancel?: () => void;
 }
 
+// The API never reveals which emails have accounts (brand and Nibbl team
+// accounts sign in elsewhere), so the wording mustn't promise a code arrived.
+const sentNotice = (email: string, create: boolean) =>
+  create
+    ? `We sent a 6-digit code to ${email}. Check your inbox (and spam). ` +
+      "No code? Brand and Nibbl team emails can't be used to shop — use your personal email."
+    : `If ${email} has a Nibbl shopper account, we sent it a 6-digit code. Check your inbox (and spam). ` +
+      "Brand and Nibbl team accounts sign in on their own sites.";
+
 const errorText = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
 /** Passwordless shopper sign-in: email → 6-digit code → signed in. */
@@ -30,7 +39,7 @@ export default function EmailCodeForm({
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState(codeSent && initialEmail ? `We sent a 6-digit code to ${initialEmail}.` : "");
+  const [notice, setNotice] = useState(codeSent && initialEmail ? sentNotice(initialEmail, create) : "");
 
   const send = async () => {
     if (!email.trim()) return setError("Enter your email address.");
@@ -39,7 +48,7 @@ export default function EmailCodeForm({
     try {
       await nibblApi.requestEmailCode(email.trim(), create);
       setStep("code");
-      setNotice(`We sent a 6-digit code to ${email.trim()}.`);
+      setNotice(sentNotice(email.trim(), create));
     } catch (err) {
       setError(errorText(err, "Could not send the code."));
     } finally {

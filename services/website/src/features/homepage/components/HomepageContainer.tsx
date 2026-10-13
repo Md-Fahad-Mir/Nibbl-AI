@@ -28,7 +28,6 @@ export default function HomepageContainer({
   const {
     wallet,
     offers,
-    offerPagination,
     categories,
     reservations,
     receipts,
@@ -40,17 +39,16 @@ export default function HomepageContainer({
     loadRewardsHub,
     discoveryLocation,
     saveDiscoveryLocation,
+    accessToken,
   } = useConsumerApiStore();
+  const signedIn = Boolean(accessToken);
 
   useEffect(() => {
     void loadHome();
-    void loadRewardsHub();
-  }, [loadHome, loadRewardsHub]);
+    if (signedIn) void loadRewardsHub();
+  }, [loadHome, loadRewardsHub, signedIn]);
 
   const balance = Number(wallet?.available ?? wallet?.balance ?? 0);
-  const loadOfferPage = (page: number) => {
-    void loadHome(searchQuery, activeCategory, page);
-  };
 
   return (
     <div className="w-full bg-[#FEFEFE] min-h-screen flex flex-col font-sans select-none">
@@ -70,9 +68,11 @@ export default function HomepageContainer({
         </section>
 
         {/* Wallet Balance Card (Frame 2147229286: top: 317px) */}
-        <section className="w-full flex justify-center">
-          <WalletCard balance={balance} onViewWallet={() => onTabChange("wallet")} />
-        </section>
+        {signedIn && (
+          <section className="w-full flex justify-center">
+            <WalletCard balance={balance} onViewWallet={() => onTabChange("wallet")} />
+          </section>
+        )}
 
         {/* Discovery needs a location first (Master: never show unfiltered deals) */}
         {status !== "loading" && (!discoveryLocation || changingLocation) ? (
@@ -101,12 +101,10 @@ export default function HomepageContainer({
             activeCategory={activeCategory}
             isLoading={status === "loading" && !offers.length}
             error={error}
-            pagination={offerPagination}
             onCategoryChange={(category) => {
               setActiveCategory(category);
               void loadHome(searchQuery, category, 1);
             }}
-            onPageChange={loadOfferPage}
             onClaimOffer={onClaimOffer}
             onViewOffer={onViewOffer}
           />
@@ -114,6 +112,7 @@ export default function HomepageContainer({
         )}
 
         {/* User Pending Rewards List */}
+        {signedIn && (<>
         <section className="w-full max-w-[1137px] mx-auto flex justify-start">
           <PendingRewards
             reservations={reservations}
@@ -132,6 +131,7 @@ export default function HomepageContainer({
         <section className="w-full max-w-[1137px] mx-auto flex justify-center pb-10">
           <ScanReceipt onActionClick={() => onTabChange("scan")} />
         </section>
+        </>)}
       </main>
 
       {/* Footer Branding Links */}

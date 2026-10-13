@@ -108,7 +108,8 @@ export default function Onboarding({ onNavigate }: OnboardingProps) {
           </button>
 
           <button
-            onClick={() => onNavigate("signin")}
+            // Master Discovery: logged-out shoppers browse For You (location first).
+            onClick={() => onNavigate("home")}
             className="text-xs text-[#3E3EDF] font-medium hover:underline mt-2"
           >
             Browse Offers Nearby

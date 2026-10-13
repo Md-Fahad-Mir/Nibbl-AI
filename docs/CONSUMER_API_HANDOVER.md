@@ -232,9 +232,11 @@ All changes are **additive**: existing fields keep their names and types, so the
 | otherwise `claimable: false` | Disabled | "This offer isn't available right now." |
 
 ### Offer List (feed)
-- `GET /offers/` · **Auth:** required · **Paginated: yes**
-- **Query params:** `search` (free text over offer/brand/product name), `category` (e.g. `Food`; `all`/`explore` = no filter), `page`, `page_size`.
-- **Response:** paginated list of Offer objects.
+- `GET /offers/` · **Auth:** optional (Oct 13 2026 — logged-out shoppers can browse) · **Paginated: yes**
+- **Query params:** `search` (free text over offer/brand/product name), `category` (e.g. `Food`; `all`/`explore` = no filter), `page`, `page_size` (≤100), and the location: `zip` or `lat`+`lng`.
+- **Response:** paginated list of Offer objects — with a location, **at most 24 campaigns per category** (Master), ranked. Ask with `page_size=24` and show them in one vertical list (no pagination).
+- **Logged out:** send `zip` / `lat`+`lng` (keep the shopper's choice on the device). Without a location the list is **empty** and the header `X-Discovery-Location: required` asks you to show the "Allow Location / Enter ZIP Code" prompt.
+- **For You card (Master):** campaign cards only — brand, `offer_headline`, `offer_description`, reward badge, `going_fast`, "Buy at" (`featured_retailers`), and **"N eligible products · View Products"** (`eligible_products.length`). **Never show a campaign-level rating** — ratings belong to each product (`eligible_products[].rating` / `review_count`, plus `flavor` and `size_label`).
 
 ### Discovery location ⚠️ app update needed (Oct 2026)
 The Master requires a location **before** showing discovery deals ("Find deals near you"):
@@ -246,13 +248,13 @@ The Master requires a location **before** showing discovery deals ("Find deals n
 - **Direct links / QR codes** (`/offers/by-url/…`, `/offers/by-qr/…`) never need a location.
 
 ### Offer Categories
-- `GET /offers/categories/` · **Auth:** required · **Paginated: no** → `[{ "category": "Food" }, { "category": "Electronics" }]`
+- `GET /offers/categories/` · **Auth:** optional · **Paginated: no** → `[{ "category": "Food" }, { "category": "Electronics" }]`
 
 ### Offer Detail (thin)
-- `GET /offers/{campaign_id}/` · **Auth:** required → single Offer object.
+- `GET /offers/{campaign_id}/` · **Auth:** optional → single Offer object.
 
 ### Offer Detail (rich content page)
-- `GET /offers/{campaign_id}/details/` · **Auth:** required → Offer object **plus**:
+- `GET /offers/{campaign_id}/details/` · **Auth:** optional (logged-out browsing) → Offer object **plus**:
   ```json
   { "...offer fields...":"…","description":"Step into summer…",
     "how_it_works":[{"icon":"gift","text":"Claim this offer, then buy the eligible product at any store or online retailer."},
@@ -677,7 +679,7 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 11. **Meta Pixel (Oct 2026)** — offer detail and redemption responses include `meta_pixel_id` (the brand's validated pixel, or `null` when tracking is off). The website fires Campaign View / Claim / Approved Redemption to it in the browser. The app may ignore it (no Meta SDK work is required at launch); if the app adds Meta later, use only this ID — never brand-supplied scripts.
 12. **Device id for fraud checks (Oct 2026)** — send a stable, app-generated device identifier on **every** request as header `X-Device-Id` (8–128 chars, letters/digits/`-_.:`; e.g. a UUID created on first launch and kept in secure storage). It's hashed server-side and used for device/network fraud rules. Without it, device checks fall back to network checks only.
 13. **Referrals (Oct 2026)** — see §10: link format with `?ref=` / `&deal=`, `referral_campaign` on register, and the 5-step progress in `GET /users/me/referrals/`.
-14. **Claim restriction codes (Oct 2026)** — a refused claim (`POST /reservations/`, `400`) now includes `code` next to `detail`: `consent_required` (**both** `consent_nibbl` and `consent_brand` must be `true` — Master "Reserve Offer"; show the "Required consent" pop-up), `slots_full`, `already_claimed`, `cooldown`, `one_time_redeemed`, `not_started`, `paused_or_ended`, `capacity_reached`, `unavailable`. Show the matching Master "Rebate Restriction" pop-up; `detail` is the shopper-facing text.
+14. **Claim restriction codes (Oct 2026)** — a refused claim (`POST /reservations/`, `400`) now includes `code` next to `detail`: `consent_required` (**both** `consent_nibbl` and `consent_brand` must be `true` — Master "Reserve Offer"; show the "Required consent" pop-up), `slots_full`, `already_claimed`, `cooldown`, `one_time_redeemed`, `not_started`, `paused_or_ended`, `capacity_reached`, `unavailable`. Show the matching Master "Rebate Restriction" pop-up; `detail` is the shopper-facing text. **Oct 13 2026 (additive):** the refusal also carries the Master pop-up copy — `title`, `message`, and where it applies `note`, `days_remaining` (cooldown — show the big "N days remaining"), `starts_at` (not started) and `slot_limit` (slots full). Prefer `title` / `message` over `detail`.
 15. **Duplicate payout account (Oct 2026)** — adding a PayPal/Venmo already on another account returns `400 {"code":"duplicate_payout_account","detail":"This payout account is already connected to another Nibbl account. You can request a review if you believe this is an error."}`. Show the Master pop-up with a **Request Review** button → `POST /payout-methods/request-review/` `{ "provider", "handle" }` → `202 {"detail": "..."}`.
 16. **Wallet Activity & Reward Details (Oct 2026)** — new `GET /wallet/activity/` (auth) powers the Master shopper Wallet screens. Response:
     `{ "summary": { "available": "8.50", "pending_approval": "12.00" }, "items": [ … ] }` — newest first. Each item:
@@ -691,3 +693,4 @@ Legend: ✅ Ready · ⚠️ Requires frontend awareness · ❌ Not implemented
 22. **Claim & receipt notifications (Oct 2026)** — `GET /notifications/` now also carries the Master shopper events (types): `claim_reserved` (offer reserved + exact deadline), `receipt_submitted` (manual review, response within 7 days), `receipt_approved` (reward added), `receipt_rejected` (first rejection with one resubmission, or final), `claim_expired`. Approval and rejection are also emailed. Push delivery follows once Firebase is configured.
 23. **Review opportunity screens + chat changes (Oct 13 2026)** — see §7 "Before the chat": Product Confirmed / Multiple Matches (`candidates`), Missing Consent (only the boxes in `needs_consent`), Share Your Voice, "This isn't my product" (`decline`). In the chat: separate recommend and buy-again questions with `suggestions` chips; title ≤ 100 / review ≤ 500 with counters. Product cards now carry `code` (Product ID, e.g. `PRD-002`) and `size_label` (e.g. `12 oz`, `6 × 12 oz`) — show "Flavor · size" so products that share a name (one record per flavor / size) are distinguishable. The review summary adds `buy_again_rate`. Card button wording per Master: **Claim $1**.
 24. **Passwordless shoppers, logged-out Reserve Offer, locked phone (Oct 13 2026)** — see §1 "Passwordless sign-in", §2 "Phone" and §5 "Create Reservation": email-code sign-in (`/auth/email-code/`, `/auth/email-code/sign-in/`); a logged-out shopper opening a deal link can reserve — collect email + phone + consents, send the code with `create: true`, sign in, then confirm; a verified phone is locked (`code: "phone_locked"`) and changes go through `/users/me/phone/change-request/` (Nibbl approves, then the shopper verifies the new number by SMS).
+25. **For You + restriction pop-ups (Oct 13 2026)** — see §4 "Offer List": the feed, categories and offer detail work logged out (location via `zip` / `lat`+`lng`; empty list + `X-Discovery-Location: required` until there is one); up to **24 campaigns per category** (`page_size=24`, one vertical list); cards per Master with "N eligible products · View Products" and **no campaign-level rating** (each product has its own). Claim refusals now include `title` / `message` / `note` / `days_remaining` / `starts_at` / `slot_limit` (Master RB-33 pop-ups — buttons: Review & Accept, View My Offers, Explore More Offers, View Eligible Retailers). Pop-up #9 (eligible retailer required) is informational on the deal page when `retailer_required` is true (list = `eligible_retailers`).

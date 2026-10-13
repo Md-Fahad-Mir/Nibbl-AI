@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from Apps.campaigns.models import Campaign, CampaignURL, QRCode
-from Apps.common.pagination import paginate, paginated_response_serializer
+from Apps.common.pagination import DefaultPagination, paginate, paginated_response_serializer
 from Apps.offers import discovery
 from Apps.offers import serializers as s
 from Apps.offers import services
@@ -44,7 +44,11 @@ class OfferFeedView(generics.ListAPIView):
     """Searchable feed of active offers across all brands."""
 
     serializer_class = s.OfferSerializer
-    permission_classes = [IsAuthenticated]
+    # Master Discovery: logged-out shoppers browse For You after giving a
+    # location (?zip= or ?lat=&lng=).
+    permission_classes = [AllowAny]
+    # ?page_size= (≤100) — the For You tab asks for up to 24 at once.
+    pagination_class = DefaultPagination
 
     @extend_schema(
         parameters=[
@@ -68,7 +72,8 @@ class OfferFeedView(generics.ListAPIView):
         # X-Discovery-Location: required header tells clients to ask first.
         location = self._resolved_location = self._location()
         if location is None:
-            return offers
+            # Logged out without a location: nothing until they share one.
+            return offers if self.request.user.is_authenticated else offers.none()
         return discovery.discover(offers, self.request.user, location)
 
     def _location(self):
@@ -80,6 +85,8 @@ class OfferFeedView(generics.ListAPIView):
                 return discovery.from_position(float(params["lat"]), float(params["lng"]))
         except (discovery.LocationError, ValueError) as exc:
             raise ValidationError({"detail": str(exc)})
+        if not self.request.user.is_authenticated:
+            return None
         return discovery.saved_location(self.request.user)
 
     def list(self, request, *args, **kwargs):
@@ -96,7 +103,7 @@ class OfferFeedView(generics.ListAPIView):
 
 @extend_schema(tags=["offers"])
 class OfferDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]  # logged-out browsing (Master Discovery)
 
     @extend_schema(responses={200: s.OfferSerializer})
     def get(self, request, campaign_id):
@@ -115,7 +122,7 @@ class OfferDetailView(APIView):
 class OfferDetailsContentView(APIView):
     """Consumer campaign-detail page (description + how-it-works + rating)."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]  # logged-out browsing (Master Discovery)
 
     @extend_schema(responses={200: s.OfferDetailSerializer})
     def get(self, request, campaign_id):
@@ -133,7 +140,7 @@ class OfferDetailsContentView(APIView):
 class OfferCategoriesView(APIView):
     """Distinct product categories present in the active offer feed."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     @extend_schema(responses={200: s.CategorySerializer(many=True)})
     def get(self, request):

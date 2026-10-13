@@ -9,17 +9,24 @@ import { ApiError, nibblApi } from "@/lib/api/backendApi";
 import { displayOffer } from "../lib/offerMappers";
 import EmailCodeForm from "@/features/auth/components/EmailCodeForm";
 
-// Master "Rebate Restriction Pop-ups" — keyed by the API's error code.
-const RESTRICTION_TITLES: Record<string, string> = {
-  consent_required: "Consent required",
-  slots_full: "All claim slots are in use",
-  already_claimed: "You've already claimed this offer",
-  cooldown: "This offer is on cooldown for you",
-  one_time_redeemed: "One-time offer already redeemed",
-  not_started: "This offer hasn't started yet",
-  paused_or_ended: "This offer is paused or has ended",
-  capacity_reached: "Current claims are used up",
-  unavailable: "This offer is temporarily unavailable",
+// Master "Rebate Restriction Pop-ups" (RB-33). Title / message / note come
+// from the API (`title`, `message`, `note`, `days_remaining`); these are the
+// icons and the codes we know.
+const RESTRICTION_ICONS: Record<string, string> = {
+  consent_required: "✉️",
+  slots_full: "🗂️",
+  already_claimed: "👤",
+  cooldown: "🕒",
+  one_time_redeemed: "✅",
+  not_started: "📅",
+  paused_or_ended: "⏸️",
+  capacity_reached: "🏆",
+  unavailable: "⚠️",
+  retailer_required: "🏪",
+};
+
+type Restriction = {
+  code: string; title: string; message: string; note?: string; days?: number | null; retailers?: string[];
 };
 
 interface ClaimDetailsProps {
@@ -51,7 +58,12 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
     loadOfferDetails,
     claimOffer,
   } = useConsumerApiStore();
-  const [restriction, setRestriction] = useState<{ code: string; message: string } | null>(null);
+  const [restriction, setRestrictionState] = useState<Restriction | null>(null);
+  const [showRetailers, setShowRetailers] = useState(false);
+  const setRestriction = (value: Restriction | null) => {
+    setShowRetailers(false);
+    setRestrictionState(value);
+  };
   const latestError = useConsumerApiStore((state) => state.error);
   // Master ④/⑤: personal claim-slot use, and a separate confirmation screen
   // (the slot is only consumed on Confirm & Reserve).
@@ -59,10 +71,12 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
   const [confirmDeadline, setConfirmDeadline] = useState<Date | null>(null);
   const [reserving, setReserving] = useState(false);
 
+  const loadedCampaign = String(selectedOffer?.campaign_id ?? "");
   useEffect(() => {
-    // Logged out, the deal comes from its public link (loadPublicOffer);
-    // the full details load once the shopper is signed in.
-    if (campaignId && accessToken) void loadOfferDetails(campaignId);
+    // Signed in: always refresh (claim state). Logged out: load only if the
+    // deal isn't already here (a deal link loads it via its public link).
+    if (campaignId && (accessToken || loadedCampaign !== campaignId)) void loadOfferDetails(campaignId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadedCampaign only gates the first load
   }, [campaignId, accessToken, loadOfferDetails]);
 
   useEffect(() => {
@@ -77,8 +91,6 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
   const fallbackOffer = offers.find((offer) => String(offer.campaign_id ?? offer.id) === campaignId);
   const offer = selectedOffer || fallbackOffer;
   const details = offer ? displayOffer(offer) : null;
-  const reviewCount = details?.reviewsCount || 0;
-  const visibleRating = reviewCount > 0 ? Math.max(0, Math.min(5, Number(details?.rating || 0))) : 0;
 
   const signedInEmail = accessToken ? String(user?.email ?? "") : "";
   const savedPhone = accessToken ? String(user?.phone ?? "") : "";
@@ -90,7 +102,8 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
     if (!consentNibbl || !consentBrand) {
       setRestriction({
         code: "consent_required",
-        message: "Please agree to both Nibbl and brand email and SMS to claim this offer.",
+        title: "Consent required",
+        message: `You must provide email and phone and accept both Nibbl and ${details?.brand || "the brand"} email/SMS consent to reserve this offer.`,
       });
       return;
     }
@@ -121,7 +134,8 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
     if (slots && slots.available <= 0) {
       setRestriction({
         code: "slots_full",
-        message: `You're using all ${slots.limit} claim slots. Submit a receipt or wait for one to clear before claiming another offer.`,
+        title: `All ${slots.limit} claim slots are in use`,
+        message: "Submit a receipt for an active offer or wait for a claim to close before reserving another.",
       });
       return;
     }
@@ -144,9 +158,16 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
       onTabChange("scan", reservationId ? `claim:${reservationId}` : undefined);
     } catch (error) {
       const backendMessage = useConsumerApiStore.getState().error;
-      const code = error instanceof ApiError ? (error.data as { code?: string } | null)?.code : undefined;
-      if (code && RESTRICTION_TITLES[code]) {
-        setRestriction({ code, message: backendMessage || "This offer can't be claimed right now." });
+      const data = (error instanceof ApiError ? error.data : null) as Record<string, unknown> | null;
+      const code = data?.code ? String(data.code) : undefined;
+      if (code && RESTRICTION_ICONS[code]) {
+        setRestriction({
+          code,
+          title: String(data?.title || "This offer can't be claimed"),
+          message: String(data?.message || backendMessage || "This offer can't be claimed right now."),
+          note: data?.note ? String(data.note) : undefined,
+          days: typeof data?.days_remaining === "number" ? data.days_remaining : null,
+        });
         setMessage("");
         return;
       }
@@ -216,25 +237,6 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
             {/* Details Box (Frame 2147229239) */}
             <div className="w-full max-w-[335px] bg-[#FEFEFE] shadow-[1px_-4px_18px_rgba(0,0,0,0.12),_2px_4px_6.9px_rgba(0,0,0,0.08)] rounded-[12px] py-[14px] px-3 flex flex-col items-center gap-[13px] border border-gray-50">
               
-              {/* Star Rating Row (Frame 2147228493) */}
-              <div className="w-[170px] h-[20px] flex items-center justify-center gap-2 text-[14px] font-semibold leading-[17px] text-[#1F1D1D]">
-                {/* Frame 2147228492 */}
-                <div className="w-[116px] h-[20px] flex items-center gap-1 flex-shrink-0">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <svg
-                      key={i}
-                      className={`w-[20px] h-[20px] fill-current ${i < Math.round(visibleRating) ? "text-[#FF9F19]" : "text-[#C0C0C0]"}`}
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
-                </div>
-                <span className="truncate">
-                  {visibleRating.toFixed(2)} ({reviewCount})
-                </span>
-              </div>
-
               {/* Description message */}
               <p className="text-[#4D4D4D] text-[14px] font-normal leading-[17px] text-center w-full max-w-[335px]">
                 {details?.description || "Claim this backend offer and upload your receipt to receive the reward."}
@@ -246,6 +248,17 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
                   <p className="font-semibold text-[#1F1D1D]">Available at {details.featuredRetailers.join(", ")}</p>
                 )}
                 <p>{details?.retailerWording}</p>
+                {details && details.requiredRetailers.length > 0 && (
+                  <button type="button" className="self-start text-[#3E3EDF] font-medium underline cursor-pointer"
+                    onClick={() => setRestriction({
+                      code: "retailer_required",
+                      title: "Receipt from an eligible retailer required",
+                      message: "This campaign requires a receipt from one of the participating retailers.",
+                      retailers: details.requiredRetailers,
+                    })}>
+                    Receipt from an eligible retailer required
+                  </button>
+                )}
                 {details && details.whereToBuy.length > 0 && <p>Where to buy: {details.whereToBuy.join(", ")}</p>}
                 <p>{details?.cooldownWording}</p>
               </div>
@@ -259,6 +272,10 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
                         {product.image && <Image src={product.image} alt={product.name} fill sizes="48px" className="object-contain" />}
                       </div>
                       <span className="text-center text-[11px] leading-[13px] text-[#1F1D1D]">{product.name}</span>
+                      {product.variant && <span className="text-center text-[10px] text-[#575757]">{product.variant}</span>}
+                      <span className="text-[10px] text-[#575757]">
+                        {product.reviewCount > 0 ? `★ ${Number(product.rating ?? 0).toFixed(1)} · ${product.reviewCount}` : "No reviews yet"}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -442,23 +459,49 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
         </div>
       )}
       {restriction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-[400px] bg-white rounded-[16px] p-6 flex flex-col gap-3 text-center">
-            <h3 className="text-[18px] font-semibold text-[#1F1D1D]">{RESTRICTION_TITLES[restriction.code]}</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setRestriction(null)}>
+          <div className="relative w-full max-w-[380px] bg-white rounded-[16px] p-6 flex flex-col items-center gap-3 text-center"
+            onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setRestriction(null)} aria-label="Close"
+              className="absolute right-4 top-3 text-xl text-gray-400 hover:text-gray-600 cursor-pointer">×</button>
+            <span className="w-14 h-14 rounded-full bg-[#EEF0FF] flex items-center justify-center text-2xl">
+              {RESTRICTION_ICONS[restriction.code]}
+            </span>
+            <h3 className="text-[18px] font-semibold text-[#1F1D1D]">{restriction.title}</h3>
             <p className="text-[14px] text-[#575757]">{restriction.message}</p>
-            <div className="flex gap-2 mt-1">
-              {restriction.code === "consent_required" ? (
+            {restriction.code === "cooldown" && restriction.days ? (
+              <div className="w-full rounded-lg bg-[#EEF0FF] py-2">
+                <div className="text-[26px] font-bold text-[#1F1D1D]">{restriction.days}</div>
+                <div className="text-[12px] text-[#575757]">days remaining</div>
+              </div>
+            ) : null}
+            {restriction.note && (
+              <p className="w-full rounded-lg bg-[#F5F6FA] px-3 py-2 text-[12px] text-[#575757]">ⓘ {restriction.note}</p>
+            )}
+            <div className="w-full flex flex-col gap-2 mt-1">
+              {restriction.code === "retailer_required" ? (
+                showRetailers ? (
+                  <p className="rounded-lg bg-[#F5F6FA] px-3 py-2 text-[13px] text-[#1F1D1D]">{(restriction.retailers || []).join(", ")}</p>
+                ) : (
+                  <button onClick={() => setShowRetailers(true)}
+                    className="h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">View Eligible Retailers</button>
+                )
+              ) : restriction.code === "consent_required" ? (
                 <button onClick={() => setRestriction(null)}
-                  className="flex-1 h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">OK</button>
+                  className="h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">Review &amp; Accept</button>
               ) : restriction.code === "slots_full" || restriction.code === "already_claimed" ? (
                 <button onClick={() => { setRestriction(null); onTabChange("scan"); }}
-                  className="flex-1 h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">View My Offers</button>
+                  className="h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">View My Offers</button>
               ) : (
-                <button onClick={() => { setRestriction(null); onBack(); }}
-                  className="flex-1 h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">Explore More Offers</button>
+                <>
+                  <button onClick={() => { setRestriction(null); onBack(); }}
+                    className="h-11 rounded-lg bg-[#3E3EDF] text-white text-sm font-semibold cursor-pointer">Explore More Offers</button>
+                  {restriction.code === "capacity_reached" && accessToken && (
+                    <button onClick={() => { setRestriction(null); onTabChange("scan"); }}
+                      className="h-11 rounded-lg border border-[#3E3EDF] text-[#3E3EDF] text-sm font-semibold cursor-pointer">View My Offers</button>
+                  )}
+                </>
               )}
-              <button onClick={() => setRestriction(null)}
-                className="flex-1 h-11 rounded-lg border border-gray-200 text-sm font-semibold text-[#575757] cursor-pointer">Close</button>
             </div>
           </div>
         </div>

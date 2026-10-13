@@ -82,10 +82,12 @@ class FeedTests(APITestCase):
         resp = self.client.get(reverse("v1:offers:feed"), {"search": "globex"})
         self.assertEqual(resp.data["count"], 1)
 
-    def test_feed_requires_auth(self):
+    def test_logged_out_feed_needs_a_location(self):
+        # Master Discovery: logged-out shoppers browse after sharing a location.
         self.client.force_authenticate(None)
         resp = self.client.get(reverse("v1:offers:feed"))
-        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual((resp.status_code, resp.data["results"]), (status.HTTP_200_OK, []))
+        self.assertEqual(resp["X-Discovery-Location"], "required")
 
 
 class CooldownResolutionTests(APITestCase):

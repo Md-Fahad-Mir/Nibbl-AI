@@ -42,3 +42,6 @@ class BrandNotificationPreferenceTests(APITestCase):
         self.assertEqual(Notification.objects.filter(type="campaign_review").count(), 2)  # in-app for both
         self.assertEqual([m.to for m in mail.outbox], [["o@x.com"]])  # viewer turned email off
         self.assertIn("Your campaign was approved.", mail.outbox[0].body)
+        html = mail.outbox[0].alternatives[0][0]  # branded HTML version
+        self.assertIn("Your campaign was approved.", html)
+        self.assertIn("Open your dashboard", html)

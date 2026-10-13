@@ -64,6 +64,8 @@ class EventNotificationTests(APITestCase):
         approved = Notification.objects.get(user=user, type="receipt_approved")
         self.assertIn("$3.00", approved.body)
         self.assertTrue(any(m.to == [user.email] and "Purchase verified" in m.subject for m in mail.outbox))
+        verified = next(m for m in mail.outbox if "Purchase verified" in m.subject)
+        self.assertIn("Open Nibbl", verified.alternatives[0][0])
 
     def test_manual_review_and_clear_rejections(self):
         user = self.shopper()

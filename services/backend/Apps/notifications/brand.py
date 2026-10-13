@@ -17,6 +17,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
 
+from Apps.accounts.emails import BRAND_ACCENT, branded_html
 from Apps.notifications import services
 from Apps.notifications.models import BrandNotificationPreference, NotificationType
 
@@ -72,9 +73,15 @@ def set_preferences(user, brand, rows: list[dict]) -> list[dict]:
     return preferences(user, brand)
 
 
-def _send_email(user, subject: str, body: str) -> None:
+def _send_email(user, subject: str, body: str, *, heading: str = "") -> None:
     try:
-        send_mail(subject, body, getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"), [user.email])
+        html = branded_html(
+            subject, heading=heading or subject, intro=body, accent=BRAND_ACCENT,
+            button_label="Open your dashboard", button_url=settings.BRAND_APP_URL,
+            note="You can choose which emails you get in Settings > Notifications.",
+        )
+        send_mail(subject, body, getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@nibblai.app"), [user.email],
+                  html_message=html)
     except Exception as exc:  # delivery problems never break the action
         logger.error("Brand notification email to %s failed: %s", user.email, exc)
 
@@ -103,7 +110,7 @@ def notify_brand(brand, notification_type, *, message: str, context=None,
                             reference_type=reference_type, reference_id=reference_id)
             pref = prefs.get((user.id, str(notification_type)))
             if pref is None or pref.email:
-                _send_email(user, f"NibblAI · {brand.name}: {title}", message)
+                _send_email(user, f"NibblAI · {brand.name}: {title}", message, heading=title)
             if pref is not None and pref.sms:
                 logger.info("Brand SMS (pending Klaviyo) to user %s: %s", user.id, message)
 

@@ -26,6 +26,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
+from Apps.accounts.emails import branded_html
 from Apps.notifications import services
 from Apps.notifications.models import Notification, NotificationType
 
@@ -41,9 +42,11 @@ def _offer(campaign) -> str:
     return campaign.offer_headline or f"{campaign.brand.name} offer"
 
 
-def _email(user, subject: str, body: str) -> None:
+def _email(user, subject: str, body: str, *, intro: str = "", url: str = "") -> None:
     try:
-        send_mail(f"Nibbl · {subject}", body, settings.DEFAULT_FROM_EMAIL, [user.email])
+        html = branded_html(f"Nibbl · {subject}", heading=subject, intro=intro or body,
+                            button_label="Open Nibbl" if url else "", button_url=url)
+        send_mail(f"Nibbl · {subject}", body, settings.DEFAULT_FROM_EMAIL, [user.email], html_message=html)
     except Exception as exc:  # delivery problems never break the action
         logger.error("Shopper email to %s failed: %s", user.email, exc)
 
@@ -57,8 +60,8 @@ def _shopper(user, notification_type, *, title: str, body: str, reference_type="
         except Exception as exc:
             logger.error("Shopper notification %s failed: %s", notification_type, exc)
         if email:
-            _email(user, title, f"{body}\n\nOpen Nibbl to see your claim: "
-                               f"{str(settings.PUBLIC_BASE_URL).rstrip('/')}/?tab=scan")
+            url = f"{str(settings.PUBLIC_BASE_URL).rstrip('/')}/?tab=scan"
+            _email(user, title, f"{body}\n\nOpen Nibbl to see your claim: {url}", intro=body, url=url)
 
     transaction.on_commit(deliver)
 

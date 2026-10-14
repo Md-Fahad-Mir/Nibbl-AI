@@ -7,6 +7,7 @@ import { getStripe, stripeConfigured } from "@/lib/stripe";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatMoney } from "../../utils/backendMappers";
 import { ACTIVATED_KEY } from "../dashboard/AccountActivated";
+import SignupSteps from "@/features/auth/components/SignupSteps";
 
 const stripePromise = getStripe();
 
@@ -184,12 +185,14 @@ export default function BrandCheckout({ application }: { application: ApiRecord 
 
   return (
     <div className="w-full max-w-[720px] flex flex-col gap-6 font-manrope text-left">
-      <div>
-        <p className="text-xs font-extrabold uppercase tracking-wider text-[#001BD2]">Checkout & activation</p>
-        <h1 className="text-2xl font-extrabold text-[#131B2E] mt-2">Activate {String(application.brand_name)}</h1>
+      <SignupSteps current={4} withPayment />
+      <div className="text-center">
+        <h1 className="font-jakarta text-3xl font-extrabold text-[#131B2E]">
+          Activate your {String(plans.find((option) => String(option.slug) === plan)?.name ?? "")} plan
+        </h1>
         <p className="text-sm text-[#454656] mt-1">
-          Pay for your first 30 days and your dashboard opens right away. Next, you&apos;ll set up your first campaign
-          and fund your wallet before launch.
+          Complete your payment details to activate your plan for {String(application.brand_name)}. Next, you&apos;ll set
+          up your first campaign and fund your wallet before launch.
         </p>
       </div>
 

@@ -1,37 +1,55 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import CategoryGrid, { categories } from "./CategoryGrid";
+import { ArrowRight, BarChart3, CheckCircle2, Rocket, Sprout, type LucideIcon } from "lucide-react";
+import SignupSteps from "./SignupSteps";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 
-const officeLocations = [
-  "North America (Global HQ)",
-  "Europe (EU HQ)",
-  "Asia-Pacific (APAC HQ)",
-  "Latin America (LATAM HQ)",
+// Master onboarding ⑤ Confirm Your Plan: who each plan is for.
+const PLAN_COPY: Record<string, { Icon: LucideIcon; blurb: string }> = {
+  starter: { Icon: Sprout, blurb: "Test customer acquisition and review campaigns." },
+  pro: {
+    Icon: BarChart3,
+    blurb: "Built for brands ready to acquire new customers, reconnect with opted-in shoppers, build loyalty, and grow verified reviews.",
+  },
+  scale: { Icon: Rocket, blurb: "Run Nibbl as an always-on acquisition, loyalty and review channel." },
+};
+
+const CATEGORIES = ["Food & Drinks", "Health", "Beauty", "Home", "Kids", "Other"];
+
+const inputClass =
+  "w-full h-12 bg-white border border-slate-200 rounded-xl px-4 text-sm focus:outline-none focus:border-[#001BD2] focus:ring-1 focus:ring-[#001BD2] font-manrope placeholder-slate-400";
+const labelClass = "flex flex-col gap-1.5 text-xs font-bold text-[#131B2E]";
+
+const planBullets = (plan: ApiRecord) => [
+  `Up to ${String(plan.max_active_campaigns)} active rebate campaign${Number(plan.max_active_campaigns) === 1 ? "" : "s"}`,
+  `${Number(plan.rebate_fee_percent)}% fee on shopper rewards`,
+  `$${(1 + Number(plan.review_fee ?? 0)).toFixed(0)} per completed review`,
+  plan.data_access_level === "full" ? "Full opted-in customer contacts and CSV export" : "Limited customer identity",
 ];
 
+/** Master brand onboarding ⑤ Confirm Your Plan and ⑥ Create Your Brand
+ *  Account (⑦ Verify follows on /verify-email). */
 export default function RegisterCard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { registerAndApply, error, status } = useBrandApiStore();
   const [plans, setPlans] = useState<ApiRecord[]>([]);
   const [plan, setPlan] = useState(searchParams.get("plan") || "pro");
+  const [step, setStep] = useState<1 | 2>(1);
+  const [changingPlan, setChangingPlan] = useState(false);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [brandName, setBrandName] = useState("");
   const [website, setWebsite] = useState("");
   const [email, setEmail] = useState("");
-  const [officeLocation, setOfficeLocation] = useState(officeLocations[0]);
-  const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
+  const [category, setCategory] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [formError, setFormError] = useState("");
-  const selectedCategory = categories.find((category) => category.id === categoryId);
 
   useEffect(() => {
     let live = true;
@@ -43,6 +61,10 @@ export default function RegisterCard() {
       live = false;
     };
   }, []);
+
+  const selected = plans.find((p) => String(p.slug) === plan);
+  const planName = String(selected?.name ?? plan.charAt(0).toUpperCase() + plan.slice(1));
+  const copy = PLAN_COPY[plan] ?? PLAN_COPY.pro;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -58,8 +80,8 @@ export default function RegisterCard() {
         brandName,
         website,
         phone,
-        officeLocation,
-        category: selectedCategory?.name || categoryId,
+        officeLocation: "",
+        category,
         plan,
       });
       router.push(`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`);
@@ -69,208 +91,143 @@ export default function RegisterCard() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#FAF8FF] flex items-center justify-center p-4 py-16 md:py-24 font-jakarta">
-      {/* Registration Card Wrapper */}
-      <div className="w-full max-w-[576px] bg-white rounded-3xl shadow-xl p-6 md:p-10 flex flex-col gap-8 border border-slate-100/50 animate-slide-up">
-        {/* Logo */}
-        <div className="flex justify-center">
-          <div className="relative w-[194px] h-[72px]">
-            <Image
-              src="/Auth/LogoImage.svg"
-              alt="NibblAI Logo"
-              fill
-              className="object-contain"
-              priority
-            />
+    <div className="min-h-screen w-full bg-[#FAF8FF] flex items-start justify-center p-4 py-10 md:py-16 font-jakarta">
+      <div className="w-full max-w-[520px] bg-white rounded-3xl shadow-xl p-6 md:p-10 flex flex-col gap-7 border border-slate-100/50 animate-slide-up">
+        <div className="flex items-center justify-between gap-3">
+          <div className="relative w-[120px] h-[44px]">
+            <Image src="/Auth/LogoImage.svg" alt="NibblAI Logo" fill className="object-contain object-left" priority />
           </div>
+          <span className="text-xs font-manrope text-[#454656]">
+            Already have an account?{" "}
+            <Link href="/login" className="text-[#001BD2] font-bold hover:underline">Sign In</Link>
+          </span>
         </div>
 
-        {/* Header Title */}
-        <div className="flex flex-col gap-2">
-          <h2 className="text-2xl md:text-3xl font-extrabold text-[#131B2E] tracking-tight">
-            Get started with NibblAI
-          </h2>
-          <p className="text-sm font-medium text-[#454656] leading-relaxed">
-            Create your enterprise account and access the dashboard.
-          </p>
-        </div>
+        <SignupSteps current={step} />
 
-        {/* Form Container */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          {/* Row 1: Full Name & Business Phone */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-[#454656]">Full Name</label>
-              <input
-                type="text"
-                placeholder="John Doe"
-                value={fullName}
-                onChange={(event) => setFullName(event.target.value)}
-                required
-                className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 text-sm focus:outline-none focus:border-[#001BD2] focus:ring-1 focus:ring-[#001BD2] font-manrope placeholder-slate-400"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-[#454656]">Business Phone</label>
-              <input
-                type="tel"
-                placeholder="+1 (555) 000-0000"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 text-sm focus:outline-none focus:border-[#001BD2] focus:ring-1 focus:ring-[#001BD2] font-manrope placeholder-slate-400"
-              />
-            </div>
-          </div>
-
-          {/* Row 2: Company/Brand Name */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-extrabold text-[#454656]">Company/Brand name</label>
-            <input
-              type="text"
-              placeholder="e.g. Acme Corp"
-              value={brandName}
-              onChange={(event) => setBrandName(event.target.value)}
-              required
-              className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 text-sm focus:outline-none focus:border-[#001BD2] focus:ring-1 focus:ring-[#001BD2] font-manrope placeholder-slate-400"
-            />
-          </div>
-
-          {/* Row 3: Website URL */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-extrabold text-[#454656]">Website URL</label>
-            <input
-              type="text"
-              placeholder="www.yourbrand.com"
-              value={website}
-              onChange={(event) => setWebsite(event.target.value)}
-              className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 text-sm focus:outline-none focus:border-[#001BD2] focus:ring-1 focus:ring-[#001BD2] font-manrope placeholder-slate-400"
-            />
-          </div>
-
-          {/* Row 4: Work Email Address */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-[#454656]">Work Email Address</label>
-            <input
-              type="email"
-              placeholder="john@company.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 text-sm focus:outline-none focus:border-[#001BD2] focus:ring-1 focus:ring-[#001BD2] font-manrope placeholder-slate-400"
-            />
-          </div>
-
-          {/* Row 5: Office Location Select */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-[#454656]">Office Location</label>
-            <select
-              value={officeLocation}
-              onChange={(event) => setOfficeLocation(event.target.value)}
-              className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 text-sm focus:outline-none focus:border-[#001BD2] focus:ring-1 focus:ring-[#001BD2] font-manrope text-slate-800"
-            >
-              {officeLocations.map((location) => (
-                <option key={location} value={location}>
-                  {location}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Business Category Grid */}
-          <CategoryGrid selected={categoryId} onSelect={setCategoryId} />
-
-          {/* Plan selection (Master: Plan & Account Setup) */}
-          {plans.length > 0 && (
+        {step === 1 ? (
+          <div className="flex flex-col gap-6 text-center">
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-[#454656]">Choose your plan</label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <h2 className="text-3xl md:text-4xl font-extrabold text-[#131B2E] tracking-tight">Start with {planName}</h2>
+              <p className="text-base text-[#454656] font-manrope">{copy.blurb}</p>
+            </div>
+
+            <div className="rounded-2xl border-2 border-[#001BD2] overflow-hidden text-left">
+              <div className="bg-[#001BD2] text-white text-sm font-semibold text-center py-2">Selected Plan</div>
+              <div className="p-5 flex flex-col gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="w-12 h-12 rounded-full bg-[#EEF0FF] text-[#001BD2] flex items-center justify-center">
+                    <copy.Icon className="w-6 h-6" />
+                  </span>
+                  <span className="text-2xl font-extrabold text-[#131B2E]">{planName}</span>
+                </div>
+                {selected && (
+                  <>
+                    <div>
+                      <span className="text-4xl font-extrabold text-[#131B2E]">${Number(selected.monthly_price)}</span>
+                      <span className="text-[#454656]">/month</span>
+                    </div>
+                    <ul className="flex flex-col gap-2 font-manrope text-sm text-[#131B2E]">
+                      {planBullets(selected).map((b) => (
+                        <li key={b} className="flex items-start gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-[#001BD2] flex-shrink-0" /> {b}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {changingPlan ? (
+              <div className="grid grid-cols-3 gap-2 font-manrope">
                 {plans.map((option) => {
                   const slug = String(option.slug);
                   return (
-                    <button key={slug} type="button" onClick={() => setPlan(slug)}
-                      className={`text-left rounded-2xl border p-3 font-manrope transition-all cursor-pointer ${
-                        plan === slug ? "border-[#001BD2] bg-[#F2F3FF]" : "border-slate-200 bg-white"
+                    <button key={slug} type="button" onClick={() => { setPlan(slug); setChangingPlan(false); }}
+                      className={`rounded-xl border p-2 text-sm font-bold cursor-pointer ${
+                        plan === slug ? "border-[#001BD2] bg-[#F2F3FF] text-[#001BD2]" : "border-slate-200 text-[#131B2E]"
                       }`}>
-                      <div className="text-sm font-extrabold text-[#131B2E]">{String(option.name)}</div>
-                      <div className="text-xs text-[#454656]">${Number(option.monthly_price)} every 30 days</div>
-                      <div className="text-[11px] text-[#757688] mt-1">
-                        {String(option.max_active_campaigns)} active rebate campaign{Number(option.max_active_campaigns) === 1 ? "" : "s"} ·{" "}
-                        {Number(option.rebate_fee_percent)}% rebate fee
-                      </div>
+                      {String(option.name)}
+                      <span className="block text-xs font-medium text-[#454656]">${Number(option.monthly_price)}/mo</span>
                     </button>
                   );
                 })}
               </div>
-              <p className="text-[11px] text-[#757688] font-manrope">
-                You&apos;ll pay for your plan at checkout after verifying your email. Promo codes can be applied there.
+            ) : (
+              <button type="button" onClick={() => setChangingPlan(true)}
+                className="self-center flex items-center gap-1.5 text-sm font-bold text-[#001BD2] cursor-pointer">
+                Change Plan <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+
+            <button type="button" onClick={() => setStep(2)}
+              className="w-full h-14 rounded-xl text-white font-bold text-lg bg-[#001BD2] hover:opacity-95 transition-all">
+              Continue with {planName}
+            </button>
+            <p className="-mt-3 text-xs text-[#757688] font-manrope">
+              Plan begins after checkout. You can change your plan at any time during your subscription.
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="text-center flex flex-col gap-2">
+              <h2 className="text-3xl md:text-4xl font-extrabold text-[#131B2E] tracking-tight">Create Your Brand Account</h2>
+              <p className="text-base text-[#454656] font-manrope">
+                Create the account your team will use to launch acquisition, loyalty, and review campaigns.
               </p>
             </div>
-          )}
-
-          {/* Acceptance Checkbox */}
-          <div className="flex items-center gap-3 py-1 font-manrope">
-            <input
-              type="checkbox"
-              id="terms"
-              checked={accepted}
-              onChange={(event) => setAccepted(event.target.checked)}
-              className="w-5 h-5 rounded-md border-slate-300 text-[#001BD2] focus:ring-[#001BD2] cursor-pointer"
-            />
-            <label htmlFor="terms" className="text-[13px] font-medium text-[#454656] cursor-pointer">
-              I accept the{" "}
-              <span className="text-[#001BD2] hover:underline">Terms and Conditions</span> and{" "}
-              <span className="text-[#001BD2] hover:underline">Privacy Policy</span>
+            <label className={labelClass}>
+              Contact Name
+              <input type="text" placeholder="Jordan Smith" value={fullName} onChange={(e) => setFullName(e.target.value)} required className={inputClass} />
             </label>
-          </div>
+            <label className={labelClass}>
+              Work Email
+              <input type="email" placeholder="jordan@yourbrand.com" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              Phone
+              <input type="tel" placeholder="(555) 123-4567" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              Company / Brand Name
+              <input type="text" placeholder="Acme Foods" value={brandName} onChange={(e) => setBrandName(e.target.value)} required className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              Company Website
+              <input type="text" placeholder="https://yourbrand.com" value={website} onChange={(e) => setWebsite(e.target.value)} className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              <span>Business Category <span className="font-medium text-[#94A3B8]">(Optional)</span></span>
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className={`${inputClass} text-slate-800`}>
+                <option value="">Select a category</option>
+                {CATEGORIES.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-3 py-1 font-manrope text-[13px] font-medium text-[#454656] cursor-pointer">
+              <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)}
+                className="w-5 h-5 rounded-md border-slate-300 text-[#001BD2] focus:ring-[#001BD2] cursor-pointer" />
+              <span>
+                I agree to the Nibbl <span className="text-[#001BD2] underline">Terms</span> and{" "}
+                <span className="text-[#001BD2] underline">Privacy Policy</span>.
+              </span>
+            </label>
 
-          {/* Create Account Button */}
-          {formError && <p className="text-sm font-semibold text-red-600">{formError}</p>}
-          {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
+            {formError && <p className="text-sm font-semibold text-red-600">{formError}</p>}
+            {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
 
-          <button
-            type="submit"
-            disabled={!accepted || status === "loading"}
-            className="flex items-center justify-center w-full h-[60px] rounded-full text-white font-bold text-lg bg-gradient-to-r from-[#001BD2] to-[#2D3FEA] hover:opacity-95 transition-all shadow-lg shadow-blue-600/25 active:scale-[0.98] disabled:opacity-60"
-          >
-            {status === "loading" ? "Sending…" : "Send Magic Link"}
-          </button>
-
-          <p className="-mt-3 text-center text-[12px] text-[#757688] font-manrope">
-            No password needed — we&apos;ll email you a secure sign-in link. We&apos;ll use your work email and company
-            website to confirm this is a brand account.
-          </p>
-
-          {/* OR Divider */}
-          <div className="flex items-center justify-center gap-4 py-1">
-            <div className="h-[1px] bg-slate-200 flex-1"></div>
-            <span className="text-xs font-extrabold tracking-widest text-[#757688] uppercase">
-              Or
-            </span>
-            <div className="h-[1px] bg-slate-200 flex-1"></div>
-          </div>
-
-          {/* Google Sign Up Button */}
-          <button
-            type="button"
-            disabled
-            className="flex items-center justify-center gap-3 w-full h-12 rounded-full border border-slate-200 bg-slate-50 text-[#757688] font-bold text-sm transition-all duration-200 cursor-not-allowed opacity-70"
-          >
-            <img
-              src="/Auth/3rdPageIcons/googleIcon.svg"
-              alt="Google icon"
-              className="w-5 h-5 object-contain"
-            />
-            <span>Google sign-up unavailable</span>
-          </button>
-        </form>
-
-        {/* Footer Login Link */}
-        <div className="text-center font-manrope text-sm font-medium text-[#454656]">
-          Already have an account?{" "}
-          <Link href="/login" className="text-[#001BD2] font-extrabold hover:underline">
-            Log in
-          </Link>
-        </div>
+            <button type="submit" disabled={!accepted || status === "loading"}
+              className="w-full h-14 rounded-xl text-white font-bold text-lg bg-[#001BD2] hover:opacity-95 transition-all disabled:opacity-60">
+              {status === "loading" ? "Sending…" : "Send Magic Link"}
+            </button>
+            <p className="-mt-2 text-center text-xs text-[#757688] font-manrope">
+              We&apos;ll use your work email and company website to confirm this is a brand account.
+            </p>
+            <button type="button" onClick={() => setStep(1)} className="text-xs font-bold text-[#454656] hover:underline self-center">
+              Back to plan
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Info } from "lucide-react";
+import { ArrowLeft, BarChart3, CircleCheck, Clock, FileText, Gift, Info, type LucideIcon, PieChart, Star } from "lucide-react";
 import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { CustomerData } from "./CustomerLedger";
@@ -21,10 +21,13 @@ const card = "bg-white border border-[#EAEDFF] rounded-[20px] p-5";
 const heading = "font-jakarta font-bold text-lg text-[#131B2E]";
 const asList = (value: unknown) => (Array.isArray(value) ? (value as ApiRecord[]) : []);
 
-const Tile = ({ label, value }: { label: string; value: string }) => (
-  <div className="border border-[#F1F2FA] rounded-2xl p-4">
+const Tile = ({ label, value, Icon }: { label: string; value: string; Icon: LucideIcon }) => (
+  <div className="border border-[#F1F2FA] rounded-2xl p-4 flex items-center gap-3">
+    <Icon className="w-8 h-8 text-[#001BD2] flex-shrink-0" strokeWidth={1.75} />
+    <div>
     <div className="text-xs text-[#64748B]">{label}</div>
     <div className="font-jakarta text-2xl font-extrabold text-[#131B2E] mt-1">{value}</div>
+    </div>
   </div>
 );
 
@@ -133,22 +136,22 @@ export default function CustomerProfileView({ customer, onBack, onToggleSuspend,
           <section className="flex flex-col gap-3">
             <h3 className={heading}>Relationship with {brandName}</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <Tile label="Claims" value={String(rel.claims ?? 0)} />
-              <Tile label="Completed Rebates" value={String(rel.completed_rebates ?? 0)} />
-              <Tile label="Brand Conversion" value={pct(rel.conversion)} />
-              <Tile label="Brand Rewards" value={formatMoney(rel.rewards ?? 0)} />
-              <Tile label="Brand Reviews" value={String(rel.reviews ?? 0)} />
-              <Tile label="Open Claims" value={String(rel.open_claims ?? 0)} />
+              <Tile Icon={FileText} label="Claims" value={String(rel.claims ?? 0)} />
+              <Tile Icon={CircleCheck} label="Completed Rebates" value={String(rel.completed_rebates ?? 0)} />
+              <Tile Icon={BarChart3} label="Brand Conversion" value={pct(rel.conversion)} />
+              <Tile Icon={Gift} label="Brand Rewards" value={formatMoney(rel.rewards ?? 0)} />
+              <Tile Icon={Star} label="Brand Reviews" value={String(rel.reviews ?? 0)} />
+              <Tile Icon={Clock} label="Open Claims" value={String(rel.open_claims ?? 0)} />
             </div>
           </section>
 
           <section className="flex flex-col gap-3">
             <h3 className={heading}>Nibbl Activity — Totals Only</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Tile label="Total Claims" value={String(site.total_claims ?? 0)} />
-              <Tile label="Overall Completion" value={pct(site.completion)} />
-              <Tile label="Total Reviews" value={String(site.total_reviews ?? 0)} />
-              <Tile label="Total Rewards" value={formatMoney(site.total_rewards ?? 0)} />
+              <Tile Icon={FileText} label="Total Claims" value={String(site.total_claims ?? 0)} />
+              <Tile Icon={PieChart} label="Overall Completion" value={pct(site.completion)} />
+              <Tile Icon={Star} label="Total Reviews" value={String(site.total_reviews ?? 0)} />
+              <Tile Icon={Gift} label="Total Rewards" value={formatMoney(site.total_rewards ?? 0)} />
             </div>
             <p className="text-xs text-[#64748B]"><Info className="w-3.5 h-3.5 inline-block align-[-2px] mr-1" />Other brands, products, receipts, and review content are never shown.</p>
           </section>

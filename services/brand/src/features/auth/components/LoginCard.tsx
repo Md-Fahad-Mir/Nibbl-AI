@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -165,28 +164,6 @@ export default function LoginCard() {
             {mode === "link" ? "Sign in with a password instead" : "Email me a secure sign-in link instead"}
           </button>
 
-          {/* OR Divider */}
-          <div className="flex items-center justify-center gap-4 py-1">
-            <div className="h-[1px] bg-slate-200 flex-1"></div>
-            <span className="text-xs font-extrabold tracking-widest text-[#454656] uppercase">
-              Or continue with
-            </span>
-            <div className="h-[1px] bg-slate-200 flex-1"></div>
-          </div>
-
-          {/* Google Sign In Button */}
-          <button
-            type="button"
-            disabled
-            className="flex items-center justify-center gap-3 w-full h-14 rounded-full border border-slate-200 bg-slate-50 text-[#757688] font-bold text-sm transition-all duration-200 cursor-not-allowed opacity-70"
-          >
-            <img
-              src="/Auth/3rdPageIcons/googleIcon.svg"
-              alt="Google icon"
-              className="w-5 h-5 object-contain"
-            />
-            <span>Google sign-in unavailable</span>
-          </button>
         </form>
 
         {/* Footer Link */}

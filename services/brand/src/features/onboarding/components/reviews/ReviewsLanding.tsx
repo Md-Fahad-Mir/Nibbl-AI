@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatInteger, formatMoney, toNumber } from "../../utils/backendMappers";
-import { ChevronRight, Info, Plus } from "lucide-react";
+import { Info, Plus } from "lucide-react";
 
 interface CampaignItem {
   id: string;
@@ -42,21 +42,10 @@ export default function ReviewsLanding({ campaigns, onCreateNew, onViewDetail, o
       
       {/* Hero Header Section */}
       <div className="flex justify-between items-end w-full border-b border-slate-100 pb-6">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-            <span>Reviews</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-            <span className="text-[#001BD2]">Review Performance</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-3xl font-extrabold font-jakarta text-[#131B2E] tracking-tight">Review Performance</h2>
-            <span className="bg-emerald-100 text-[#15803D] text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E]"></span>
-              ACTIVE
-            </span>
-          </div>
-          <p className="text-sm text-slate-500 font-medium max-w-[600px] mt-1 leading-relaxed">
-            Optimize and monitor your review acquisition workflows, track daily budgets, and oversee verified user feedback.
+        <div className="flex flex-col gap-1">
+          <h2 className="text-3xl font-extrabold font-jakarta text-[#131B2E] tracking-tight">Review Campaigns</h2>
+          <p className="text-sm text-[#454656] font-medium max-w-[600px] leading-relaxed">
+            Create and manage review campaigns to collect verified product reviews.
           </p>
         </div>
 

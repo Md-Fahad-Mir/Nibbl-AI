@@ -13,9 +13,10 @@ import {
   DEAL_TYPES,
   DealType,
   claimCapacity,
+  rulesSummary,
   suggestedWording,
-  systemRules,
 } from "./dealRules";
+import { Lock } from "lucide-react";
 
 interface DealCampaignBuilderProps {
   /** Existing campaign to edit; null creates a new one. */
@@ -221,7 +222,7 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
     ? "Submit changes for review"
     : reviewStatus === "changes_requested"
       ? "Resubmit for review"
-      : "Submit for review";
+      : "Submit for Nibbl Review";
 
   return (
     <div className="w-full max-w-[1240px] mx-auto flex flex-col gap-6 font-manrope text-left animate-slide-up">
@@ -237,18 +238,35 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-jakarta text-2xl font-extrabold text-[#131B2E]">
-            {campaign ? "Edit rebate campaign" : "Create rebate campaign"}
-          </h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-jakarta text-3xl font-extrabold text-[#131B2E]">
+              {campaign ? "Edit Rebate Campaign" : "Create Rebate Campaign"}
+            </h1>
+            {(!campaign || String(campaign.display_status ?? "draft") === "draft") && (
+              <span className="text-xs font-bold text-[#001BD2] bg-[#E2E7FF] rounded-full px-3 py-1">Draft</span>
+            )}
+          </div>
           <p className="text-sm text-[#64748B] mt-1">
             {isApproved
               ? "Changes go to Nibbl for review. The approved version stays live until they're approved."
-              : "Save a draft anytime. Submitting sends it to Nibbl for review."}
+              : "Create a new rebate campaign to drive trial, velocity, and shopper engagement."}
           </p>
         </div>
-        <button onClick={onCancel} className="text-sm font-bold text-[#454656] hover:text-[#001BD2] cursor-pointer">
-          Cancel
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={onCancel} className="text-sm font-bold text-[#454656] hover:text-[#001BD2] cursor-pointer">
+            Cancel
+          </button>
+          {!isApproved && (
+            <button onClick={() => save(false)} disabled={busy !== null}
+              className="h-11 px-5 rounded-xl bg-[#E2E7FF] text-[#001BD2] font-bold text-sm disabled:opacity-50 cursor-pointer">
+              {busy === "draft" ? "Saving…" : "Save Draft"}
+            </button>
+          )}
+          <button onClick={() => save(true)} disabled={busy !== null}
+            className="h-11 px-5 rounded-xl bg-[#001BD2] hover:bg-blue-700 text-white font-bold text-sm disabled:opacity-50 cursor-pointer">
+            {busy === "submit" ? "Submitting…" : primaryLabel}
+          </button>
+        </div>
       </div>
 
       {campaign && (
@@ -418,15 +436,18 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
             >
               Use Nibbl&apos;s suggested wording
             </button>
-            <div className="bg-[#FAF8FF] rounded-xl p-4">
-              <span className="text-[10px] font-bold text-[#454656]/60 uppercase tracking-wider">
-                System rules (locked)
+            <div className="bg-[#F7F8FF] border border-[#EAEDFF] rounded-xl p-4">
+              <span className="flex items-center gap-2 text-sm font-bold text-[#131B2E]">
+                <Lock className="w-4 h-4" /> System Rules Summary <span className="font-normal text-[#64748B]">(Locked)</span>
               </span>
-              <ul className="mt-2 list-disc pl-5 text-sm text-[#454656] flex flex-col gap-1">
-                {systemRules(dealType, maxRebate, fixedReward, quantity).map((rule) => (
-                  <li key={rule}>{rule}</li>
+              <dl className="mt-3 divide-y divide-[#EAEDFF] text-sm">
+                {rulesSummary(dealType, maxRebate, fixedReward, quantity).map(([label, value]) => (
+                  <div key={label} className="grid grid-cols-[150px_1fr] gap-3 py-2">
+                    <dt className="font-semibold text-[#131B2E]">{label}</dt>
+                    <dd className="text-[#454656]">{value}</dd>
+                  </div>
                 ))}
-              </ul>
+              </dl>
             </div>
           </Section>
 
@@ -491,13 +512,18 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
 
           <Section n="⑧" title="Campaign controls">
             <span className="text-xs font-bold text-[#454656] uppercase tracking-wider">Customer cooldown</span>
-            <select className={inputClass} value={cooldown} onChange={(e) => setCooldown(e.target.value)}>
+            <div role="radiogroup" aria-label="Customer cooldown" className="flex flex-col gap-2">
               {COOLDOWN_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
+                <label key={opt.value} className="flex items-center gap-2 text-sm text-[#131B2E] cursor-pointer">
+                  <input type="radio" name="cooldown" value={opt.value} checked={cooldown === opt.value}
+                    onChange={() => setCooldown(opt.value)} className="accent-[#001BD2]" />
+                  {opt.label.replace(" — Recommended", "")}
+                  {opt.value === "30" && (
+                    <span className="text-[11px] font-bold text-[#001BD2] bg-[#E2E7FF] rounded-full px-2 py-0.5">Recommended</span>
+                  )}
+                </label>
               ))}
-            </select>
+            </div>
             <p className="text-xs text-[#64748B]">
               Cooldown begins after an approved redemption. An active claim always prevents another claim for this campaign.
             </p>
@@ -524,7 +550,7 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
                 disabled={busy !== null}
                 className="h-12 px-6 rounded-full border border-[#001BD2] text-[#001BD2] font-bold text-sm disabled:opacity-50 cursor-pointer"
               >
-                {busy === "draft" ? "Saving…" : "Save draft"}
+                {busy === "draft" ? "Saving…" : "Save Draft"}
               </button>
             )}
             <button

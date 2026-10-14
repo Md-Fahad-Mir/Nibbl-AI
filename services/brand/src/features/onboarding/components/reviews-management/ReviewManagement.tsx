@@ -5,7 +5,7 @@ import { ApiRecord, API_BASE_URL, tokenStorage } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import { formatDate, formatInteger, formatMoney } from "../../utils/backendMappers";
 import Pager from "@/components/shared/Pager";
-import { Check, Circle, CircleCheck, Star, X } from "lucide-react";
+import { AlertCircle, BarChart3, Check, ChevronRight, Circle, CircleCheck, CreditCard, ImageIcon, type LucideIcon, MessageSquare, Star, X } from "lucide-react";
 
 interface ReviewManagementProps {
   onBack: () => void;
@@ -397,12 +397,13 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
   };
 
   const kpis = [
-    { label: "Total Reviews", value: formatInteger(Number(summary.total_reviews ?? 0)), note: "Excluding removed reviews" },
-    { label: "Pending 1–3 Star Response", value: formatInteger(Number(summary.low_rating_awaiting_action ?? 0)), note: "Publishes after 7 days" },
-    { label: "Average Rating", value: summary.average_rating == null ? "—" : `${Number(summary.average_rating).toFixed(1)} / 5.0`, note: "Published reviews" },
-    { label: "Review Spend", value: formatMoney(summary.review_spend ?? 0), note: "$1 rewards + review fees" },
-    { label: "Cost per Review", value: summary.cost_per_review == null ? "—" : formatMoney(summary.cost_per_review), note: "Spend ÷ completed reviews" },
-  ];
+    { label: "Total Reviews", value: formatInteger(Number(summary.total_reviews ?? 0)), note: "Excluding removed reviews", Icon: MessageSquare, tone: "bg-[#EEF0FF] text-[#001BD2]" },
+    { label: "Pending 1–3 Star Response", value: formatInteger(Number(summary.low_rating_awaiting_action ?? 0)), note: "Publishes after 7 days", Icon: AlertCircle, tone: "bg-red-50 text-red-600" },
+    { label: "Average Rating", value: summary.average_rating == null ? "—" : `${Number(summary.average_rating).toFixed(1)} / 5.0`, note: "Published reviews", Icon: Star, tone: "bg-amber-50 text-amber-500" },
+    { label: "Review Spend", value: formatMoney(summary.review_spend ?? 0), note: "$1 rewards + review fees", Icon: CreditCard, tone: "bg-[#EEF0FF] text-[#001BD2]" },
+    { label: "Cost per Review", value: summary.cost_per_review == null ? "—" : formatMoney(summary.cost_per_review), note: "Spend ÷ completed reviews", Icon: BarChart3, tone: "bg-[#EEF0FF] text-[#001BD2]" },
+  ] as { label: string; value: string; note: string; Icon: LucideIcon; tone: string }[];
+  const productImage = new Map(products.map((p) => [String(p.id), p.imageSrc]));
 
   return (
     <div className="flex flex-col gap-6 w-full animate-slide-up text-left font-manrope bg-[#FAF8FF]">
@@ -420,10 +421,15 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 w-full">
         {kpis.map((k) => (
-          <div key={k.label} className={cardClass}>
-            <div className="text-xs font-semibold text-[#454656]">{k.label}</div>
-            <div className="font-jakarta text-2xl font-extrabold text-[#131B2E] mt-1">{k.value}</div>
-            <div className="text-[11px] text-[#94A3B8] mt-1">{k.note}</div>
+          <div key={k.label} className={`${cardClass} flex items-start gap-3`}>
+            <span className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${k.tone}`}>
+              <k.Icon className="w-5 h-5" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-[#454656]">{k.label}</div>
+              <div className="font-jakarta text-2xl font-extrabold text-[#131B2E] mt-1">{k.value}</div>
+              <div className="text-[11px] text-[#94A3B8] mt-1">{k.note}</div>
+            </div>
           </div>
         ))}
       </div>
@@ -484,6 +490,7 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
                 <th className="p-4 text-left">Status</th>
                 <th className="p-4 text-left">Reward</th>
                 <th className="p-4 text-left">Submitted</th>
+                <th className="p-4" aria-label="Open" />
               </tr>
             </thead>
             <tbody>
@@ -497,9 +504,21 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
                       <div className="font-bold text-[#131B2E]">{String(review.shopper_name ?? "Customer")}</div>
                       {review.verified_purchase ? <VerifiedBadge /> : null}
                     </td>
-                    <td className="p-4 max-w-[200px]">
-                      <div className="font-semibold text-[#131B2E] truncate">{String(review.product_name ?? "")}</div>
-                      <div className="text-xs text-[#64748B] truncate">{productVariant(String(review.product ?? ""))}</div>
+                    <td className="p-4 max-w-[240px]">
+                      <div className="flex items-center gap-3">
+                        <span className="w-10 h-10 rounded-lg bg-[#F2F3FF] overflow-hidden flex items-center justify-center flex-shrink-0">
+                          {productImage.get(String(review.product ?? "")) ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={productImage.get(String(review.product ?? ""))} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <ImageIcon className="w-4 h-4 text-[#C5C5D9]" />
+                          )}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-semibold text-[#131B2E] truncate">{String(review.product_name ?? "")}</span>
+                          <span className="block text-xs text-[#64748B] truncate">{productVariant(String(review.product ?? ""))}</span>
+                        </span>
+                      </div>
                     </td>
                     <td className="p-4"><Stars rating={Number(review.rating ?? 0)} /></td>
                     <td className="p-4 max-w-[200px] truncate">{String(review.title ?? "")}</td>
@@ -510,12 +529,13 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
                     </td>
                     <td className="p-4">{review.reward ? formatMoney(review.reward) : "—"}</td>
                     <td className="p-4 whitespace-nowrap">{formatDate(String(review.created_at ?? ""))}</td>
+                    <td className="p-4"><ChevronRight className="w-4 h-4 text-[#94A3B8]" /></td>
                   </tr>
                 );
               })}
               {data && reviews.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-10 text-center text-sm font-semibold text-slate-400">
+                  <td colSpan={8} className="p-10 text-center text-sm font-semibold text-slate-400">
                     No reviews match the current selection.
                   </td>
                 </tr>

@@ -35,13 +35,17 @@ class PlanChangeError(Exception):
 
 
 def running_campaigns(brand):
-    """Rebate campaigns using an active slot: active, or paused only for low
-    funds (those resume on their own when the wallet is refilled)."""
+    """Rebate campaigns using an active slot.
+
+    Manually paused campaigns free their slot. Low-funds auto-paused campaigns
+    retain it because they resume when the wallet is refilled. Campaigns past
+    their end date are over regardless of their stored lifecycle status.
+    """
     from Apps.campaigns.models import Campaign
 
     return brand.campaigns.filter(
         Q(status=Campaign.Status.ACTIVE) | Q(status=Campaign.Status.PAUSED, auto_paused=True)
-    )
+    ).filter(Q(end_at__isnull=True) | Q(end_at__gt=timezone.now()))
 
 
 def monthly_spend(brand, now=None) -> Decimal:

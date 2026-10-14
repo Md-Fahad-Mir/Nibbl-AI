@@ -454,9 +454,11 @@ def activate_campaign(campaign: Campaign) -> Campaign:
     # Per-plan active-campaign limit (Starter 1 / Pro 3 / Scale 10).
     plan = campaign.brand.plan
     if plan and campaign.status != Campaign.Status.ACTIVE:
-        active_count = campaign.brand.campaigns.filter(
-            status=Campaign.Status.ACTIVE
-        ).count()
+        # Match the plan overview's slot accounting: manual pauses free a
+        # slot, auto-pauses retain one, and campaigns past end_at are ended.
+        from Apps.billing.plans import running_campaigns
+
+        active_count = running_campaigns(campaign.brand).exclude(pk=campaign.pk).count()
         if active_count >= plan.max_active_campaigns:
             raise CampaignError(
                 f"Your plan allows {plan.max_active_campaigns} active "

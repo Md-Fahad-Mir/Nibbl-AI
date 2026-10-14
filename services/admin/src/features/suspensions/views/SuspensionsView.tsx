@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
 import { AdminPage, AlertIcon, InfoIcon, Kpi, Notice, Pager, btn, selectCls, shortDate, usePaged } from "@/features/dashboard/components/AdminPage";
+import { Building2, Globe, RefreshCw } from "lucide-react";
 
 /** Master Admin Sheet 3 "Suspensions": shoppers suspended by individual
  *  brands — review, remove a brand suspension or apply a global suspension. */
@@ -54,10 +55,10 @@ export const SuspensionsView = () => {
   return (
     <AdminPage active="suspensions" title="Suspensions" subtitle="Review brand suspensions and repeated customer issues.">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Kpi label="Active brand suspensions" value={String(summary.active_brand_suspensions ?? "—")} />
-        <Kpi label="Repeat suspensions" value={String(summary.repeat_suspensions ?? "—")}
+        <Kpi icon={Building2} label="Active brand suspensions" value={String(summary.active_brand_suspensions ?? "—")} />
+        <Kpi icon={RefreshCw} iconTone="bg-red-50 text-red-500" label="Repeat suspensions" value={String(summary.repeat_suspensions ?? "—")}
           tone={Number(summary.repeat_suspensions) ? "text-red-600" : ""} />
-        <Kpi label="Global suspensions" value={String(summary.global_suspensions ?? "—")} />
+        <Kpi icon={Globe} label="Global suspensions" value={String(summary.global_suspensions ?? "—")} />
       </div>
       <Notice error={error} notice={notice} />
 

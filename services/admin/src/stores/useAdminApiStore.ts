@@ -11,8 +11,7 @@ import {
   tokenStorage,
 } from "@/lib/api/backendApi";
 import { BrandDetail } from "@/types/brand.types";
-import { MonthlyEarning, StatCardData } from "@/types/dashboard.types";
-import { TransactionDetail } from "@/types/earnings.types";
+import { StatCardData } from "@/types/dashboard.types";
 import { UserDetail } from "@/types/users.types";
 
 type LoadState = "idle" | "loading" | "success" | "error";
@@ -57,10 +56,6 @@ const parseMoney = (value: unknown) => {
 
 const money = (value: unknown) => `$${parseMoney(value).toFixed(2)}`;
 
-const shortMoney = (value: number) => {
-  if (Math.abs(value) >= 1000) return `$${(value / 1000).toFixed(1)}k`;
-  return `$${value.toFixed(2)}`;
-};
 
 const mapUser = (item: ApiRecord, index: number): UserDetail => ({
   id: String(item.id ?? index),
@@ -131,53 +126,6 @@ const mergeBrandRows = (
   }));
 };
 
-const mapTransaction = (item: ApiRecord, index: number): TransactionDetail => ({
-  id: String(item.id ?? index),
-  transactionId: String(item.id ?? item.transaction_id ?? index),
-  userName: String(item.user_email ?? item.user_name ?? item.actor_email ?? item.wallet ?? ""),
-  brandName: String(item.brand_name ?? item.category ?? item.wallet_kind ?? item.reference_type ?? ""),
-  amount: money(item.amount),
-  date: dateText(item.created_at),
-  accountNumber: String(item.wallet ?? ""),
-  accountHolderName: String(item.user_email ?? item.user_name ?? item.actor_email ?? ""),
-  providerName: String(item.category ?? item.wallet_kind ?? ""),
-});
-
-const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const earningCategories = new Set(["rebate_fee", "review_fee", "subscription"]);
-
-const mapMonthlyEarnings = (items: ApiRecord[]): MonthlyEarning[] => {
-  const grouped = new Map<string, number>();
-
-  items.forEach((item) => {
-    const category = String(item.category ?? "");
-    if (category && !earningCategories.has(category)) return;
-
-    const date = typeof item.created_at === "string" ? new Date(item.created_at) : null;
-    if (!date || Number.isNaN(date.getTime())) return;
-
-    const key = `${date.getFullYear()}-${date.getMonth()}`;
-    grouped.set(key, (grouped.get(key) || 0) + parseMoney(item.amount));
-  });
-
-  const years = new Set<string>();
-  grouped.forEach((_, key) => years.add(key.split("-")[0]));
-  if (!years.size) years.add(String(new Date().getFullYear()));
-
-  return Array.from(years)
-    .sort((a, b) => Number(b) - Number(a))
-    .flatMap((year) =>
-      months.map((month, monthIndex) => {
-        const amount = grouped.get(`${year}-${monthIndex}`) || 0;
-        return {
-          year,
-          month,
-          amount,
-          formattedAmount: shortMoney(amount),
-        };
-      })
-    );
-};
 
 interface AdminApiState {
   accessToken: string | null;
@@ -186,8 +134,6 @@ interface AdminApiState {
   overview: ApiRecord | null;
   users: UserDetail[];
   brands: BrandDetail[];
-  transactions: TransactionDetail[];
-  monthlyEarnings: MonthlyEarning[];
   stats: StatCardData[];
   unreadCount: number;
   status: LoadState;
@@ -199,7 +145,6 @@ interface AdminApiState {
   loadDashboard: () => Promise<void>;
   loadUsers: () => Promise<void>;
   loadBrands: () => Promise<void>;
-  loadTransactions: () => Promise<void>;
   updateProfile: (body: ApiRecord | FormData) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
@@ -230,8 +175,6 @@ export const useAdminApiStore = create<AdminApiState>()(
       overview: null,
       users: [],
       brands: [],
-      transactions: [],
-      monthlyEarnings: [],
       stats: [],
       campaignApprovals: [],
       campaignApprovalsLoaded: false,
@@ -322,25 +265,21 @@ export const useAdminApiStore = create<AdminApiState>()(
             return;
           }
 
-          const [overview, users, brands, applications, transactions, unread] = await Promise.all([
+          const [overview, users, brands, applications, unread] = await Promise.all([
             apiClient.request<ApiRecord>(backendApi.admin.analyticsOverview),
             apiClient.request<unknown>(backendApi.admin.users),
             apiClient.request<unknown>(backendApi.admin.brands),
             apiClient.request<unknown>(backendApi.admin.brandApplications),
-            apiClient.request<unknown>(backendApi.admin.transactions),
             apiClient.request<ApiRecord>(backendApi.consumer.unreadCount),
           ]);
           const userList = listResults(users);
           const brandList = listResults(brands);
           const applicationList = listResults(applications);
-          const transactionList = listResults(transactions);
           set({
             profile,
             overview,
             users: userList.map(mapUser),
             brands: mergeBrandRows(brandList, applicationList),
-            transactions: transactionList.map(mapTransaction),
-            monthlyEarnings: mapMonthlyEarnings(transactionList),
             unreadCount: Number(unread.unread_count || 0),
             stats: [
               { id: "earnings", title: "Total Earnings", value: money(parseMoney(overview.total_fees) + parseMoney(overview.subscription)) },
@@ -403,14 +342,6 @@ export const useAdminApiStore = create<AdminApiState>()(
           apiClient.request<unknown>(backendApi.admin.brandApplications),
         ]);
         set({ brands: mergeBrandRows(listResults(brands), listResults(applications)) });
-      },
-      loadTransactions: async () => {
-        const response = await apiClient.request<unknown>(backendApi.admin.transactions);
-        const transactionList = listResults(response);
-        set({
-          transactions: transactionList.map(mapTransaction),
-          monthlyEarnings: mapMonthlyEarnings(transactionList),
-        });
       },
       updateProfile: async (body) => {
         set({ status: "loading", error: null });

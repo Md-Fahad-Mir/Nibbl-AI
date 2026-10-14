@@ -9,6 +9,7 @@ import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord, API_BASE_URL, nibblApi, tokenStorage } from "@/lib/api/backendApi";
 import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
+import { X } from "lucide-react";
 
 const inputClass = "h-10 px-3 rounded-lg border border-[#E0E0F0] text-sm text-[#1A1A2E] outline-none focus:border-[#3E3EDF]";
 
@@ -145,9 +146,9 @@ export const BrandDiscoveryView = () => {
           <button type="submit" className="h-10 px-5 rounded-full border border-[#3E3EDF] text-[#3E3EDF] text-sm font-semibold cursor-pointer">Apply</button>
         </form>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6 items-start">
+        <div className={`grid grid-cols-1 gap-6 items-start ${selected ? "xl:grid-cols-[minmax(0,1fr)_380px]" : ""}`}>
           <div className="bg-white border border-[#ECECF5] rounded-2xl overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead>
                 <tr className="text-left text-xs text-[#9A9AB0] border-b border-[#ECECF5]">
                   <th className="p-3">Brand</th>
@@ -184,7 +185,7 @@ export const BrandDiscoveryView = () => {
             <aside className="bg-white border border-[#ECECF5] rounded-2xl p-5 flex flex-col gap-4">
               <div className="flex items-start justify-between">
                 <h2 className="text-lg font-bold text-[#1A1A2E]">{String(selected.brand)}</h2>
-                <button onClick={() => setSelected(null)} className="text-[#9A9AB0] text-xl cursor-pointer" aria-label="Close">×</button>
+                <button onClick={() => setSelected(null)} className="text-[#9A9AB0] cursor-pointer" aria-label="Close"><X className="w-5 h-5" /></button>
               </div>
               <dl className="grid grid-cols-3 gap-3 text-center">
                 {[["Shoppers", selected.unique_shoppers], ["Receipts", selected.receipt_volume], ["Repeat", selected.repeat_purchasers]].map(([label, value]) => (

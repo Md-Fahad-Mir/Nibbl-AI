@@ -7,6 +7,7 @@ import { Header } from "./Header";
 import { SectionTabs } from "./SectionTabs";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
+import type { LucideIcon } from "lucide-react";
 
 /** Sidebar + header frame shared by the Master admin pages. */
 export const AdminPage = ({
@@ -69,10 +70,33 @@ export const money = (value: unknown) => {
 export const shortDate = (value: unknown) =>
   value ? new Date(String(value)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 
-export const Kpi = ({ label, value, tone = "" }: { label: string; value: React.ReactNode; tone?: string }) => (
-  <div className="bg-white border border-[#ECECF5] rounded-2xl p-5">
-    <div className="text-xs font-semibold uppercase tracking-wider text-[#9A9AB0]">{label}</div>
-    <div className={`text-2xl font-bold mt-1 ${tone || "text-[#1A1A2E]"}`}>{value}</div>
+export const Kpi = ({
+  label,
+  value,
+  tone = "",
+  icon: Icon,
+  iconTone = "bg-[#EEF0FF] text-[#3E3EDF]",
+  sub,
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: string;
+  /** Master admin cards: an icon beside the label and value. */
+  icon?: LucideIcon;
+  iconTone?: string;
+  sub?: React.ReactNode;
+}) => (
+  <div className="bg-white border border-[#ECECF5] rounded-2xl p-5 flex items-center gap-4">
+    {Icon && (
+      <span className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${iconTone}`}>
+        <Icon className="w-6 h-6" />
+      </span>
+    )}
+    <div className="min-w-0">
+      <div className="text-xs font-semibold uppercase tracking-wider text-[#6B6B80]">{label}</div>
+      <div className={`text-2xl font-bold mt-1 ${tone || "text-[#1A1A2E]"}`}>{value}</div>
+      {sub && <div className="text-xs text-[#9A9AB0] mt-0.5">{sub}</div>}
+    </div>
   </div>
 );
 

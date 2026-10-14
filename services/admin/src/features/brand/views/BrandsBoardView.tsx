@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { AdminPage, Kpi, Notice, Pager, btn, money, selectCls, shortDate, usePaged } from "@/features/dashboard/components/AdminPage";
+import { AlertTriangle, Ban, Building2, Clock } from "lucide-react";
 
 const PAYMENT: Record<string, [string, string]> = {
   connected: ["Connected", "bg-emerald-500"],
@@ -97,10 +98,10 @@ export const BrandsBoardView = () => {
   return (
     <AdminPage active="brand" title="Brands" subtitle="Manage brand accounts, revenue and access.">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Kpi label="Active brands" value={String(kpis.active ?? "—")} />
-        <Kpi label="Pending verification" value={String(kpis.pending_verification ?? "—")} />
-        <Kpi label="Failed payments" value={String(kpis.failed_payments ?? "—")} tone={Number(kpis.failed_payments) ? "text-red-600" : ""} />
-        <Kpi label="Suspended" value={String(kpis.suspended ?? "—")} />
+        <Kpi icon={Building2} label="Active brands" value={String(kpis.active ?? "—")} />
+        <Kpi icon={Clock} iconTone="bg-amber-50 text-amber-600" label="Pending verification" value={String(kpis.pending_verification ?? "—")} />
+        <Kpi icon={AlertTriangle} iconTone="bg-red-50 text-red-600" label="Failed payments" value={String(kpis.failed_payments ?? "—")} tone={Number(kpis.failed_payments) ? "text-red-600" : ""} />
+        <Kpi icon={Ban} iconTone="bg-red-50 text-red-600" label="Suspended" value={String(kpis.suspended ?? "—")} />
       </div>
       <Notice error={error} notice={notice} />
 
@@ -148,7 +149,7 @@ export const BrandsBoardView = () => {
             </select>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[860px] text-sm">
               <thead>
                 <tr className="text-left text-xs text-[#9A9AB0] border-b border-[#ECECF5] uppercase">
                   <th className="py-2 pr-4">Brand</th><th className="py-2 pr-4">Category</th><th className="py-2 pr-4">Plan</th>

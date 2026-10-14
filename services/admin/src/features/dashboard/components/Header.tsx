@@ -32,7 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
     resolveBackendAssetUrl(storeProfile?.avatar_url || storeProfile?.avatar);
 
   return (
-    <header className="w-full min-w-0 min-h-[78px] bg-white rounded-[16px] shadow-[0px_2px_8px_rgba(0,0,0,0.1)] px-4 sm:px-6 py-3 flex items-center justify-between gap-4 shrink-0 flex-wrap sm:flex-nowrap">
+    <header className="w-full min-w-0 min-h-[64px] bg-white border-b border-[#ECECF5] px-1 sm:px-2 py-2 flex items-center justify-between gap-4 shrink-0">
       {/* Left: Mobile Hamburger Button & Welcome Message */}
       <div className="flex items-center gap-3">
         {/* Mobile Menu Toggle Button */}
@@ -59,15 +59,6 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Welcome Message */}
-        <div className="flex flex-col justify-center">
-          <h1 className="font-inter text-[20px] sm:text-[24px] font-medium leading-[26px] sm:leading-[29px] text-[#3E3EDF]">
-            Welcome,{adminName}
-          </h1>
-          <p className="font-inter text-[14px] sm:text-[16px] font-normal leading-[19px] text-[#575757]">
-            Have a nice day!
-          </p>
-        </div>
       </div>
 
       {/* Right Controls: Notifications & Profile */}
@@ -125,11 +116,11 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="hidden min-w-0 sm:flex flex-col justify-center">
-            <span className="max-w-[140px] truncate font-inter text-[16px] font-normal leading-[19px] text-[#575757]">
+            <span className="max-w-[160px] truncate font-inter text-[15px] font-semibold leading-[19px] text-[#1A1A2E]">
               {adminName}
             </span>
-            <span className="max-w-[140px] truncate font-inter text-[14px] font-normal leading-[17px] text-[#575757]">
-              {adminRole}
+            <span className="max-w-[160px] truncate font-inter text-[13px] font-normal leading-[17px] text-[#6B6B80]">
+              {adminRole === "admin" ? "Nibbl Admin" : adminRole}
             </span>
           </div>
         </button>

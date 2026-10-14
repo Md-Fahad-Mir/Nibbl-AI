@@ -4,14 +4,17 @@ import React, { useEffect, useState } from "react";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { AdminUsersPanel } from "./AdminUsersPanel";
 import { ProductCategoriesPanel } from "./ProductCategoriesPanel";
+import { SettingsSubTab } from "@/types/settings.types";
+import { ChevronRight } from "lucide-react";
 
 interface PlatformSettingsViewProps {
-  onBack: () => void;
+  /** Opens one of the account / content pages (profile, password, FAQ…). */
+  onOpen: (tab: SettingsSubTab) => void;
 }
 
 type Draft = Record<string, string | boolean>;
 
-export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBack }) => {
+export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onOpen }) => {
   const { platformSettings, loadPlatformSettings, savePlatformSettings } = useAdminApiStore();
   const [draft, setDraft] = useState<Draft>({});
   const [saving, setSaving] = useState(false);
@@ -67,26 +70,22 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
   const inputClass =
     "w-full h-11 px-3 rounded-lg border border-[#E0E0F0] text-[15px] text-[#1A1A2E] outline-none focus:border-[#3E3EDF] focus:ring-2 focus:ring-[#3E3EDF]/15";
 
+  const card = "bg-white border border-[#ECECF5] rounded-2xl p-6 shadow-sm flex flex-col gap-4";
+  const title = "text-lg font-bold text-[#3E3EDF]";
+
   return (
-    <div className="w-full flex flex-col gap-6 font-inter max-w-[640px]">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onBack}
-          className="text-sm font-semibold text-[#3E3EDF] hover:underline cursor-pointer"
-        >
-          ← Back
-        </button>
-        <h2 className="text-xl font-bold text-[#1A1A2E]">Platform Settings</h2>
+    <div className="w-full flex flex-col gap-6 font-inter">
+      <div>
+        <h1 className="text-2xl font-bold text-[#1A1A2E]">Settings</h1>
+        <p className="text-sm text-[#6B6B80] mt-1">Control essential Admin rules.</p>
       </div>
 
-      <div className="bg-white border border-[#ECECF5] rounded-2xl p-6 shadow-sm flex flex-col gap-5">
-        <div>
-          <h3 className="text-base font-bold text-[#1A1A2E]">Withdrawal review thresholds</h3>
-          <p className="text-sm text-[#6B6B80] mt-1">
-            Withdrawals above either threshold are flagged for closer review.
-          </p>
-        </div>
-
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+        <section className={card}>
+          <div>
+            <h2 className={title}>Withdrawal Review Rules</h2>
+            <p className="text-sm text-[#6B6B80] mt-1">Withdrawals above either threshold go to Manual Review.</p>
+          </div>
         <label className="flex flex-col gap-1 text-sm font-semibold text-[#454656]">
           Single withdrawal over ($)
           <input
@@ -123,8 +122,13 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
           />
         </label>
 
-        <div className="border-t border-[#F0F0F7] pt-4">
-          <h3 className="text-base font-bold text-[#1A1A2E]">Referrals</h3>
+        </section>
+
+        <section className={card}>
+          <div>
+            <h2 className={title}>Referral Flag Rules</h2>
+            <p className="text-xs text-[#6B6B80] mt-1">A qualified referral matching an enabled rule goes to Referrals for review instead of paying.</p>
+          </div>
           <label className="flex items-center gap-2 text-sm font-medium text-[#454656] mt-2">
             <input
               type="checkbox"
@@ -133,8 +137,6 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
             />
             Referral bonuses enabled
           </label>
-          <p className="text-sm font-semibold text-[#454656] mt-3">Referral Flag Rules</p>
-          <p className="text-xs text-[#6B6B80]">A qualified referral matching an enabled rule goes to Referrals for review instead of paying.</p>
           {[
             { field: "referral_flag_duplicate_payout", label: "Duplicate payout identity" },
             { field: "referral_flag_shared_device", label: "Same device" },
@@ -154,36 +156,11 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
             <input className={inputClass} type="number" min="1" step="1" value={text("referral_volume_limit")}
               onChange={(e) => setDraft({ ...draft, referral_volume_limit: e.target.value })} />
           </label>
-        </div>
+        </section>
 
-        <div className="border-t border-[#F0F0F7] pt-4 flex flex-col gap-3">
+        <section className={card}>
           <div>
-            <h3 className="text-base font-bold text-[#1A1A2E]">Device &amp; network checks</h3>
-            <p className="text-sm text-[#6B6B80] mt-1">
-              Receipts and withdrawals from accounts over these limits go to manual review. Shoppers aren&apos;t told
-              which rule applied.
-            </p>
-          </div>
-          <label className="flex items-center gap-2 text-sm font-medium text-[#454656]">
-            <input type="checkbox" checked={bool("device_checks_enabled")}
-              onChange={(e) => setDraft({ ...draft, device_checks_enabled: e.target.checked })} />
-            Device and network checks enabled
-          </label>
-          {[
-            { field: "max_accounts_per_device", label: "Max accounts per device (90 days)" },
-            { field: "max_accounts_per_ip_daily", label: "Max accounts per network in 24 hours" },
-          ].map((f) => (
-            <label key={f.field} className="flex flex-col gap-1 text-sm font-semibold text-[#454656]">
-              {f.label}
-              <input className={inputClass} type="number" min="1" step="1" value={text(f.field)}
-                onChange={(e) => setDraft({ ...draft, [f.field]: e.target.value })} />
-            </label>
-          ))}
-        </div>
-
-        <div className="border-t border-[#F0F0F7] pt-4 flex flex-col gap-4">
-          <div>
-            <h3 className="text-base font-bold text-[#1A1A2E]">Discovery ranking</h3>
+            <h2 className={title}>Discovery Ranking</h2>
             <p className="text-sm text-[#6B6B80] mt-1">
               Eligible campaigns are ranked by Base CVR × Store Match × Brand Interest. Base CVR = (redemptions +
               starting redemptions) ÷ (views + starting views) over 30 days, so new campaigns get a fair start.
@@ -208,26 +185,67 @@ export const PlatformSettingsView: React.FC<PlatformSettingsViewProps> = ({ onBa
               />
             </label>
           ))}
-        </div>
+        </section>
 
-        {message && (
-          <div className="text-sm font-medium text-[#3E3EDF]">{message}</div>
-        )}
+        <AdminUsersPanel />
 
-        <div>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="h-11 px-6 bg-[#3E3EDF] hover:bg-[#3333c4] text-white font-semibold text-sm rounded-full transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            {saving ? "Saving…" : "Save settings"}
-          </button>
-        </div>
+        <section className={card}>
+          <div>
+            <h2 className={title}>Device &amp; Network Checks</h2>
+            <p className="text-sm text-[#6B6B80] mt-1">
+              Receipts and withdrawals from accounts over these limits go to manual review. Shoppers aren&apos;t told
+              which rule applied.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-sm font-medium text-[#454656]">
+            <input type="checkbox" checked={bool("device_checks_enabled")}
+              onChange={(e) => setDraft({ ...draft, device_checks_enabled: e.target.checked })} />
+            Device and network checks enabled
+          </label>
+          {[
+            { field: "max_accounts_per_device", label: "Max accounts per device (90 days)" },
+            { field: "max_accounts_per_ip_daily", label: "Max accounts per network in 24 hours" },
+          ].map((f) => (
+            <label key={f.field} className="flex flex-col gap-1 text-sm font-semibold text-[#454656]">
+              {f.label}
+              <input className={inputClass} type="number" min="1" step="1" value={text(f.field)}
+                onChange={(e) => setDraft({ ...draft, [f.field]: e.target.value })} />
+            </label>
+          ))}
+        </section>
+
+        <ProductCategoriesPanel />
       </div>
 
-      <ProductCategoriesPanel />
-      <AdminUsersPanel />
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {message && <span className="text-sm font-medium text-[#3E3EDF]">{message}</span>}
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="h-11 px-6 bg-[#3E3EDF] hover:bg-[#3333c4] text-white font-semibold text-sm rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+        >
+          {saving ? "Saving…" : "Save Changes"}
+        </button>
+      </div>
+
+      <section className={card}>
+        <h2 className="text-base font-bold text-[#1A1A2E]">Account &amp; content</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2">
+          {([
+            ["personal-info", "Personal Information"],
+            ["change-password", "Change Password"],
+            ["faq", "FAQ"],
+            ["privacy-policy", "Privacy Policy"],
+            ["terms-conditions", "Terms & Conditions"],
+          ] as [SettingsSubTab, string][]).map(([tab, label]) => (
+            <button key={tab} type="button" onClick={() => onOpen(tab)}
+              className="flex items-center justify-between gap-2 rounded-xl border border-[#ECECF5] px-4 py-3 text-sm font-medium text-[#1A1A2E] hover:border-[#3E3EDF] cursor-pointer">
+              {label} <ChevronRight className="w-4 h-4 text-[#9A9AB0]" />
+            </button>
+          ))}
+        </div>
+      </section>
     </div>
   );
 };

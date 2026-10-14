@@ -1,5 +1,4 @@
 export type SettingsSubTab =
-  | "menu"
   | "personal-info"
   | "change-password"
   | "platform-settings"

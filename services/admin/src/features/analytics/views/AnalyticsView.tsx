@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { API_BASE_URL, ApiRecord, nibblApi, tokenStorage } from "@/lib/api/backendApi";
 import { AdminPage, Kpi, Notice, Pager, btn, money, selectCls, usePaged } from "@/features/dashboard/components/AdminPage";
+import { BarChart3, CircleMinus, CreditCard, Database, FileText, Gift, Settings, Tag, TrendingUp } from "lucide-react";
 
 const RANGES = [
   { days: 7, label: "Last 7 Days" },
@@ -118,17 +119,17 @@ export const AnalyticsView = () => {
       }>
       <Notice error={error} />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi label="Subscription revenue" value={money(revenue.subscriptions)} />
-        <Kpi label="Rebate fee revenue" value={money(revenue.rebate_fees)} />
-        <Kpi label="Review fee revenue" value={money(revenue.review_fees)} />
-        <Kpi label="Total Nibbl revenue" value={money(revenue.total)} tone="text-[#3E3EDF]" />
+        <Kpi icon={CreditCard} label="Subscription revenue" value={money(revenue.subscriptions)} />
+        <Kpi icon={FileText} label="Rebate fee revenue" value={money(revenue.rebate_fees)} />
+        <Kpi icon={Settings} label="Review fee revenue" value={money(revenue.review_fees)} />
+        <Kpi icon={BarChart3} label="Total Nibbl revenue" value={money(revenue.total)} tone="text-[#3E3EDF]" />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <Kpi label="Promotional credits used" value={money(net.promo_credits_used)} />
-        <Kpi label="Refunds" value={money(net.refunds)} />
-        <Kpi label="Processing costs (est.)" value={money(net.processing_costs)} />
-        <Kpi label="Net Nibbl revenue" value={money(net.net)} tone="text-emerald-700" />
-        <Kpi label="Brand-funded rewards" value={money(rewards.total)} />
+        <Kpi icon={Tag} iconTone="bg-amber-50 text-amber-600" label="Promotional credits used" value={money(net.promo_credits_used)} />
+        <Kpi icon={CircleMinus} iconTone="bg-red-50 text-red-500" label="Refunds" value={money(net.refunds)} />
+        <Kpi icon={Database} label="Processing costs (est.)" value={money(net.processing_costs)} />
+        <Kpi icon={TrendingUp} iconTone="bg-emerald-50 text-emerald-600" label="Net Nibbl revenue" value={money(net.net)} tone="text-emerald-700" />
+        <Kpi icon={Gift} label="Brand-funded rewards" value={money(rewards.total)} />
       </div>
       <p className="text-xs text-[#6B6B80] -mt-3">
         Net = total revenue − promotional credits − processing costs (Stripe card fees on wallet funding and payout fees,

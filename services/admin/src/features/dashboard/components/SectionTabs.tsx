@@ -9,7 +9,6 @@ const GROUPS: { id: SidebarNavItem; label: string }[][] = [
   [{ id: "brand", label: "Brands" }, { id: "brand-discovery", label: "Brand Discovery" }, { id: "refunds", label: "Refund Requests" }],
   [{ id: "campaign-approvals", label: "Campaign Approvals" }, { id: "review-flags", label: "Flagged Reviews" }],
   [{ id: "users", label: "Shoppers" }, { id: "suspensions", label: "Suspensions" }],
-  [{ id: "analytics", label: "Analytics" }, { id: "earnings", label: "Earnings" }],
 ];
 
 export const SectionTabs = ({ current }: { current: SidebarNavItem }) => {

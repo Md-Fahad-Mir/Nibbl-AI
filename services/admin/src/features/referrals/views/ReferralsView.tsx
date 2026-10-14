@@ -7,9 +7,11 @@ import { Header } from "@/features/dashboard/components/Header";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
-import { CheckIcon, Pager, usePaged } from "@/features/dashboard/components/AdminPage";
+import { CheckIcon, Kpi, Pager, usePaged } from "@/features/dashboard/components/AdminPage";
+import { AlertTriangle, CircleCheck, CircleDollarSign, Users } from "lucide-react";
 
 const TABS = [
+  { value: "", label: "All" },
   { value: "flagged", label: "Flagged" },
   { value: "in_progress", label: "In progress" },
   { value: "qualified", label: "Qualified" },
@@ -124,7 +126,11 @@ export const ReferralsView = () => {
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { profile, loadProfile, logout } = useAdminApiStore();
-  const [tab, setTab] = useState("flagged");
+  const [tab, setTab] = useState("");
+  // Master Referral Filters: search + date range (status is the tab).
+  const [search, setSearch] = useState("");
+  const [days, setDays] = useState(0);
+  const [now] = useState(() => Date.now());
   const [data, setData] = useState<ApiRecord | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -155,8 +161,14 @@ export const ReferralsView = () => {
   };
 
   const summary = (data?.summary ?? {}) as ApiRecord;
-  const results = (Array.isArray(data?.results) ? data.results : []) as ApiRecord[];
-  const resultsPage = usePaged(results, 10, tab);
+  const allResults = (Array.isArray(data?.results) ? data.results : []) as ApiRecord[];
+  const q = search.trim().toLowerCase();
+  const results = allResults.filter((r) => {
+    if (days && new Date(String(r.created_at ?? 0)).getTime() < now - days * 86400000) return false;
+    if (!q) return true;
+    return [person(r.referrer), person(r.referred), String(r.id ?? "")].some((v) => v.toLowerCase().includes(q));
+  });
+  const resultsPage = usePaged(results, 10, `${tab}${q}${days}`);
 
   return (
     <div className="flex min-h-screen w-full bg-[#FEFEFE]">
@@ -175,12 +187,10 @@ export const ReferralsView = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[["In progress", summary.in_progress], ["Qualified", summary.qualified], ["Flagged", summary.flagged], ["Paid", summary.paid]].map(([label, value]) => (
-            <div key={String(label)} className="bg-white border border-[#ECECF5] rounded-2xl p-5">
-              <div className="text-xs font-semibold uppercase tracking-wider text-[#9A9AB0]">{String(label)}</div>
-              <div className="text-2xl font-bold text-[#1A1A2E] mt-1">{String(value ?? "—")}</div>
-            </div>
-          ))}
+          <Kpi icon={Users} label="In progress" value={String(summary.in_progress ?? "—")} />
+          <Kpi icon={CircleCheck} iconTone="bg-emerald-50 text-emerald-600" label="Qualified" value={String(summary.qualified ?? "—")} />
+          <Kpi icon={AlertTriangle} iconTone="bg-red-50 text-red-600" label="Flagged" value={String(summary.flagged ?? "—")} />
+          <Kpi icon={CircleDollarSign} label="Paid" value={String(summary.paid ?? "—")} />
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -192,6 +202,18 @@ export const ReferralsView = () => {
               {t.label}
             </button>
           ))}
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by referrer, new shopper or ID…"
+            className="flex-1 min-w-[220px] h-10 px-4 rounded-full border border-[#E0E0F0] text-sm outline-none focus:border-[#3E3EDF]" />
+          <select value={days} onChange={(e) => setDays(Number(e.target.value))}
+            className="h-10 px-4 rounded-full border border-[#E0E0F0] bg-white text-sm font-semibold text-[#1A1A2E] cursor-pointer">
+            <option value={0}>All time</option>
+            <option value={7}>Last 7 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+          </select>
         </div>
 
         {notice && <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm rounded-lg px-3 py-2">{notice}</div>}

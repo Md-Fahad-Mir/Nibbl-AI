@@ -4,10 +4,6 @@ import React, { useEffect, useState } from "react";
 import { Sidebar } from "../components/Sidebar";
 import { Header } from "../components/Header";
 import { AdminOverview } from "../components/AdminOverview";
-import { EarningsChart } from "../components/EarningsChart";
-import { RecentTransactions } from "../components/RecentTransactions";
-import { TransactionDetailsModal } from "@/features/earnings/components/TransactionDetailsModal";
-import { TransactionDetail } from "@/types/earnings.types";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useRouter } from "next/navigation";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
@@ -16,10 +12,7 @@ export const DashboardView = () => {
   const router = useRouter();
   const [activeNav, setActiveNav] = useState<SidebarNavItem>("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] =
-    useState<TransactionDetail | null>(null);
-  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-  const { profile, transactions, monthlyEarnings, loadDashboard, logout } = useAdminApiStore();
+  const { profile, loadDashboard, logout } = useAdminApiStore();
 
   useEffect(() => {
     void loadDashboard();
@@ -76,11 +69,6 @@ export const DashboardView = () => {
     }
   };
 
-  const handleViewTransaction = (transaction: TransactionDetail) => {
-    setSelectedTransaction(transaction);
-    setIsTransactionModalOpen(true);
-  };
-
   return (
     <div className="flex min-h-screen w-full bg-[#FEFEFE]">
       {/* Responsive Left Sidebar */}
@@ -104,22 +92,7 @@ export const DashboardView = () => {
 
         {/* Master: revenue summary, needs attention, brand revenue, rewards */}
         <AdminOverview />
-
-        {/* Earnings Bar Chart */}
-        <EarningsChart data={monthlyEarnings} />
-
-        {/* Recent Transactions Table */}
-        <RecentTransactions
-          transactions={transactions}
-          onViewTransaction={handleViewTransaction}
-        />
       </main>
-
-      <TransactionDetailsModal
-        isOpen={isTransactionModalOpen}
-        onClose={() => setIsTransactionModalOpen(false)}
-        transaction={selectedTransaction}
-      />
     </div>
   );
 };

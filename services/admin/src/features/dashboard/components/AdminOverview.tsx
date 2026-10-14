@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
-import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
+import { Kpi, Pager, usePaged } from "@/features/dashboard/components/AdminPage";
+import { AlertTriangle, Ban, BarChart3, Clock, CreditCard, FileText, Flag, Gift, type LucideIcon, Percent, Phone, Users } from "lucide-react";
 
 const RANGES = [
   { days: 7, label: "Last 7 days" },
@@ -15,14 +16,6 @@ const RANGES = [
 const isoDay = (date: Date) => date.toISOString().slice(0, 10);
 const money = (value: unknown) =>
   `$${Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-const Tile = ({ label, value, sub, strong }: { label: string; value: string; sub?: string; strong?: boolean }) => (
-  <div className={`rounded-2xl border p-5 flex flex-col gap-1 ${strong ? "bg-[#3E3EDF] border-[#3E3EDF] text-white" : "bg-white border-[#ECECF5]"}`}>
-    <span className={`text-xs font-semibold uppercase tracking-wider ${strong ? "text-white/80" : "text-[#9A9AB0]"}`}>{label}</span>
-    <span className={`text-2xl font-bold ${strong ? "text-white" : "text-[#1A1A2E]"}`}>{value}</span>
-    {sub && <span className={`text-xs ${strong ? "text-white/80" : "text-[#6B6B80]"}`}>{sub}</span>}
-  </div>
-);
 
 /** Master Admin Dashboard: Nibbl revenue (subscriptions / rebate fees / review
  *  fees), Needs Attention, Brand Revenue and Brand-Funded Rewards, by date range. */
@@ -54,28 +47,32 @@ export const AdminOverview = () => {
   const attention = (data?.needs_attention ?? {}) as ApiRecord;
   const brands = (Array.isArray(data?.brands) ? data.brands : []) as ApiRecord[];
   const brandsPage = usePaged(brands, 10, `${status}${plan}${category}${sort}`);
-  const trend = (Array.isArray(data?.trend) ? data.trend : []) as ApiRecord[];
   const categories = (Array.isArray(data?.categories) ? data.categories : []) as string[];
 
-  const attentionItems = [
-    { label: "Withdrawals needing review", value: attention.withdrawals_to_review, href: "/payout-reviews" },
+  const attentionItems: { label: string; value: unknown; href: string; Icon: LucideIcon; tone: string }[] = [
+    { label: "Withdrawals needing review", value: attention.withdrawals_to_review, href: "/payout-reviews", Icon: Clock, tone: "bg-amber-50 text-amber-600" },
     {
-      label: "Campaign approvals",
+      Icon: FileText,
+      tone: "bg-[#EEF0FF] text-[#3E3EDF]",
+      label: "Campaigns awaiting approval",
       value: attention.campaign_approvals === undefined ? undefined
         : Number(attention.campaign_approvals) + Number(attention.review_campaign_approvals ?? 0),
       href: "/campaign-approvals",
     },
-    { label: "Failed payouts", value: attention.failed_payouts, href: "/withdraw-request" },
-    { label: "Suspended shoppers", value: attention.suspended_shoppers, href: "/users" },
-    { label: "Brand suspensions", value: attention.brand_suspensions, href: "/suspensions" },
-    { label: "Flagged reviews", value: attention.flagged_reviews, href: "/review-flags" },
-    { label: "Phone change requests", value: attention.phone_change_requests, href: "/users?phone_change=pending" },
+    { label: "Failed payouts", value: attention.failed_payouts, href: "/withdraw-request", Icon: AlertTriangle, tone: "bg-red-50 text-red-600" },
+    { label: "Suspended shoppers", value: attention.suspended_shoppers, href: "/users", Icon: Users, tone: "bg-[#F3E8FF] text-[#7C3AED]" },
+    { label: "Brand suspensions", value: attention.brand_suspensions, href: "/suspensions", Icon: Ban, tone: "bg-red-50 text-red-500" },
+    { label: "Flagged reviews", value: attention.flagged_reviews, href: "/review-flags", Icon: Flag, tone: "bg-amber-50 text-amber-600" },
+    { label: "Phone change requests", value: attention.phone_change_requests, href: "/users?phone_change=pending", Icon: Phone, tone: "bg-[#EEF0FF] text-[#3E3EDF]" },
   ];
 
   return (
     <div className="flex flex-col gap-6 font-inter">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-[#1A1A2E]">Dashboard Overview</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1A1A2E]">Nibbl Admin Dashboard</h1>
+          <p className="text-sm text-[#6B6B80] mt-1">Revenue and tasks that need attention.</p>
+        </div>
         <select value={days} onChange={(e) => setDays(Number(e.target.value))}
           className="h-10 px-4 rounded-full border border-[#E0E0F0] bg-white text-sm font-semibold text-[#1A1A2E] cursor-pointer">
           {RANGES.map((r) => <option key={r.days} value={r.days}>{r.label}</option>)}
@@ -83,68 +80,34 @@ export const AdminOverview = () => {
       </div>
       {error && <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-lg px-3 py-2">{error}</div>}
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-bold text-[#1A1A2E]">Revenue Summary</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Tile label="Nibbl revenue" value={money(revenue.total)} strong
-            sub={Number(revenue.credits_applied) > 0 ? `${money(revenue.cash_total)} cash after ${money(revenue.credits_applied)} promo credits` : undefined} />
-          <Tile label="Subscriptions" value={money(revenue.subscriptions)} />
-          <Tile label="Rebate fees" value={money(revenue.rebate_fees)} />
-          <Tile label="Review fees" value={money(revenue.review_fees)} />
-        </div>
+      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Revenue Summary">
+        <Kpi icon={CreditCard} label="Subscription revenue" value={money(revenue.subscriptions)} />
+        <Kpi icon={Percent} iconTone="bg-emerald-50 text-emerald-600" label="Rebate fee revenue" value={money(revenue.rebate_fees)} />
+        <Kpi icon={FileText} iconTone="bg-[#F3E8FF] text-[#7C3AED]" label="Review fee revenue" value={money(revenue.review_fees)} />
+        <Kpi icon={BarChart3} label="Total Nibbl revenue" value={money(revenue.total)} tone="text-[#3E3EDF]"
+          sub={Number(revenue.credits_applied) > 0
+            ? `${money(revenue.cash_total)} cash after ${money(revenue.credits_applied)} promo credits`
+            : "Brand-funded rewards shown separately."} />
       </section>
-
-      {trend.length > 0 && (
-        <section className="bg-white border border-[#ECECF5] rounded-2xl p-5 flex flex-col gap-3">
-          <h2 className="text-sm font-bold text-[#1A1A2E]">Revenue Trend</h2>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-[#9A9AB0] border-b border-[#ECECF5]">
-                <th className="py-2 pr-4">Month</th>
-                <th className="py-2 pr-4 text-right">Subscriptions</th>
-                <th className="py-2 pr-4 text-right">Rebate fees</th>
-                <th className="py-2 pr-4 text-right">Review fees</th>
-                <th className="py-2 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trend.map((row) => (
-                <tr key={String(row.month)} className="border-b border-[#F6F6FB]">
-                  <td className="py-2 pr-4">{new Date(`${String(row.month)}-01T00:00:00`).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</td>
-                  <td className="py-2 pr-4 text-right">{money(row.subscriptions)}</td>
-                  <td className="py-2 pr-4 text-right">{money(row.rebate_fees)}</td>
-                  <td className="py-2 pr-4 text-right">{money(row.review_fees)}</td>
-                  <td className="py-2 text-right font-bold">{money(row.total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-bold text-[#1A1A2E]">Needs Attention</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           {attentionItems.map((item) => (
             <button key={item.label} type="button" onClick={() => router.push(item.href)}
-              className="text-left rounded-2xl border border-[#ECECF5] bg-white p-4 hover:border-[#3E3EDF] cursor-pointer">
-              <div className={`text-2xl font-bold ${Number(item.value) > 0 ? "text-[#E65353]" : "text-[#1A1A2E]"}`}>
-                {item.value === null || item.value === undefined ? "—" : String(item.value)}
-              </div>
-              <div className="text-xs font-semibold text-[#6B6B80] mt-1">{item.label}</div>
-              {item.value === null && <div className="text-[10px] text-[#9A9AB0] mt-1">Tracked once payout results are imported</div>}
+              className="text-left rounded-2xl border border-[#ECECF5] bg-white p-4 hover:border-[#3E3EDF] cursor-pointer flex items-center gap-3">
+              <span className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${item.tone}`}>
+                <item.Icon className="w-5 h-5" />
+              </span>
+              <span className="min-w-0">
+                <span className={`block text-2xl font-bold ${Number(item.value) > 0 ? "text-[#E65353]" : "text-[#1A1A2E]"}`}>
+                  {item.value === null || item.value === undefined ? "—" : String(item.value)}
+                </span>
+                <span className="block text-xs font-semibold text-[#6B6B80]">{item.label}</span>
+                {item.value === null && <span className="block text-[10px] text-[#9A9AB0] mt-0.5">Tracked once payout results are imported</span>}
+              </span>
             </button>
           ))}
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-bold text-[#1A1A2E]">Brand-Funded Rewards</h2>
-        <p className="text-xs text-[#6B6B80] -mt-2">Shopper rewards paid from brand wallets — not Nibbl revenue.</p>
-        <div className="grid grid-cols-3 gap-4">
-          <Tile label="Rebate rewards" value={money(rewards.rebate_rewards)} />
-          <Tile label="Review rewards" value={money(rewards.review_rewards)} />
-          <Tile label="Total rewards" value={money(rewards.total)} />
         </div>
       </section>
 
@@ -211,6 +174,17 @@ export const AdminOverview = () => {
           </table>
         </div>
         <Pager paged={brandsPage} noun="brands" />
+      </section>
+
+      <section className="bg-white border border-[#ECECF5] rounded-2xl p-5 flex flex-wrap items-center gap-4" aria-label="Brand-Funded Rewards">
+        <span className="w-11 h-11 rounded-xl bg-[#EEF0FF] text-[#3E3EDF] flex items-center justify-center">
+          <Gift className="w-5 h-5" />
+        </span>
+        <span className="text-sm text-[#6B6B80]">Brand-Funded Rewards</span>
+        <span className="text-2xl font-bold text-[#1A1A2E]">{money(rewards.total)}</span>
+        <span className="text-xs text-[#9A9AB0]">
+          Rebate {money(rewards.rebate_rewards)} · Review {money(rewards.review_rewards)} — paid from brand wallets, not Nibbl revenue.
+        </span>
       </section>
     </div>
   );

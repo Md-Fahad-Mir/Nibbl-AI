@@ -4,13 +4,6 @@ export interface StatCardData {
   value: string;
 }
 
-export interface MonthlyEarning {
-  year?: string;
-  month: string;
-  amount: number;
-  formattedAmount: string;
-}
-
 export interface Transaction {
   id: string;
   transactionId: string;

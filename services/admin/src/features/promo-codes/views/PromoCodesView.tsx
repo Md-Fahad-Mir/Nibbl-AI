@@ -6,12 +6,21 @@ import { Sidebar } from "@/features/dashboard/components/Sidebar";
 import { Header } from "@/features/dashboard/components/Header";
 import { SidebarNavItem } from "@/types/dashboard.types";
 import { useAdminApiStore } from "@/stores/useAdminApiStore";
-import { ApiRecord } from "@/lib/api/backendApi";
-import { Pager, usePaged } from "@/features/dashboard/components/AdminPage";
+import { ApiRecord, nibblApi } from "@/lib/api/backendApi";
+import { Kpi, Pager, usePaged } from "@/features/dashboard/components/AdminPage";
+import { BarChart3, CircleDollarSign, Info, Plus, Tag, WalletMinimal, X } from "lucide-react";
 
 const money = (value: unknown) => `$${Number(value ?? 0).toFixed(2)}`;
 const dateText = (value: unknown) =>
-  typeof value === "string" && value ? new Date(value).toLocaleDateString() : "—";
+  typeof value === "string" && value
+    ? new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "";
+const dateRange = (from: unknown, until: unknown) => {
+  const a = dateText(from);
+  const b = dateText(until);
+  if (!a && !b) return "No end date";
+  return `${a || "Now"} – ${b || "No end date"}`;
+};
 
 const emptyForm = {
   code: "",
@@ -34,6 +43,54 @@ export const PromoCodesView = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [credit, setCredit] = useState({ open: false, brandId: "", amount: "", note: "" });
+  const [brands, setBrands] = useState<ApiRecord[]>([]);
+  const [creditsUsed, setCreditsUsed] = useState<number | null>(null);
+  const [crediting, setCrediting] = useState(false);
+  // Master Promo Codes summary: active codes, credits issued, credits used.
+  const activeCodes = promoCodes.filter((c) => c.is_active).length;
+  const creditsIssued = promoCodes.reduce((sum, c) => sum + Number(c.amount ?? 0) * Number(c.redemption_count ?? 0), 0);
+
+  useEffect(() => {
+    let live = true;
+    nibblApi
+      .adminRevenueDashboard({ from: "2020-01-01", to: new Date().toISOString().slice(0, 10) })
+      .then((result) => {
+        const net = (result.net ?? {}) as ApiRecord;
+        if (live) setCreditsUsed(Number(net.promo_credits_used ?? 0));
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const openCredit = () => {
+    setCredit({ open: true, brandId: "", amount: "", note: "" });
+    if (!brands.length) {
+      nibblApi
+        .adminBrandBoard({})
+        .then((result) => setBrands((Array.isArray(result.results) ? result.results : []) as ApiRecord[]))
+        .catch(() => undefined);
+    }
+  };
+
+  const addCredit = async () => {
+    setError("");
+    setSuccess("");
+    setCrediting(true);
+    try {
+      await nibblApi.adminBrandCredit(credit.brandId, credit.amount, credit.note);
+      const name = String(brands.find((b) => String(b.id) === credit.brandId)?.name ?? "the brand");
+      setSuccess(`Added ${money(credit.amount)} promotional credit to ${name}.`);
+      setCredit({ open: false, brandId: "", amount: "", note: "" });
+    } catch (err) {
+      setError((err as Error).message || "Could not add credit.");
+    } finally {
+      setCrediting(false);
+    }
+  };
 
   useEffect(() => {
     void loadProfile();
@@ -143,14 +200,35 @@ export const PromoCodesView = () => {
 
         <div>
           <h1 className="text-2xl font-bold text-[#1A1A2E]">Promo Codes</h1>
-          <p className="text-sm text-[#6B6B80] mt-1">
-            Create reusable promotional codes. Promo credit covers platform fees and
-            subscriptions — it never funds shopper rewards.
-          </p>
+          <p className="text-sm text-[#6B6B80] mt-1">Create and manage promotional credits.</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Kpi icon={Tag} label="Active codes" value={String(activeCodes)} />
+          <Kpi icon={CircleDollarSign} iconTone="bg-emerald-50 text-emerald-600" label="Credits issued" value={money(creditsIssued)}
+            sub="Through promo codes" />
+          <Kpi icon={BarChart3} label="Credits used" value={creditsUsed === null ? "—" : money(creditsUsed)} sub="All time" />
+        </div>
+
+        {(error || success) && !showCreate && (
+          <div className={`text-sm rounded-lg px-3 py-2 border ${error ? "bg-red-50 border-red-100 text-red-700" : "bg-emerald-50 border-emerald-100 text-emerald-700"}`}>
+            {error || success}
+          </div>
+        )}
+
+        <div className="flex flex-wrap justify-end gap-3">
+          <button type="button" onClick={() => setShowCreate((v) => !v)}
+            className="h-10 px-5 rounded-xl bg-[#3E3EDF] text-white text-sm font-semibold flex items-center gap-2 cursor-pointer">
+            <Plus className="w-4 h-4" /> Create Promo Code
+          </button>
+          <button type="button" onClick={openCredit}
+            className="h-10 px-5 rounded-xl border border-[#3E3EDF] text-[#3E3EDF] bg-white text-sm font-semibold flex items-center gap-2 cursor-pointer">
+            <WalletMinimal className="w-4 h-4" /> Add Brand Credit
+          </button>
         </div>
 
         {/* Create form */}
-        <form
+        {showCreate && <form
           onSubmit={handleSubmit}
           className="bg-white border border-[#ECECF5] rounded-2xl p-6 shadow-sm flex flex-col gap-4"
         >
@@ -248,22 +326,19 @@ export const PromoCodesView = () => {
               {submitting ? "Creating…" : "Create promo code"}
             </button>
           </div>
-        </form>
+        </form>}
 
         {/* List */}
         <div className="bg-white border border-[#ECECF5] rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-[#ECECF5]">
-            <h2 className="text-base font-bold text-[#1A1A2E]">Existing codes</h2>
-          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-[#F6F6FB] text-[#6B6B80] text-xs uppercase tracking-wider">
                 <tr>
                   <th className="px-6 py-3 font-semibold">Code</th>
-                  <th className="px-6 py-3 font-semibold">Amount</th>
-                  <th className="px-6 py-3 font-semibold">Used</th>
-                  <th className="px-6 py-3 font-semibold">Valid until</th>
-                  <th className="px-6 py-3 font-semibold">Per brand</th>
+                  <th className="px-6 py-3 font-semibold">Credit</th>
+                  <th className="px-6 py-3 font-semibold">Applies to</th>
+                  <th className="px-6 py-3 font-semibold">Dates</th>
+                  <th className="px-6 py-3 font-semibold">Usage</th>
                   <th className="px-6 py-3 font-semibold">Status</th>
                 </tr>
               </thead>
@@ -273,12 +348,12 @@ export const PromoCodesView = () => {
                     <td className="px-6 py-3 font-bold text-[#1A1A2E]">{String(code.code)}</td>
                     <td className="px-6 py-3 text-[#454656]">{money(code.amount)}</td>
                     <td className="px-6 py-3 text-[#454656]">
-                      {String(code.redemption_count ?? 0)}
-                      {code.max_redemptions ? ` / ${code.max_redemptions}` : ""}
+                      Fees + Subscription
+                      <span className="block text-xs text-[#9A9AB0]">{code.once_per_brand ? "Once per brand" : "Reusable per brand"}</span>
                     </td>
-                    <td className="px-6 py-3 text-[#454656]">{dateText(code.valid_until)}</td>
+                    <td className="px-6 py-3 text-[#454656]">{dateRange(code.valid_from, code.valid_until)}</td>
                     <td className="px-6 py-3 text-[#454656]">
-                      {code.once_per_brand ? "Once" : "Multiple"}
+                      {String(code.redemption_count ?? 0)} of {code.max_redemptions ? String(code.max_redemptions) : "unlimited"}
                     </td>
                     <td className="px-6 py-3">
                       <span
@@ -304,7 +379,45 @@ export const PromoCodesView = () => {
             </table>
           </div>
           <div className="px-6 pb-4"><Pager paged={promoCodesPage} noun="codes" /></div>
+          <p className="mx-6 mb-4 flex items-center gap-2 text-xs text-[#6B6B80] bg-[#F6F6FB] rounded-lg px-3 py-2">
+            <Info className="w-4 h-4 text-[#3E3EDF]" /> Promotional credits never fund shopper rewards.
+          </p>
         </div>
+
+        {credit.open && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setCredit((c) => ({ ...c, open: false }))}>
+            <div className="w-full max-w-md bg-white rounded-2xl p-6 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-[#1A1A2E]">Add Brand Credit</h3>
+                <button onClick={() => setCredit((c) => ({ ...c, open: false }))} aria-label="Close" className="text-[#9A9AB0] cursor-pointer">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <label className="flex flex-col gap-1 text-sm font-semibold text-[#454656]">
+                Brand
+                <select className={inputClass} value={credit.brandId} onChange={(e) => setCredit((c) => ({ ...c, brandId: e.target.value }))}>
+                  <option value="">Select a brand</option>
+                  {brands.map((b) => <option key={String(b.id)} value={String(b.id)}>{String(b.name)}</option>)}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-semibold text-[#454656]">
+                Amount ($)
+                <input className={inputClass} type="number" min="0.01" step="0.01" value={credit.amount}
+                  onChange={(e) => setCredit((c) => ({ ...c, amount: e.target.value }))} />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-semibold text-[#454656]">
+                Note
+                <input className={inputClass} value={credit.note} placeholder="Reason for the credit"
+                  onChange={(e) => setCredit((c) => ({ ...c, note: e.target.value }))} />
+              </label>
+              <p className="text-xs text-[#6B6B80]">Promotional credits never fund shopper rewards.</p>
+              <button type="button" onClick={() => void addCredit()} disabled={crediting || !credit.brandId || !credit.amount}
+                className="h-11 rounded-xl bg-[#3E3EDF] text-white text-sm font-semibold disabled:opacity-50 cursor-pointer">
+                {crediting ? "Adding…" : "Add Credit"}
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

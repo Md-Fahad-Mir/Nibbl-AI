@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Sidebar } from "@/features/dashboard/components/Sidebar";
 import { Header } from "@/features/dashboard/components/Header";
 import { SettingsSubTab, UserProfileData } from "@/types/settings.types";
-import { SettingsMenuList } from "../components/SettingsMenuList";
 import { PersonalInfoView } from "../components/PersonalInfoView";
 import { SettingsPasswordFlow } from "../components/SettingsPasswordFlow";
 import { FaqView } from "../components/FaqView";
@@ -35,7 +34,7 @@ const buildPhone = (countryCode: string, phoneNumber: string) => {
 
 export const SettingsView = () => {
   const router = useRouter();
-  const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>("menu");
+  const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>("platform-settings");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const {
     profile,
@@ -137,16 +136,13 @@ export const SettingsView = () => {
           onProfileClick={() => setActiveSubTab("personal-info")}
         />
 
-        {/* Dynamic Sub-Tab Views */}
-        {activeSubTab === "menu" && (
-          <SettingsMenuList onSelectTab={(tab) => setActiveSubTab(tab)} />
-        )}
+        {/* Master: Settings opens on the Admin rules; account and content pages hang off it. */}
 
         {activeSubTab === "personal-info" && (
           <PersonalInfoView
             key={`${userProfile.email}-${userProfile.name}-${userProfile.phoneNumber}-${userProfile.avatarUrl}`}
             initialProfile={userProfile}
-            onBack={() => setActiveSubTab("menu")}
+            onBack={() => setActiveSubTab("platform-settings")}
             onSaveProfile={async (updated, avatarFile) => {
               const phone = buildPhone(updated.countryCode, updated.phoneNumber);
               if (avatarFile) {
@@ -169,7 +165,7 @@ export const SettingsView = () => {
         {activeSubTab === "change-password" && (
           <SettingsPasswordFlow
             defaultEmail={userProfile.email}
-            onBackToMenu={() => setActiveSubTab("menu")}
+            onBackToMenu={() => setActiveSubTab("platform-settings")}
             onChangePassword={changePassword}
             onForgotPassword={forgotPassword}
             onResetPassword={resetPassword}
@@ -177,19 +173,19 @@ export const SettingsView = () => {
         )}
 
         {activeSubTab === "platform-settings" && (
-          <PlatformSettingsView onBack={() => setActiveSubTab("menu")} />
+          <PlatformSettingsView onOpen={setActiveSubTab} />
         )}
 
         {activeSubTab === "faq" && (
-          <FaqView onBack={() => setActiveSubTab("menu")} />
+          <FaqView onBack={() => setActiveSubTab("platform-settings")} />
         )}
 
         {activeSubTab === "privacy-policy" && (
-          <PrivacyPolicyView onBack={() => setActiveSubTab("menu")} />
+          <PrivacyPolicyView onBack={() => setActiveSubTab("platform-settings")} />
         )}
 
         {activeSubTab === "terms-conditions" && (
-          <TermsConditionView onBack={() => setActiveSubTab("menu")} />
+          <TermsConditionView onBack={() => setActiveSubTab("platform-settings")} />
         )}
 
       </main>

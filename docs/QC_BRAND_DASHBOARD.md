@@ -57,7 +57,7 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 | X3 | Filters | Search + Campaign, Product, Status, Submitted Date, Clear Filters | Search + Campaign + Product | Fixed |
 | X4 | Priority queue banner | "Pending review queue (n) … auto-approves using the campaign's maximum eligible reward" | Missing | Fixed |
 | X5 | Table | Receipt summary (retailer · date · items · total), "Auto-approves in N days", Review Receipt / View Details | Receipt thumbnail only; no countdown | Fixed |
-| X6 | Manual receipt review screen (mockup 14) | Seven panels | Built earlier — re-check | Open |
+| X6 | Manual receipt review screen (mockup 14) | Seven panels | Built earlier — re-check | OK — all seven panels present; zoom/rotate symbols replaced with icons |
 
 ## Review Campaigns (mockups 16–17)
 
@@ -84,7 +84,7 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 | C2 | "LIVE DATA" badge (old element) | Fixed |
 | C3 | Filters button; Open Claims pill ("1 open"/None); cooldown text ("Rebate: 18 days") | Fixed (Open Claims pill, status dot, View button). Filters button not added — the filter tabs do the same job |
 | C4 | Integrations: "Customer Integrations — Coming Soon" with logos + "API connections will be available in a future release." | Fixed |
-| C5 | Customer Profile (mockup 22) | Built earlier — re-check |
+| C5 | Customer Profile (mockup 22) | Fixed — all Master sections present; stat tiles got icons |
 
 ## Wallet (mockup 24)
 
@@ -119,4 +119,4 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 
 | # | Item | Status |
 |---|---|---|
-| O1 | Role gate, public homepage, plans, register, verify, checkout, activated, first dashboard, funding before launch | Built earlier to these mockups — re-check after the dashboard fixes |
+| O1 | Role gate, public homepage, plans, register, verify, checkout, activated, first dashboard, funding before launch | Fixed — register split into ⑤ Confirm Your Plan and ⑥ Create Your Brand Account (Master fields, no Office Location); ⑦ Check Your Email and checkout show the Plan/Account/Verify/Payment steps; dead Google sign-in buttons removed |

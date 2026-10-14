@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { ApiRecord } from "@/lib/api/backendApi";
 import { ReviewSelection, useBrandApiStore } from "@/stores/useBrandApiStore";
-import { Check, X } from "lucide-react";
+import { Check, RotateCw, X, ZoomIn, ZoomOut } from "lucide-react";
 
 export const REJECTION_REASONS: { value: string; label: string }[] = [
   { value: "outside_period", label: "Purchase outside reservation period" },
@@ -155,13 +155,14 @@ export default function ReviewDecisionDrawer({ item, onClose, onApprove, onRejec
             <span className="font-bold text-[#131B2E] text-sm">Submitted receipt</span>
             <div className="flex items-center gap-1.5">
               {[
-                { t: "−", f: () => setZoom((z) => Math.max(z - 0.2, 0.6)) },
-                { t: "+", f: () => setZoom((z) => Math.min(z + 0.2, 3)) },
-                { t: "⟳", f: () => setRotation((r) => (r + 90) % 360) },
-                { t: "1:1", f: () => { setZoom(1); setRotation(0); } },
+                { t: "Zoom out", icon: <ZoomOut className="w-4 h-4" />, f: () => setZoom((z) => Math.max(z - 0.2, 0.6)) },
+                { t: "Zoom in", icon: <ZoomIn className="w-4 h-4" />, f: () => setZoom((z) => Math.min(z + 0.2, 3)) },
+                { t: "Rotate", icon: <RotateCw className="w-4 h-4" />, f: () => setRotation((r) => (r + 90) % 360) },
+                { t: "Reset", icon: "1:1", f: () => { setZoom(1); setRotation(0); } },
               ].map((b) => (
-                <button key={b.t} onClick={b.f} className="w-8 h-8 rounded-full bg-[#E2E7FF] text-[#001BD2] text-xs font-bold cursor-pointer">
-                  {b.t}
+                <button key={b.t} onClick={b.f} title={b.t} aria-label={b.t}
+                  className="w-8 h-8 rounded-full bg-[#E2E7FF] text-[#001BD2] text-xs font-bold cursor-pointer flex items-center justify-center">
+                  {b.icon}
                 </button>
               ))}
               {imageUrl && (

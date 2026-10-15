@@ -89,6 +89,20 @@ class AutoRefillConfigTests(APITestCase):
         self.assertEqual(st["trigger_at"], Decimal("80.50"))
         self.assertEqual(st["recommended_amount"], Decimal("322.00"))
 
+    def test_ended_campaign_is_not_in_the_estimate(self):
+        import datetime as dt
+
+        from django.utils import timezone
+
+        _fund(self.brand, "1000.00")
+        _active_campaign(self.brand, "40.00")  # 322
+        ended = _active_campaign(self.brand, "100.00")
+        ended.end_at = timezone.now() - dt.timedelta(days=1)
+        ended.save(update_fields=["end_at"])
+        self.assertEqual(
+            services.estimate_seven_day_requirement(self.brand), Decimal("322.00")
+        )
+
     def test_list_saved_cards_normalizes_stripe_objects(self):
         import stripe
 

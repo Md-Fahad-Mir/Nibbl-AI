@@ -79,7 +79,7 @@ export default function Header({
       </div>
 
       {/* User & Alert Actions */}
-      <div className="flex items-center gap-6 relative">
+      <div className="flex items-center gap-3 sm:gap-6 relative">
         {/* Notification Bell Button */}
         <button
           onClick={() => {
@@ -125,7 +125,7 @@ export default function Header({
         )}
 
         {/* Vertical Divider */}
-        <div className="w-[1px] h-8 bg-[#C5C5D9]/15"></div>
+        <div className="hidden sm:block w-[1px] h-8 bg-[#C5C5D9]/15"></div>
 
         {/* User Profile */}
         <button
@@ -138,7 +138,7 @@ export default function Header({
           aria-haspopup="menu"
           aria-expanded={showProfileMenu}
         >
-          <div className="flex flex-col items-end font-manrope">
+          <div className="hidden sm:flex flex-col items-end font-manrope">
             <span className="text-xs font-bold text-[#131B2E] leading-none">
               {brandName || userName}
             </span>

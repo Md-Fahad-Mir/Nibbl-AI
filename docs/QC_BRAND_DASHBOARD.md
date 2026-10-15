@@ -17,6 +17,7 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 | S7 | Load time | — | Brand data appears 10–12 s after page load (header shows $0.00, lists look empty until then) | Fixed |
 | S8 | Emoji | Icons only | "ℹ️" on Review Campaigns page | Fixed |
 | S9 | Notification bell | Not in mockup header | Present | Intentional — in-app notifications are required (Settings §3) |
+| S10 | Phone width | — | Header was 33 px wider than a phone screen on every page (sideways scroll) | Fixed — name text and divider hidden on phones; avatar kept |
 
 ## Dashboard (mockup 1)
 
@@ -113,7 +114,7 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 
 | # | Item | Status |
 |---|---|---|
-| G1 | Static Coming Soon page with the example artwork (Meta Ads, Retail Displays, On-Pack, Email, MMS, How It Will Work) | Fixed |
+| G1 | Static Coming Soon page with the example artwork (Meta Ads, Retail Displays, On-Pack, Email, MMS, How It Will Work) | Fixed — rebuilt as real page sections (no image): intro banner, Meta Ads, Retail Displays, On-Pack Ideas, Email Campaign, MMS Message, How It Will Work, footnote; static, nothing to generate yet |
 
 ## Brand onboarding (mockups 28–32)
 

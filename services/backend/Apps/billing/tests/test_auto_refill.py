@@ -37,14 +37,21 @@ def _fund(brand, amount):
     return wallet
 
 
-def _spend(brand, amount):
-    """Record a rebate-reward debit so it counts toward the 7-day estimate."""
-    wallet = wallet_services.get_or_create_brand_wallet(brand)
-    wallet_services.debit(
-        wallet=wallet, amount=Decimal(amount),
-        category=LedgerEntry.Category.REBATE_REWARD,
+def _active_campaign(brand, max_rebate):
+    """An active Free campaign with capacity 1: its 7-day need is
+    (max_rebate + 15% Pro fee) x 1 claim x 7 cycles."""
+    from Apps.campaigns import services as campaign_services
+    from Apps.campaigns.models import Campaign
+    from Apps.common.testing import go_live
+    from Apps.products.services import create_product
+
+    product = create_product(brand=brand, name=f"Bar {max_rebate}")
+    campaign = campaign_services.create_campaign(
+        brand=brand, product_ids=[product.id], name="Deal", deal_type=Campaign.DealType.FREE,
+        max_rebate=Decimal(max_rebate), desired_redemptions=1, estimated_redemption_rate=Decimal("100"),
     )
-    return wallet
+    go_live(campaign)
+    return campaign
 
 
 class AutoRefillConfigTests(APITestCase):
@@ -71,16 +78,16 @@ class AutoRefillConfigTests(APITestCase):
         self.assertEqual(config.amount, Decimal("100.00"))
         self.assertEqual(config.stripe_payment_method_id, "pm_1")
 
-    def test_estimate_from_last_7_days_spend(self):
+    def test_estimate_is_the_active_campaigns_7_day_need(self):
         _fund(self.brand, "1000.00")
-        _spend(self.brand, "300.00")
+        _active_campaign(self.brand, "40.00")  # (40 + 6) x 1 x 7 = 322
         self.assertEqual(
-            services.estimate_seven_day_requirement(self.brand), Decimal("300.00")
+            services.estimate_seven_day_requirement(self.brand), Decimal("322.00")
         )
         # trigger = 25% of the estimate; recommended = the estimate
         st = services.auto_refill_status(self.brand)
-        self.assertEqual(st["trigger_at"], Decimal("75.00"))
-        self.assertEqual(st["recommended_amount"], Decimal("300.00"))
+        self.assertEqual(st["trigger_at"], Decimal("80.50"))
+        self.assertEqual(st["recommended_amount"], Decimal("322.00"))
 
     def test_list_saved_cards_normalizes_stripe_objects(self):
         import stripe
@@ -103,8 +110,8 @@ class RunAutoRefillTests(APITestCase):
     def test_charges_when_available_below_25pct_of_estimate(self, mock_charge):
         mock_charge.return_value = SimpleNamespace(id="pi_refill")
         brand = _brand()
-        _fund(brand, "1000.00")
-        _spend(brand, "900.00")  # estimate 900 -> trigger 225; available 100 < 225
+        _fund(brand, "100.00")
+        _active_campaign(brand, "100.00")  # need 805 -> trigger 201.25; available 100 < trigger
         services.set_auto_refill(
             brand=brand, enabled=True, amount=Decimal("250"), payment_method_id="pm_1",
         )
@@ -116,7 +123,7 @@ class RunAutoRefillTests(APITestCase):
     def test_skips_when_available_above_trigger(self, mock_charge):
         brand = _brand()
         _fund(brand, "1000.00")
-        _spend(brand, "100.00")  # estimate 100 -> trigger 25; available 900 > 25
+        _active_campaign(brand, "10.00")  # need 80.50 -> trigger 20.13; available 1000 > trigger
         services.set_auto_refill(
             brand=brand, enabled=True, amount=Decimal("250"), payment_method_id="pm_1",
         )
@@ -126,9 +133,9 @@ class RunAutoRefillTests(APITestCase):
         mock_charge.assert_not_called()
 
     @patch("Apps.billing.stripe_gateway.charge_saved_card")
-    def test_skips_brand_with_no_recent_spend(self, mock_charge):
+    def test_skips_brand_with_no_active_campaigns(self, mock_charge):
         brand = _brand()
-        _fund(brand, "0")  # no spend -> estimate 0 -> never refills
+        _fund(brand, "0")  # no active campaigns -> estimate 0 -> never refills
         services.set_auto_refill(
             brand=brand, enabled=True, amount=Decimal("250"), payment_method_id="pm_1",
         )
@@ -141,8 +148,8 @@ class RunAutoRefillTests(APITestCase):
         owner = User.objects.create_user(email="o@example.com", password="x", full_name="O")
         brand = _brand()
         BrandMembership.objects.create(brand=brand, user=owner, role=BrandMembership.Role.OWNER)
-        _fund(brand, "1000.00")
-        _spend(brand, "900.00")
+        _fund(brand, "100.00")
+        _active_campaign(brand, "100.00")
         services.set_auto_refill(
             brand=brand, enabled=True, amount=Decimal("250"), payment_method_id="pm_1",
         )
@@ -155,8 +162,8 @@ class RunAutoRefillTests(APITestCase):
 
     def test_disabled_configs_ignored(self):
         brand = _brand()
-        _fund(brand, "1000.00")
-        _spend(brand, "900.00")
+        _fund(brand, "100.00")
+        _active_campaign(brand, "100.00")
         services.set_auto_refill(
             brand=brand, enabled=False, amount=Decimal("250"), payment_method_id="pm_1",
         )

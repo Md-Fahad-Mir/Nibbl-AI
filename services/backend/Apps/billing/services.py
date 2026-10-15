@@ -12,7 +12,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import F, Sum
+from django.db.models import F
 from django.utils import timezone
 
 from Apps.billing import stripe_gateway
@@ -321,19 +321,11 @@ def set_auto_refill(*, brand, enabled: bool, amount, payment_method_id: str) -> 
 
 
 def estimate_seven_day_requirement(brand) -> Decimal:
-    """Estimate a brand's 7-day funding need from its last 7 days of spend."""
-    wallet = wallet_services.get_or_create_brand_wallet(brand)
-    since = timezone.now() - timedelta(days=7)
-    total = (
-        LedgerEntry.objects.filter(
-            wallet=wallet,
-            entry_type=LedgerEntry.EntryType.DEBIT,
-            category__in=_SPEND_CATEGORIES,
-            created_at__gte=since,
-        ).aggregate(total=Sum("amount"))["total"]
-        or ZERO
-    )
-    return to_money(total)
+    """Master Wallet: the most all active campaigns could need over the next
+    7 days — the same figure as the Campaign Funding card."""
+    from Apps.wallets.statements import campaign_funding
+
+    return to_money(Decimal(campaign_funding(brand)["seven_day_need"]))
 
 
 def auto_refill_status(brand) -> dict:
@@ -384,7 +376,7 @@ def run_auto_refill(now=None) -> dict:
             estimate_seven_day_requirement(config.brand) * AUTO_REFILL_TRIGGER_FRACTION
         )
         wallet = wallet_services.get_or_create_brand_wallet(config.brand)
-        # No recent spend (estimate 0) means there is nothing to refill for.
+        # No active campaigns (estimate 0) means there is nothing to refill for.
         # Promo credit doesn't count toward the real funds that back rewards.
         if trigger_at <= ZERO or wallet.reward_available() >= trigger_at:
             summary["skipped"] += 1

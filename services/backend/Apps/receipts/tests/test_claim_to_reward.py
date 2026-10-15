@@ -903,6 +903,28 @@ class PayloadMappingTests(APITestCase):
         self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
         self.assertEqual(balance(user), Decimal("5.49"))
 
+    def test_claim_still_matches_its_product_after_the_brand_deletes_it(self):
+        from Apps.campaigns.models import Campaign
+
+        _, brand, product, _ = build_world()
+        other = create_product(brand=brand, name="Biscuits")
+        campaign = campaign_services.create_campaign(
+            brand=brand, product_ids=[product.id], name="Free bar", deal_type=Campaign.DealType.FREE,
+            max_rebate=Decimal("6.00"), desired_redemptions=10, estimated_redemption_rate=Decimal("30"),
+        )
+        go_live(campaign)
+        user, reservation = claim(campaign, "d@example.com")
+        product.is_active = False  # brand deletes the product after the claim
+        product.save(update_fields=["is_active"])
+        body = payload(items=[
+            {"description": "Dark Chocolate Bar", "quantity": "100", "unit": "G", "unit_price": None, "total_price": "3.79"},
+            {"description": other.name, "quantity": None, "unit": None, "unit_price": None, "total_price": "5.49"},
+        ])
+        with ocr_returning(body):
+            receipt = services.upload_receipt(user=user, reservation_id=reservation.id, image=image())
+        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+        self.assertEqual(balance(user), Decimal("3.79"))
+
     def test_size_suffix_lets_the_product_library_match(self):
         """OCR splits the size off; the restored description matches the
         library name exactly, with no fuzzy matching involved."""

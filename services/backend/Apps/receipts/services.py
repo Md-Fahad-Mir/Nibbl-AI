@@ -13,7 +13,7 @@ from Apps.common.exceptions import DomainError
 from Apps.common.text import normalize_text
 from Apps.products import services as product_services
 from Apps.products.models import Product, ProductAlias
-from Apps.products.selectors import match_product, name_candidates
+from Apps.products.selectors import _retailer_ok, match_product, name_candidates
 from Apps.receipts import identity as receipt_identity
 from Apps.receipts import ocr
 from Apps.receipts.signals import receipt_rejected, receipt_verified
@@ -446,6 +446,8 @@ def _match_eligible_product(extracted, *, campaign, reservation=None):
     merchant = getattr(extracted, "merchant_name", "")
     for item in extracted.items:
         product = _match_item(item, brand=campaign.brand, merchant=merchant)
+        if product is None or product.id not in targets:
+            product = _match_claimed_product(item, targets, merchant=merchant) or product
         if product is None:
             continue
         if product.id not in targets:
@@ -471,6 +473,28 @@ def _match_eligible_product(extracted, *, campaign, reservation=None):
     return eligible, matched_units, eligible_description
 
 
+def _match_claimed_product(item, targets, *, merchant=""):
+    """Match a line against the claim's own eligible products — including one
+    the brand has since deleted (Master: later edits must not change an
+    existing claim's receipt-validation rules)."""
+    sku = (item.sku or "").strip().lower()
+    if sku:
+        product = next((t for t in targets.values() if (t.sku or "").lower() == sku), None)
+        if product is not None:
+            return product
+    for text in (item.description, item.description_with_size):
+        norm = normalize_text(text or "")
+        if not norm:
+            continue
+        alias = ProductAlias.objects.filter(product_id__in=list(targets), normalized=norm).first()
+        if alias is not None and _retailer_ok(alias, merchant):
+            return targets[alias.product_id]
+        product = next((t for t in targets.values() if t.normalized_name == norm), None)
+        if product is not None:
+            return product
+    return None
+
+
 def _match_item(item, *, brand, merchant=""):
     """Resolve one receipt line to a product.
 
@@ -493,7 +517,13 @@ def _match_item(item, *, brand, merchant=""):
 
 
 def _create_line_items(receipt: Receipt, extracted) -> None:
+    reservation = receipt.reservation
+    claimed = Product.objects.filter(id__in=reservation.eligible_product_ids) if _uses_snapshot(reservation) else []
+    targets = {p.id: p for p in claimed}
     for item in extracted.items:
+        product = _match_item(item, brand=receipt.brand, merchant=receipt.merchant)
+        if targets and (product is None or product.id not in targets):
+            product = _match_claimed_product(item, targets, merchant=receipt.merchant) or product
         ReceiptLineItem.objects.create(
             receipt=receipt,
             description=item.description[:255],
@@ -501,7 +531,7 @@ def _create_line_items(receipt: Receipt, extracted) -> None:
             description_hash=ocr.hash_text(item.description),
             quantity=item.quantity,
             unit_price=item.unit_price,
-            matched_product=_match_item(item, brand=receipt.brand, merchant=receipt.merchant),
+            matched_product=product,
         )
 
 

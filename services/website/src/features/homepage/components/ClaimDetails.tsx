@@ -8,7 +8,9 @@ import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
 import { ApiError, nibblApi } from "@/lib/api/backendApi";
 import { displayOffer } from "../lib/offerMappers";
 import EmailCodeForm from "@/features/auth/components/EmailCodeForm";
-import { AlertTriangle, CalendarDays, CheckCircle2, Clock, Info, Layers, Mail, PauseCircle, Star, Store, Trophy, User, type LucideIcon } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, Clock, Flame, Info, Layers, Mail, Package, PauseCircle, Receipt, Share2, ShoppingCart, Star, Store, Tag, Trophy, User, X, type LucideIcon } from "lucide-react";
+import { referralLink } from "@/lib/referral";
+import ProductReviews from "./ProductReviews";
 
 // Master "Rebate Restriction Pop-ups" (RB-33). Title / message / note come
 // from the API (`title`, `message`, `note`, `days_remaining`); these are the
@@ -33,7 +35,7 @@ type Restriction = {
 interface ClaimDetailsProps {
   campaignId?: string;
   onBack: () => void;
-  onNavigate: (stage: "signin" | "signup" | "view-details") => void;
+  onNavigate: (stage: "signin" | "signup") => void;
   onTabChange: (tab: "offer" | "wallet" | "scan" | "profile" | "brand" | "notification", extra?: string) => void;
 }
 
@@ -71,6 +73,9 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
   const [slots, setSlots] = useState<{ used: number; limit: number; available: number } | null>(null);
   const [confirmDeadline, setConfirmDeadline] = useState<Date | null>(null);
   const [reserving, setReserving] = useState(false);
+  // Master ③ Campaign Details → ④ Reserve Offer sheet → ⑤ Confirm Reservation.
+  const [reserveOpen, setReserveOpen] = useState(false);
+  const [shareMessage, setShareMessage] = useState("");
 
   const loadedCampaign = String(selectedOffer?.campaign_id ?? "");
   useEffect(() => {
@@ -129,7 +134,7 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
     }
 
     if (!(campaignId || details?.id)) {
-      setMessage("No backend campaign id was found for this offer.");
+      setMessage("This offer is no longer available.");
       return;
     }
     if (slots && slots.available <= 0) {
@@ -141,7 +146,20 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
       return;
     }
     // The 7-day window starts when the shopper confirms (Master).
+    setReserveOpen(false);
     setConfirmDeadline(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  };
+
+  // Master: share a specific deal with your referral link.
+  const handleShareDeal = async () => {
+    const code = typeof user?.referral_code === "string" ? user.referral_code : "";
+    const id = campaignId || details?.id;
+    if (!code || !id) {
+      setShareMessage("Sign in to share this deal with your referral link.");
+      return;
+    }
+    await navigator.clipboard.writeText(referralLink(code, String(id)));
+    setShareMessage("Deal link copied — friends who join with it count as your referral.");
   };
 
   const confirmReservation = async () => {
@@ -184,206 +202,182 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
       {/* Header */}
       <Header activeTab="offer" onTabChange={onTabChange} unreadCount={unreadCount} />
 
-      {/* Main Page Layout Wrapper */}
-      <main className="flex-grow flex flex-col items-center py-10 px-4 sm:px-6 max-w-[1440px] mx-auto w-full relative">
-        {/* Offer headline (the brand's shopper wording — never the internal campaign name) */}
-        <h1 className="text-[32px] font-bold text-[#1F1D1D] text-center mb-6 mt-4">
-          {details?.headline || details?.title || "Offer Details"}
-        </h1>
-        {details?.goingFast && (
-          <span className="-mt-4 mb-6 rounded-full bg-[#FFF1E6] px-3 py-1 text-[13px] font-semibold text-[#E0700B]">
-            Going fast
-          </span>
+      <main className="flex-grow w-full max-w-[640px] mx-auto px-4 py-6 flex flex-col gap-5">
+        <button onClick={onBack} className="self-start text-[#3E3EDF] text-sm font-medium cursor-pointer">
+          &larr; Back to Offers
+        </button>
+
+        {/* ① Campaign image */}
+        <div className="relative w-full aspect-[16/10] rounded-[16px] overflow-hidden bg-[#F2F3FF] flex items-center justify-center">
+          {details?.image ? (
+            <Image src={details.image} alt={details.headline || "Offer image"} fill sizes="640px" className="object-cover" />
+          ) : (
+            <Package className="w-12 h-12 text-[#B8B8D9]" />
+          )}
+        </div>
+
+        {/* ② Brand, headline, description, reward */}
+        <div className="flex flex-col gap-2 text-center items-center">
+          {details?.brand && <span className="text-[12px] font-semibold tracking-wide uppercase text-[#575757]">{details.brand}</span>}
+          <h1 className="text-[24px] sm:text-[28px] font-bold leading-tight text-[#1F1D1D]">
+            {details?.headline || details?.title || "Offer Details"}
+          </h1>
+          {details?.description && <p className="text-[15px] text-[#4D4D4D]">{details.description}</p>}
+          {details?.rewardLabel && (
+            <span className="mt-1 rounded-lg bg-[#EEEAFE] px-4 py-1.5 text-[16px] font-semibold text-[#3E3EDF]">
+              {details.rewardLabel.startsWith("Up to") ? details.rewardLabel.replace("Up to", "Free up to") : details.rewardLabel}
+            </span>
+          )}
+        </div>
+
+        {/* ③ Eligible products (each keeps its own rating) */}
+        {details && details.products.length > 0 && (
+          <section className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[16px] font-semibold text-[#3E3EDF]">Eligible Products</h2>
+              <span className="text-[13px] text-[#575757]">{details.products.length} product{details.products.length === 1 ? "" : "s"}</span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {details.products.map((product) => (
+                <div key={product.id} className="min-w-[112px] max-w-[112px] flex flex-col items-center gap-1 text-center">
+                  <div className="relative h-20 w-20 overflow-hidden rounded-lg bg-gray-50">
+                    {product.image ? (
+                      <Image src={product.image} alt={product.name} fill sizes="80px" className="object-contain" />
+                    ) : (
+                      <Package className="absolute inset-0 m-auto w-7 h-7 text-[#B8B8D9]" />
+                    )}
+                  </div>
+                  <span className="text-[12px] font-medium leading-[15px] text-[#1F1D1D]">{product.name}</span>
+                  {product.variant && <span className="text-[11px] text-[#575757]">{product.variant}</span>}
+                  <span className="text-[11px] text-[#575757] inline-flex items-center gap-0.5">
+                    {product.reviewCount > 0 ? (
+                      <>
+                        <Star className="w-3 h-3 fill-[#FFB701] text-[#FFB701]" /> {Number(product.rating ?? 0).toFixed(1)} · {product.reviewCount} reviews
+                      </>
+                    ) : "No reviews yet"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
-        {/* Claim Details Card (Frame 2147229230) */}
-        <div className="w-full max-w-[614px] bg-[#FEFEFE] shadow-[0px_4px_11.5px_rgba(0,0,0,0.08)] rounded-[12px] p-6 sm:py-[12px] sm:px-[33px] flex flex-col items-center gap-[22px] border border-gray-100/50">
-          
-          {/* Blue Header Card (Group 85 / Rectangle 34628220) */}
-          <div className="w-full max-w-[548px] min-h-[139px] bg-[#3E3EDF] rounded-lg p-5 flex flex-col justify-center items-center gap-1.5 relative overflow-hidden text-white shadow-sm flex-shrink-0">
-            {/* Background Blob for aesthetic */}
-            <div className="absolute -right-6 -top-6 w-20 h-20 bg-white/10 rounded-full blur-xl pointer-events-none" />
-
-            {/* $10% OFF */}
-            <h2 className="text-[48px] font-semibold leading-[58px] text-[#FEFEFE] text-center tracking-tight">
-              {details?.rewardLabel || "Reward"}
-            </h2>
-            
-            {/* Subtext */}
-            <p className="text-[16px] font-normal leading-[19px] text-[#FEFEFE] text-center">
-              Buy, upload, and get rewarded after verification
-            </p>
-          </div>
-
-          {/* White Inner Card (Frame 2147229221) */}
-          <div className="w-full max-w-[548px] bg-[#FEFEFE] shadow-[0px_4px_23.6px_rgba(0,0,0,0.06)] rounded-[12px] py-[27px] px-4 flex flex-col items-center gap-[20px] border border-gray-50">
-            
-            {/* Popcorn bag image (0E4EF3F6-89A0-44D4-B898-AF59D3F0B5B2) */}
-            <div className="w-[179px] h-[179px] relative bg-gray-50 rounded-lg overflow-hidden flex-shrink-0 border border-gray-100/60">
-              {details?.image ? (
-                <Image
-                  src={details.image}
-                  alt={details.title || "Backend offer image"}
-                  fill
-                  sizes="179px"
-                  className="object-contain p-2"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">
-                  No image returned
-                </div>
-              )}
-            </div>
-
-            {/* Details Box (Frame 2147229239) */}
-            <div className="w-full max-w-[335px] bg-[#FEFEFE] shadow-[1px_-4px_18px_rgba(0,0,0,0.12),_2px_4px_6.9px_rgba(0,0,0,0.08)] rounded-[12px] py-[14px] px-3 flex flex-col items-center gap-[13px] border border-gray-50">
-              
-              {/* Description message */}
-              <p className="text-[#4D4D4D] text-[14px] font-normal leading-[17px] text-center w-full max-w-[335px]">
-                {details?.description || "Claim this backend offer and upload your receipt to receive the reward."}
-              </p>
-
-              {/* Offer eligibility: featured retailers, receipt retailer rule, where to buy, cooldown */}
-              <div className="w-full max-w-[335px] flex flex-col gap-1 rounded-lg bg-[#F5F5FD] px-3 py-2 text-left text-[12px] leading-[16px] text-[#4D4D4D]">
-                {details && details.featuredRetailers.length > 0 && (
-                  <p className="font-semibold text-[#1F1D1D]">Available at {details.featuredRetailers.join(", ")}</p>
-                )}
-                <p>{details?.retailerWording}</p>
-                {details && details.requiredRetailers.length > 0 && (
-                  <button type="button" className="self-start text-[#3E3EDF] font-medium underline cursor-pointer"
-                    onClick={() => setRestriction({
+        {/* ④ Offer terms */}
+        {details && (
+          <section className="flex flex-col divide-y divide-gray-100 rounded-[12px] border border-gray-100">
+            {([
+              [ShoppingCart, "Where to Buy",
+                (details.featuredRetailers.length ? details.featuredRetailers : details.whereToBuy).join(", ") || "Any store that sells the eligible products",
+                null],
+              [Receipt, "Receipt Eligibility", details.requiredRetailers.length ? `Required: ${details.requiredRetailers.join(", ")}` : "Any retailer",
+                details.requiredRetailers.length
+                  ? () => setRestriction({
                       code: "retailer_required",
                       title: "Receipt from an eligible retailer required",
                       message: "This campaign requires a receipt from one of the participating retailers.",
                       retailers: details.requiredRetailers,
-                    })}>
-                    Receipt from an eligible retailer required
-                  </button>
-                )}
-                {details && details.whereToBuy.length > 0 && <p>Where to buy: {details.whereToBuy.join(", ")}</p>}
-                <p>{details?.cooldownWording}</p>
-              </div>
-
-              {/* Eligible products */}
-              {details && details.products.length > 1 && (
-                <div className="w-full max-w-[335px] flex gap-2 overflow-x-auto pb-1">
-                  {details.products.map((product) => (
-                    <div key={product.id} className="min-w-[90px] rounded-lg border border-gray-100 p-2 flex flex-col items-center gap-1">
-                      <div className="relative h-12 w-12 overflow-hidden rounded bg-gray-50">
-                        {product.image && <Image src={product.image} alt={product.name} fill sizes="48px" className="object-contain" />}
-                      </div>
-                      <span className="text-center text-[11px] leading-[13px] text-[#1F1D1D]">{product.name}</span>
-                      {product.variant && <span className="text-center text-[10px] text-[#575757]">{product.variant}</span>}
-                      <span className="text-[10px] text-[#575757]">
-                        {product.reviewCount > 0 ? (
-                          <span className="inline-flex items-center gap-0.5">
-                            <Star className="w-3 h-3 fill-[#FFB701] text-[#FFB701]" /> {Number(product.rating ?? 0).toFixed(1)} · {product.reviewCount}
-                          </span>
-                        ) : "No reviews yet"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Marketing consents — two separate checkboxes, both required (Master: Reserve Offer) */}
-              <div className="w-full max-w-[335px] flex flex-col gap-2 text-left">
-                <p className="text-[12px] text-[#4D4D4D]">
-                  We&apos;ll use your contact info to reserve your offer, check eligibility and send important claim updates.
-                </p>
-                <input type="email" value={emailValue} readOnly={Boolean(signedInEmail)}
-                  onChange={(e) => setContactEmail(e.target.value)} placeholder="Email"
-                  className={`h-10 px-3 rounded-lg border border-gray-300 text-sm ${signedInEmail ? "bg-gray-50 text-gray-500" : ""}`} />
-                <input type="tel" value={phoneValue} readOnly={Boolean(savedPhone)}
-                  onChange={(e) => setContactPhone(e.target.value)} placeholder="Mobile phone (e.g. +1 512 555 0123)"
-                  title={phoneLocked ? "Your verified phone is locked. Change it from Profile." : undefined}
-                  className={`h-10 px-3 rounded-lg border border-gray-300 text-sm ${savedPhone ? "bg-gray-50 text-gray-500" : ""}`} />
-                {slots && (
-                  <div className="flex items-center justify-between gap-2 text-[13px] text-[#4D4D4D]">
-                    <span>{slots.used} of {slots.limit} claim slots used</span>
-                    <span className="flex gap-1">
-                      {Array.from({ length: slots.limit }, (_, i) => (
-                        <span key={i} className={`w-3 h-3 rounded-full ${i < slots.used ? "bg-[#3E3EDF]" : "border border-[#3E3EDF]"}`} />
-                      ))}
-                    </span>
-                  </div>
-                )}
-                <label className="flex items-start gap-2 text-[12px] leading-[16px] text-[#4D4D4D] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={consentNibbl}
-                    onChange={(e) => setConsentNibbl(e.target.checked)}
-                    className="mt-[2px] accent-[#3E3EDF]"
-                  />
-                  <span>Send me NibblAI offers and updates by email and SMS. <span className="text-[#E65353]">*</span></span>
-                </label>
-                <label className="flex items-start gap-2 text-[12px] leading-[16px] text-[#4D4D4D] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={consentBrand}
-                    onChange={(e) => setConsentBrand(e.target.checked)}
-                    className="mt-[2px] accent-[#3E3EDF]"
-                  />
-                  <span>
-                    Send me offers and updates from {details?.brand || "this brand"} by email and SMS.{" "}
-                    <span className="text-[#E65353]">*</span>
-                  </span>
-                </label>
-              </div>
-
-              {/* CTA Large Claim button (Frame 2147229219) */}
-              {details?.unavailableReason && (
-                <p className="text-center text-[13px] font-medium text-[#E65353]">{details.unavailableReason}</p>
-              )}
-              <button
-                onClick={handleClaimClick}
-                disabled={Boolean(details?.unavailableReason) || sendingCode}
-                className="w-full max-w-[197px] h-[46px] bg-gradient-to-b from-[#3E3EDF] to-[#3E3EDF] hover:opacity-90 active:scale-[0.98] text-[#FEFEFE] text-[16px] font-medium leading-[24px] rounded-lg shadow-[0_4px_4px_rgba(0,0,0,0.12),inset_0_4px_4px_rgba(255,255,255,0.12)] flex items-center justify-center cursor-pointer transition-all focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {details?.unavailableReason ? "Not available" : sendingCode ? "Sending code…" : "Continue"}
-            </button>
-            {message && (
-              <p className={`text-center text-[13px] font-medium ${status === "error" ? "text-[#E65353]" : "text-[#00A671]"}`}>
-                {message}
-              </p>
-            )}
-            {latestError && status === "error" && latestError !== message && (
-              <p className="text-center text-[13px] font-medium text-[#E65353]">
-                {latestError}
-              </p>
-            )}
-            </div>
-
-            {/* Sub details block (Frame 2147229237) */}
-            <div className="w-full max-w-[335px] flex flex-col items-center gap-[4px] mt-2">
-              <p className="text-[#4D4D4D] text-[14px] font-normal leading-[17px] text-center w-full">
-                {details?.expires ? `Offer expires ${details.expires}.` : "Sign in, claim this offer, then upload your receipt."}
-              </p>
-              
-              {/* More Details link (Frame 2147229236) */}
-              <button
-                type="button"
-                onClick={() => onNavigate("view-details")}
-                className="w-[72px] h-[25px] border-b border-[#000000] text-[#000000] text-[12px] font-normal leading-[15px] flex items-center justify-center cursor-pointer hover:opacity-75 transition-all focus:outline-none"
-              >
-                More Details
+                    })
+                  : null],
+              [Tag, details.rewardLabel.startsWith("Up to") ? "Maximum Rebate" : "Reward", details.rewardLabel, null],
+              [Info, "Offer Eligibility", details.cooldownWording, null],
+            ] as [LucideIcon, string, string, (() => void) | null][]).map(([Icon, label, value, onClick]) => (
+              <button key={label} type="button" onClick={onClick ?? undefined} disabled={!onClick}
+                className="flex items-center gap-3 px-4 py-3 text-left disabled:cursor-default cursor-pointer">
+                <Icon className="w-5 h-5 text-[#3E3EDF] flex-shrink-0" />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[14px] font-semibold text-[#1F1D1D]">{label}</span>
+                  <span className="block text-[13px] text-[#575757]">{value}</span>
+                </span>
+                {onClick && <ChevronRight className="w-4 h-4 text-[#9A9AB0]" />}
               </button>
-            </div>
+            ))}
+          </section>
+        )}
 
-          </div>
+        {details?.goingFast && (
+          <span className="self-center flex items-center gap-1 rounded-lg bg-[#FFF1E6] px-3 py-1.5 text-[13px] font-semibold text-[#E0700B]">
+            <Flame className="w-4 h-4" /> Going fast
+          </span>
+        )}
 
-          {/* Back to Homepage Button */}
-          <button
-            onClick={onBack}
-            className="text-[#3E3EDF] hover:underline text-sm font-medium mt-1 cursor-pointer focus:outline-none"
-          >
-            &larr; Back to Offers
-          </button>
-        </div>
+        {details?.unavailableReason && (
+          <p className="text-center text-[13px] font-medium text-[#E65353]">{details.unavailableReason}</p>
+        )}
+        <button
+          onClick={() => { setMessage(null); setReserveOpen(true); }}
+          disabled={Boolean(details?.unavailableReason) || !details}
+          className="w-full h-12 rounded-[10px] bg-[#3E3EDF] hover:opacity-90 text-white text-[16px] font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {details?.unavailableReason ? "Not available" : "Claim This Offer"}
+        </button>
+        {message && !reserveOpen && (
+          <p className={`text-center text-[13px] font-medium ${status === "error" ? "text-[#E65353]" : "text-[#00A671]"}`}>{message}</p>
+        )}
+
+        <button type="button" onClick={() => void handleShareDeal()}
+          className="self-center flex items-center gap-2 text-[14px] font-medium text-[#3E3EDF] cursor-pointer">
+          <Share2 className="w-4 h-4" /> Share this deal with a friend
+        </button>
+        {shareMessage && <p className="text-center text-[13px] text-[#00A671]">{shareMessage}</p>}
+
+        {details?.products[0] && <ProductReviews productId={details.products[0].id} />}
       </main>
 
       {/* Footer */}
       <Footer onTabChange={onTabChange} />
+
+      {/* Master ④ Reserve Offer */}
+      {reserveOpen && details && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 sm:p-4" onClick={() => setReserveOpen(false)}>
+          <div className="w-full max-w-[440px] bg-white rounded-t-[20px] sm:rounded-[16px] p-6 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-[20px] font-semibold text-[#1F1D1D]">Reserve this offer</h3>
+                {slots && <p className="text-[13px] text-[#575757]">{slots.used} of {slots.limit} claim slots used</p>}
+              </div>
+              <button onClick={() => setReserveOpen(false)} aria-label="Close" className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {slots && (
+              <span className="flex gap-1.5">
+                {Array.from({ length: slots.limit }, (_, i) => (
+                  <span key={i} className={`w-3.5 h-3.5 rounded-full ${i < slots.used ? "bg-[#3E3EDF]" : "border border-[#3E3EDF]"}`} />
+                ))}
+              </span>
+            )}
+            <p className="text-[13px] text-[#4D4D4D]">
+              We&apos;ll use your contact info to reserve your offer, check eligibility and send important claim updates.
+            </p>
+            <label className="relative">
+              <Mail className="w-4 h-4 text-[#9A9AB0] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input type="email" value={emailValue} readOnly={Boolean(signedInEmail)}
+                onChange={(e) => setContactEmail(e.target.value)} placeholder="Email"
+                className={`w-full h-11 pl-9 pr-3 rounded-lg border border-gray-300 text-sm ${signedInEmail ? "bg-gray-50 text-gray-500" : ""}`} />
+            </label>
+            <input type="tel" value={phoneValue} readOnly={Boolean(savedPhone)}
+              onChange={(e) => setContactPhone(e.target.value)} placeholder="Mobile phone (e.g. +1 512 555 0123)"
+              title={phoneLocked ? "Your verified phone is locked. Change it from Profile." : undefined}
+              className={`h-11 px-3 rounded-lg border border-gray-300 text-sm ${savedPhone ? "bg-gray-50 text-gray-500" : ""}`} />
+            <label className="flex items-start gap-2 text-[13px] leading-[17px] text-[#1F1D1D] cursor-pointer">
+              <input type="checkbox" checked={consentNibbl} onChange={(e) => setConsentNibbl(e.target.checked)} className="mt-[2px] accent-[#3E3EDF]" />
+              <span><b>Nibbl email &amp; SMS (required)</b><br /><span className="text-[#575757]">Get claim updates and reminders about your offers.</span></span>
+            </label>
+            <label className="flex items-start gap-2 text-[13px] leading-[17px] text-[#1F1D1D] cursor-pointer">
+              <input type="checkbox" checked={consentBrand} onChange={(e) => setConsentBrand(e.target.checked)} className="mt-[2px] accent-[#3E3EDF]" />
+              <span><b>{details.brand} email &amp; SMS (required)</b><br /><span className="text-[#575757]">Get offers, product news and updates from {details.brand}.</span></span>
+            </label>
+            {message && <p className="text-[13px] font-medium text-[#E65353]">{message}</p>}
+            {latestError && status === "error" && latestError !== message && (
+              <p className="text-[13px] font-medium text-[#E65353]">{latestError}</p>
+            )}
+            <button onClick={() => void handleClaimClick()} disabled={sendingCode}
+              className="h-12 rounded-[10px] bg-[#3E3EDF] text-white text-[16px] font-semibold cursor-pointer disabled:opacity-50">
+              {sendingCode ? "Sending code…" : "Continue"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Master ⑤ Confirm Reservation */}
       {confirmDeadline && details && (
@@ -468,7 +462,7 @@ export default function ClaimDetails({ campaignId, onBack, onNavigate, onTabChan
           <div className="relative w-full max-w-[380px] bg-white rounded-[16px] p-6 flex flex-col items-center gap-3 text-center"
             onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setRestriction(null)} aria-label="Close"
-              className="absolute right-4 top-3 text-xl text-gray-400 hover:text-gray-600 cursor-pointer">×</button>
+              className="absolute right-4 top-3 text-gray-400 hover:text-gray-600 cursor-pointer"><X className="w-5 h-5" /></button>
             <span className="w-14 h-14 rounded-full bg-[#EEF0FF] flex items-center justify-center text-2xl">
               {(() => {
                 const Icon = RESTRICTION_ICONS[restriction.code] ?? AlertTriangle;

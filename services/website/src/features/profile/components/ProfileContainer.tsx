@@ -231,7 +231,7 @@ export default function ProfileContainer({
         setOldPassword("");
         setNewPassword("");
       }
-      setSaveMessage("Profile changes saved to the backend.");
+      setSaveMessage("Profile changes saved.");
       setActiveView("menu");
     } catch {
       setSaveMessage(null);
@@ -290,7 +290,7 @@ export default function ProfileContainer({
                   {displayName}
                 </span>
                 <span className="text-[12px] font-normal leading-[15px] text-[#575757] text-center mt-0.5">
-                  {email || "No email returned by backend"}
+                  {email || "—"}
                 </span>
               </div>
             </div>
@@ -457,7 +457,7 @@ export default function ProfileContainer({
                       <Image src={offer.image} alt={offer.title} fill sizes="396px" className="object-cover" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-gray-100 text-xs text-gray-500">
-                        No image returned
+                        No image
                       </div>
                     )}
                     <span className="absolute right-4 top-4 min-w-[64px] px-2 h-[30px] bg-[#E65353] shadow-[0px_4px_4px_rgba(0,0,0,0.12)] rounded-lg text-white text-[12px] font-semibold flex items-center justify-center z-10">
@@ -469,7 +469,7 @@ export default function ProfileContainer({
                     <div className="flex flex-col gap-2">
                       <div className="flex justify-between items-center text-[12px] font-normal leading-[15px] text-[#4D4D4D]">
                         <span>{offer.brand}</span>
-                        <span>{offer.expires ? `Expires ${offer.expires}` : "Backend offer"}</span>
+                        <span>{offer.expires ? `Expires ${offer.expires}` : ""}</span>
                       </div>
                       <h3 className="text-[16px] font-semibold leading-[19px] text-[#2D2D2D] truncate">
                         {offer.title}
@@ -486,7 +486,7 @@ export default function ProfileContainer({
                 </div>
               )) : (
                 <div className="w-full rounded-lg border border-gray-100 bg-white p-6 text-center text-sm text-[#575757]">
-                  No saved offers returned by the backend.
+                  No saved offers yet.
                 </div>
               )}
             </div>
@@ -534,15 +534,17 @@ export default function ProfileContainer({
                     {text(notification.title, "Notification")}
                   </p>
                   <p className="mt-1 text-sm text-[#575757]">
-                    {text(notification.body ?? notification.message ?? notification.description, "No message returned by backend.")}
+                    {text(notification.body ?? notification.message ?? notification.description, "")}
                   </p>
                   <p className="mt-1 text-xs text-[#8A8A8A]">
-                    {text(notification.created_at, "")}
+                    {notification.created_at
+                      ? new Date(String(notification.created_at)).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                      : ""}
                   </p>
                 </div>
               )) : (
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 text-gray-400">
-                  <p className="text-sm font-normal">No notifications returned by the backend.</p>
+                  <p className="text-sm font-normal">No notifications yet.</p>
                 </div>
               )}
             </div>

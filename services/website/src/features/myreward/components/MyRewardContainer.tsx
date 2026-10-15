@@ -13,6 +13,17 @@ import ReviewChatModal from "./ReviewChatModal";
 import InviteFriendsModal from "./InviteFriendsModal";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
 
+// Shopper-facing names for wallet ledger categories.
+const ACTIVITY_LABEL: Record<string, string> = {
+  rebate_reward: "Rebate",
+  review_reward: "Review reward",
+  referral_reward: "Referral",
+  withdrawal: "Withdrawal",
+  adjustment: "Adjustment",
+};
+const shortDate = (value: unknown) =>
+  value ? new Date(String(value)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+
 interface MyRewardContainerProps {
   onTabChange: (tab: "offer" | "wallet" | "scan" | "profile" | "brand" | "notification", extra?: string) => void;
   autoOpenReviewItem?: string | null;
@@ -208,8 +219,9 @@ export default function MyRewardContainer({
         id: String(activity.id || activity.created_at || activity.title || "activity"),
         type: activity.entry_type === "credit" ? "verified" as const : "pending" as const,
         title: String(activity.title || activity.description || "Activity"),
-        subtitle: String(activity.created_at || "").slice(0, 10),
-        statusText: String(activity.category || activity.entry_type || "Activity"),
+        subtitle: shortDate(activity.created_at),
+        statusText: ACTIVITY_LABEL[String(activity.category || "")]
+          ?? (activity.entry_type === "credit" ? "Added" : "Paid out"),
         statusColor: activity.entry_type === "credit" ? "text-[#00A671]" : "text-[#D7930A]",
         iconBg: activity.entry_type === "credit" ? "#00D855" : "#FF9400",
         iconSrc: activity.entry_type === "credit" ? "/myreward/tick-02.svg" : "/myreward/watch-01.svg",

@@ -12,7 +12,6 @@ import VerifyEmailForm from "./VerifyEmailForm";
 import ResetPasswordForm from "./ResetPasswordForm";
 import HomepageContainer from "@/features/homepage/components/HomepageContainer";
 import ClaimDetails from "@/features/homepage/components/ClaimDetails";
-import ViewDetails from "@/features/homepage/components/ViewDetails";
 import ProfileContainer from "@/features/profile/components/ProfileContainer";
 import MyRewardContainer from "@/features/myreward/components/MyRewardContainer";
 import WalletContainer from "@/features/wallet/components/WalletContainer";
@@ -30,11 +29,10 @@ const ROUTE_STORAGE_KEY = "nibbl_current_route";
 const CAMPAIGN_STORAGE_KEY = "nibbl_selected_campaign_id";
 const PROFILE_VIEW_STORAGE_KEY = "nibbl_profile_view";
 
-const publicStages = new Set<AuthStage>(["home", "claim-details", "view-details"]);
+const publicStages = new Set<AuthStage>(["home", "claim-details"]);
 const authenticatedStages = new Set<AuthStage>([
   "home",
   "claim-details",
-  "view-details",
   "profile",
   "my-reward",
   "wallet",
@@ -60,7 +58,7 @@ const readStoredStage = (): AuthStage => {
   const storedStage = window.localStorage.getItem(ROUTE_STORAGE_KEY) as AuthStage | null;
   if (!storedStage || !authenticatedStages.has(storedStage)) return "home";
 
-  const needsCampaign = storedStage === "claim-details" || storedStage === "view-details";
+  const needsCampaign = storedStage === "claim-details";
   if (needsCampaign && !window.localStorage.getItem(CAMPAIGN_STORAGE_KEY)) return "home";
 
   return storedStage;
@@ -366,7 +364,7 @@ export default function AuthContainer() {
           onViewOffer={(campaignId) => {
             setSelectedCampaignId(campaignId || "");
             if (campaignId) void loadOfferDetails(campaignId);
-            setStage("view-details");
+            setStage("claim-details");
           }}
           onTabChange={handleTabChange}
         />
@@ -382,19 +380,6 @@ export default function AuthContainer() {
           campaignId={selectedCampaignId}
           onBack={() => setStage("home")}
           onNavigate={setStage}
-          onTabChange={handleTabChange}
-        />
-      </div>
-    );
-  }
-
-  // Render View Details Page directly
-  if (stage === "view-details") {
-    return (
-      <div className="animate-fade-in">
-        <ViewDetails
-          campaignId={selectedCampaignId}
-          onBack={() => setStage("home")}
           onTabChange={handleTabChange}
         />
       </div>

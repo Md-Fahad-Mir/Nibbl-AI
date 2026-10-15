@@ -212,6 +212,17 @@ class ExpiryTests(APITestCase):
         self.assertEqual(fresh.status, Reservation.Status.ACTIVE)
 
 
+    def test_deleting_a_claim_releases_its_hold(self):
+        brand, campaign, wallet = _campaign(premium="5.00")
+        reservation = services.create_reservation(
+            user=_user("c@example.com"), campaign_id=campaign.id
+        )
+        self.assertEqual(wallet.held_amount(), Decimal("5.00"))
+        reservation.delete()
+        self.assertEqual(wallet.held_amount(), Decimal("0.00"))
+        self.assertEqual(Hold.objects.get().status, Hold.Status.RELEASED)
+
+
 class ReservationApiTests(APITestCase):
     def test_user_can_list_and_view_own_reservations(self):
         brand, campaign, _ = _campaign()

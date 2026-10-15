@@ -113,3 +113,45 @@ class PlanChangeTests(APITestCase):
         BrandMembership.objects.create(brand=self.brand, user=member, role=BrandMembership.Role.MEMBER)
         self.client.force_authenticate(member)
         self.assertEqual(self.client.post(self.url, {"plan": "scale"}, format="json").status_code, 403)
+
+
+class CampaignSlotTests(APITestCase):
+    """Starter allows 1 active rebate campaign: a manual pause frees the slot,
+    a low-funds auto-pause keeps it, an ended campaign never holds one."""
+
+    def setUp(self):
+        self.brand = Brand.objects.create(name="Acme", slug="acme", plan=Plan.objects.get(slug="starter"))
+        wallet_services.credit(wallet=wallet_services.get_or_create_brand_wallet(self.brand),
+                               amount=Decimal("1000"), category=LedgerEntry.Category.FUNDING)
+        self.product = create_product(brand=self.brand, name="Chips", category="Chips")
+
+    def _approved(self, name):
+        campaign = campaign_services.create_campaign(
+            brand=self.brand, product_ids=[self.product.id], name=name, deal_type=Campaign.DealType.FREE,
+            max_rebate=Decimal("5.00"), desired_redemptions=10, estimated_redemption_rate=Decimal("100"),
+        )
+        Campaign.objects.filter(pk=campaign.pk).update(review_status=Campaign.ReviewStatus.APPROVED)
+        campaign.refresh_from_db()
+        return campaign
+
+    def test_manual_pause_frees_the_slot(self):
+        a, b = self._approved("A"), self._approved("B")
+        campaign_services.activate_campaign(a)
+        with self.assertRaises(campaign_services.CampaignError):
+            campaign_services.activate_campaign(b)  # limit reached
+        campaign_services.pause_campaign(a)
+        campaign_services.activate_campaign(b)  # slot freed by the pause
+        with self.assertRaises(campaign_services.CampaignError):
+            campaign_services.activate_campaign(a)  # B holds the only slot now
+        campaign_services.pause_campaign(b)
+        campaign_services.activate_campaign(a)  # re-activating a paused campaign works
+
+    def test_auto_pause_keeps_the_slot_and_ended_campaigns_do_not(self):
+        a, b = self._approved("A"), self._approved("B")
+        campaign_services.activate_campaign(a)
+        Campaign.objects.filter(pk=a.pk).update(status=Campaign.Status.PAUSED, auto_paused=True)
+        with self.assertRaises(campaign_services.CampaignError):
+            campaign_services.activate_campaign(b)
+        Campaign.objects.filter(pk=a.pk).update(status=Campaign.Status.ACTIVE, auto_paused=False,
+                                                end_at=timezone.now() - dt.timedelta(days=1))
+        campaign_services.activate_campaign(b)  # A is past its end date

@@ -24,20 +24,20 @@ export default function AutoRefillCard() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const reload = async () => {
-    try {
-      const [config, savedCards] = await Promise.all([getAutoRefill(), loadSavedCards()]);
-      setEnabled(config.enabled);
-      if (Number(config.amount) > 0) setAmount(String(config.amount));
-      setPaymentMethodId(config.payment_method_id ?? "");
-      setRecommended(String(config.recommended_amount ?? "0"));
-      setTriggerAt(String(config.trigger_at ?? "0"));
-      setEstimate(String(config.estimated_seven_day ?? "0"));
-      setCards(savedCards);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load auto-refill.");
-    }
-  };
+  const reload = () =>
+    Promise.all([getAutoRefill(), loadSavedCards()])
+      .then(([config, savedCards]) => {
+        setEnabled(config.enabled);
+        if (Number(config.amount) > 0) setAmount(String(config.amount));
+        setPaymentMethodId(config.payment_method_id ?? "");
+        setRecommended(String(config.recommended_amount ?? "0"));
+        setTriggerAt(String(config.trigger_at ?? "0"));
+        setEstimate(String(config.estimated_seven_day ?? "0"));
+        setCards(savedCards);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Could not load auto-refill.");
+      });
 
   useEffect(() => {
     reload();

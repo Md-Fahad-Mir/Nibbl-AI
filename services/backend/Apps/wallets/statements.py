@@ -91,7 +91,11 @@ def campaign_funding(brand) -> dict:
 
     plan = brand.plan
     rebate_need = ZERO
-    for campaign in brand.campaigns.filter(status=Campaign.Status.ACTIVE):
+    # Campaigns past their end date can't take claims, so they need no funding.
+    live = brand.campaigns.filter(status=Campaign.Status.ACTIVE).filter(
+        Q(end_at__isnull=True) | Q(end_at__gt=timezone.now())
+    )
+    for campaign in live:
         reward = deals.max_reward(campaign) or ZERO
         fee = rebate_processing_fee(plan, reward) if plan else ZERO
         rebate_need += (reward + fee) * (campaign.claim_capacity or 0) * CYCLES_PER_WEEK

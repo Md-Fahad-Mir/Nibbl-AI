@@ -26,6 +26,7 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 | F7 | Confirm Reservation | Product, Purchase at, exact deadline, "This will use slot 4 of 5", Confirm & Reserve / Back | Re-check | OK — product, purchase-at, exact deadline, slot use, Confirm & Reserve / Back |
 | F8 | Return Action Prompt | "N actions waiting" with Submit Receipt / Save for Later and Browse More Offers | "Your Pending Rewards" list | Fixed — "N actions waiting" with Submit Receipt / Save for Later and Browse More Offers, shown first |
 | F9 | Restriction pop-ups (RB-33, 1–10) | Built in the For You batch | OK |
+| F10 | Logged-out first screen | Land on For You (location prompt, then campaign cards) | Old "Welcome to nibblAI" screen ("…rewards on amount needed", Start Scanning / Upload from Photos) | Fixed — removed; everyone lands on For You, sign-in appears when needed |
 
 ## My Offers and receipts (mockups 10–12)
 

@@ -1,6 +1,5 @@
 export type AuthStage =
   | "splash"
-  | "onboarding"
   | "signin"
   | "signup"
   | "forgot-password"

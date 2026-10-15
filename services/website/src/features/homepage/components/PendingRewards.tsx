@@ -118,7 +118,7 @@ export default function PendingRewards({
 
         {!hasPendingRewards && (
           <div className="w-full rounded-lg border border-gray-100 bg-white p-6 text-sm text-gray-400 shadow-[0px_2px_7.6px_rgba(0,0,0,0.08)]">
-            No pending rewards from the backend.
+            No pending rewards yet.
           </div>
         )}
       </div>
@@ -166,7 +166,7 @@ function PendingRewardCard({
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center px-2 text-center text-[10px] text-gray-400">
-            No image returned
+            No image
           </div>
         )}
       </div>

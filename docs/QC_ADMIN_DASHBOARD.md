@@ -44,7 +44,7 @@ Status: **Open** = differs from the Master · **Fixed** = changed and re-checked
 | U1 | Suspensions summary, list, review panel | OK (icons per H3) |
 | R1 | Referrals tabs | Master: All, Flagged, Qualified, Paid, Rejected · Live: no "All" | Fixed |
 | R2 | Referral filters | Master: search + status + date range · Live: none | Fixed |
-| R3 | Referral details panel with flag reasons, Approve / Reject / Suspend | Open — re-check with a flagged referral |
+| R3 | Referral details panel with flag reasons, Approve / Reject / Suspend | OK — checked locally with a flagged referral: steps, reward, flag reason, Approve & pay / Reject / Suspend new shopper / Suspend referrer; Reject and Suspend stay disabled until a shopper-facing reason is typed |
 
 ## Sheet 4 — Analytics, Receipt Brand Discovery and Settings
 

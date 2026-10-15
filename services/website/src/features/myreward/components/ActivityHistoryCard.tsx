@@ -92,7 +92,7 @@ export default function ActivityHistoryCard({ activities }: ActivityHistoryCardP
         )) : (
           <div className="w-full min-h-[75px] border-b border-[#E0E0E0] last:border-b-0 flex items-center py-3.5">
             <span className="text-[14px] font-normal leading-[17px] text-[#575757]">
-              No activity history from the backend.
+              No activity yet.
             </span>
           </div>
         )}

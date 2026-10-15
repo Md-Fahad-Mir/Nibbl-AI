@@ -8,7 +8,6 @@ export type AuthStage =
   | "reset-password"
   | "home"
   | "claim-details"
-  | "view-details"
   | "profile"
   | "my-reward"
   | "wallet";

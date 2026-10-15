@@ -53,7 +53,7 @@ export default function EarnMoreCard({ opportunities = [], onStartReviewClick }:
         )) : (
           <div className="w-full h-[47px] border-b border-[#E0E0E0] last:border-b-0 flex items-center py-[10px]">
             <span className="text-[14px] font-normal leading-[17px] text-[#575757]">
-              No review opportunities from the backend.
+              No review opportunities yet.
             </span>
           </div>
         )}

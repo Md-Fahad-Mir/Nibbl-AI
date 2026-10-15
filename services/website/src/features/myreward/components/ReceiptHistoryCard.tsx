@@ -65,7 +65,7 @@ export default function ReceiptHistoryCard({ receipts }: ReceiptHistoryCardProps
         )) : (
           <div className="w-full min-h-[65px] border-b border-[#E0E0E0] last:border-b-0 flex items-center py-[10px]">
             <span className="text-[14px] font-normal leading-[17px] text-[#575757]">
-              No receipt history from the backend.
+              No receipts yet.
             </span>
           </div>
         )}

@@ -94,6 +94,9 @@ if env.bool("USE_S3_MEDIA", default=False):
         "OPTIONS": {
             "bucket_name": env("AWS_STORAGE_BUCKET_NAME", default="nibblai-media-prod"),
             "region_name": env("AWS_REGION", default="us-west-1"),
+            # Same-named uploads (e.g. two "receipt.jpg") get a unique suffix
+            # instead of replacing each other.
+            "file_overwrite": False,
         },
     }
 else:

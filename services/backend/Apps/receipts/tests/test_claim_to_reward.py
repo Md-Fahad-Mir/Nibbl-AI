@@ -875,6 +875,34 @@ class PayloadMappingTests(APITestCase):
         ])
         self.assertEqual(ocr.map_payload(body).items[0].quantity, 3)
 
+    def test_total_only_line_uses_the_line_total_as_unit_price(self):
+        body = payload(items=[
+            {"description": "Greek Yogurt", "quantity": None, "unit": None,
+             "unit_price": None, "total_price": "5.49"},
+            {"description": "Biscuits", "quantity": "3", "unit": None,
+             "unit_price": None, "total_price": "6.00"},
+        ])
+        items = ocr.map_payload(body).items
+        self.assertEqual(items[0].unit_price, Decimal("5.49"))
+        self.assertEqual(items[1].unit_price, Decimal("2.00"))
+
+    def test_free_deal_auto_approves_when_only_the_total_is_printed(self):
+        from Apps.campaigns.models import Campaign
+
+        owner, brand, product, _ = build_world()
+        campaign = campaign_services.create_campaign(
+            brand=brand, product_ids=[product.id], name="Free bar", deal_type=Campaign.DealType.FREE,
+            max_rebate=Decimal("6.00"), desired_redemptions=10, estimated_redemption_rate=Decimal("30"),
+        )
+        go_live(campaign)
+        user, reservation = claim(campaign, "t@example.com")
+        body = payload(items=[{"description": "Dark Chocolate Bar", "quantity": "100", "unit": "G",
+                               "unit_price": None, "total_price": "5.49"}])
+        with ocr_returning(body):
+            receipt = services.upload_receipt(user=user, reservation_id=reservation.id, image=image())
+        self.assertEqual(receipt.status, Receipt.Status.VERIFIED)
+        self.assertEqual(balance(user), Decimal("5.49"))
+
     def test_size_suffix_lets_the_product_library_match(self):
         """OCR splits the size off; the restored description matches the
         library name exactly, with no fuzzy matching involved."""

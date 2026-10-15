@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { AuthStage, SignInCredentials, SignUpCredentials } from "../types/auth.types";
 import SplashScreen from "./SplashScreen";
-import Onboarding from "./Onboarding";
 import AuthLayout from "./AuthLayout";
 import SignInForm from "./SignInForm";
 import SignUpForm from "./SignUpForm";
@@ -250,7 +249,8 @@ export default function AuthContainer() {
   };
 
   const handleSplashComplete = () => {
-    setStage(accessToken ? "home" : "onboarding");
+    // Master: everyone lands on For You (logged-out shoppers can browse).
+    setStage("home");
   };
 
   // After any sign-in: back to the linked deal, else home.
@@ -342,15 +342,6 @@ export default function AuthContainer() {
     return <SplashScreen onComplete={handleSplashComplete} />;
   }
 
-  // Render Onboarding Screen directly
-  if (stage === "onboarding") {
-    return (
-      <div className="animate-fade-in">
-        <Onboarding onNavigate={setStage} />
-      </div>
-    );
-  }
-
   // Render Homepage directly
   if (stage === "home") {
     return (
@@ -396,7 +387,7 @@ export default function AuthContainer() {
           onSignOut={() => {
             clearStoredNavigation();
             void logout();
-            setStage("onboarding");
+            setStage("home");
           }}
           onClaimOffer={() => setStage("claim-details")}
           onSelectOffer={(campaignId) => {

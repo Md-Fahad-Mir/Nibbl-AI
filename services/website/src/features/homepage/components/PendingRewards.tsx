@@ -40,6 +40,8 @@ interface PendingRewardsProps {
   reviewOpportunities?: Record<string, unknown>[];
   onUploadReceiptClick?: (reservationId: string) => void;
   onLeaveReviewClick?: (opportunityId: string) => void;
+  /** Master Return Action Prompt: "Browse More Offers" moves on to the deals. */
+  onBrowseMore?: () => void;
 }
 
 export default function PendingRewards({
@@ -48,6 +50,7 @@ export default function PendingRewards({
   reviewOpportunities = [],
   onUploadReceiptClick,
   onLeaveReviewClick,
+  onBrowseMore,
 }: PendingRewardsProps) {
   const [saved, setSaved] = useState<string[]>(() => (typeof window === "undefined" ? [] : readSaved()));
   const saveForLater = (key: string) => {
@@ -73,10 +76,12 @@ export default function PendingRewards({
 
   return (
     <div className="w-full max-w-[1137px] mx-auto font-sans flex flex-col gap-6">
-      {/* Title */}
-      <h2 className="text-[24px] font-semibold leading-[29px] text-[#1F1D1D]">
-        Your Pending Rewards
-      </h2>
+      <div className="flex flex-col gap-1">
+        <h2 className="text-[24px] font-bold leading-[29px] text-[#1F1D1D]">
+          {visibleReservations.length + visibleReviews.length} action{visibleReservations.length + visibleReviews.length === 1 ? "" : "s"} waiting
+        </h2>
+        <p className="text-[14px] text-[#575757]">Complete receipts and reviews to keep earning with Nibbl.</p>
+      </div>
 
       {/* Swipeable carousel of pending actions (Master: Return Action Prompt) */}
       <div className="flex gap-6 items-stretch overflow-x-auto snap-x snap-mandatory pb-3 -mx-1 px-1">
@@ -122,6 +127,12 @@ export default function PendingRewards({
           </div>
         )}
       </div>
+      {onBrowseMore && (
+        <button type="button" onClick={onBrowseMore}
+          className="w-full h-12 rounded-[10px] border border-[#DAE2FD] bg-[#F5F6FF] text-[#3E3EDF] text-[15px] font-semibold cursor-pointer">
+          Browse More Offers →
+        </button>
+      )}
     </div>
   );
 }

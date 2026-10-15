@@ -3,11 +3,9 @@
 import { useEffect, useState } from "react";
 import Header from "./Header";
 import SearchBar from "./SearchBar";
-import WalletCard from "./WalletCard";
 import RewardsSection from "./RewardsSection";
 import LocationGate from "./LocationGate";
 import PendingRewards from "./PendingRewards";
-import ScanReceipt from "./ScanReceipt";
 import Footer from "./Footer";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
 
@@ -26,7 +24,6 @@ export default function HomepageContainer({
   const [activeCategory, setActiveCategory] = useState("All");
   const [changingLocation, setChangingLocation] = useState(false);
   const {
-    wallet,
     offers,
     categories,
     reservations,
@@ -48,7 +45,6 @@ export default function HomepageContainer({
     if (signedIn) void loadRewardsHub();
   }, [loadHome, loadRewardsHub, signedIn]);
 
-  const balance = Number(wallet?.available ?? wallet?.balance ?? 0);
 
   return (
     <div className="w-full bg-[#FEFEFE] min-h-screen flex flex-col font-sans select-none">
@@ -67,10 +63,21 @@ export default function HomepageContainer({
           />
         </section>
 
-        {/* Wallet Balance Card (Frame 2147229286: top: 317px) */}
-        {signedIn && (
-          <section className="w-full flex justify-center">
-            <WalletCard balance={balance} onViewWallet={() => onTabChange("wallet")} />
+        {/* Master ⑥ Return Action Prompt: pending receipts and reviews come first */}
+        {signedIn && reservations.length + reviewOpportunities.length > 0 && (
+          <section className="w-full max-w-[1137px] mx-auto">
+            <PendingRewards
+              reservations={reservations}
+              receipts={receipts}
+              reviewOpportunities={reviewOpportunities}
+              onUploadReceiptClick={(reservationId) =>
+                onTabChange("scan", reservationId ? `reservation:${reservationId}` : undefined)
+              }
+              onLeaveReviewClick={(opportunityId) =>
+                onTabChange("scan", opportunityId ? `review:${opportunityId}` : undefined)
+              }
+              onBrowseMore={() => document.getElementById("for-you")?.scrollIntoView({ behavior: "smooth" })}
+            />
           </section>
         )}
 
@@ -86,7 +93,7 @@ export default function HomepageContainer({
             />
           </section>
         ) : (
-        <section className="w-full">
+        <section id="for-you" className="w-full scroll-mt-4">
           {discoveryLocation && (
             <p className="max-w-[1137px] mx-auto mb-4 text-[14px] text-[#575757]">
               Deals near {discoveryLocation.zip} ·{" "}
@@ -111,27 +118,6 @@ export default function HomepageContainer({
         </section>
         )}
 
-        {/* User Pending Rewards List */}
-        {signedIn && (<>
-        <section className="w-full max-w-[1137px] mx-auto flex justify-start">
-          <PendingRewards
-            reservations={reservations}
-            receipts={receipts}
-            reviewOpportunities={reviewOpportunities}
-            onUploadReceiptClick={(reservationId) =>
-              onTabChange("scan", reservationId ? `reservation:${reservationId}` : undefined)
-            }
-            onLeaveReviewClick={(opportunityId) =>
-              onTabChange("scan", opportunityId ? `review:${opportunityId}` : undefined)
-            }
-          />
-        </section>
-
-        {/* Scan & Receipt action section centered below */}
-        <section className="w-full max-w-[1137px] mx-auto flex justify-center pb-10">
-          <ScanReceipt onActionClick={() => onTabChange("scan")} />
-        </section>
-        </>)}
       </main>
 
       {/* Footer Branding Links */}

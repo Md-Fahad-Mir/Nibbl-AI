@@ -57,6 +57,8 @@ export default function Footer({ onTabChange }: FooterProps) {
         <div className="border-t border-[#D0D0D0] pt-4 text-sm text-[#575757] text-center sm:text-left">
           © {new Date().getFullYear()} Nibbl. All rights reserved.
         </div>
+        {/* Room for the phone bottom tab bar */}
+        <div className="h-16 md:hidden" aria-hidden />
       </div>
     </footer>
   );

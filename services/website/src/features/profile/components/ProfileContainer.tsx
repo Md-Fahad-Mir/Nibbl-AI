@@ -11,6 +11,8 @@ import { LoadState, useConsumerApiStore } from "@/stores/useConsumerApiStore";
 import { ApiError, ApiRecord, nibblApi } from "@/lib/api/backendApi";
 import { displayOffer, imageUrl, text } from "@/features/homepage/lib/offerMappers";
 import MarketingPreferences from "./MarketingPreferences";
+import InviteFriendsCard from "@/features/myreward/components/InviteFriendsCard";
+import InviteFriendsModal from "@/features/myreward/components/InviteFriendsModal";
 import { BadgeCheck, Lock } from "lucide-react";
 
 type ProfileView = "menu" | "edit" | "saved" | "privacy" | "terms" | "notifications" | "help" | "faq" | "contact-us";
@@ -76,6 +78,17 @@ export default function ProfileContainer({
   onTabChange,
 }: ProfileContainerProps) {
   const [activeView, setActiveView] = useState<ProfileView>(() => viewFromInitial(initialView));
+  const [inviteOpen, setInviteOpen] = useState(false);
+  // Tapping a notification opens what it is about (claim, wallet, referral).
+  const openNotification = (n: ApiRecord) => {
+    const type = String(n.reference_type ?? "");
+    const id = String(n.reference_id ?? "");
+    if (type === "reservation" && id) onTabChange?.("scan", `claim:${id}`);
+    else if (type === "receipt" || type === "review_session" || type === "review") onTabChange?.("scan");
+    else if (["redemption", "withdrawal", "wallet", "payout"].includes(type)) onTabChange?.("wallet");
+    else if (type === "referral") setActiveView("menu");
+  };
+  const inviteFriend = useConsumerApiStore((state) => state.inviteFriend);
   const [fullName, setFullName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
@@ -313,6 +326,9 @@ export default function ProfileContainer({
               <ProfileRow label="Saved" onClick={() => setActiveView("saved")} />
             </ProfileGroup>
 
+            {/* Master: Refer a Friend lives under Profile */}
+            <InviteFriendsCard onInviteClick={() => setInviteOpen(true)} />
+
             <ProfileGroup title="Marketing Preferences">
               <MarketingPreferences />
             </ProfileGroup>
@@ -529,7 +545,9 @@ export default function ProfileContainer({
 
             <div className="w-full min-h-[350px] flex flex-col text-gray-500">
               {notifications.length ? notifications.map((notification) => (
-                <div key={String(notification.id ?? notification.created_at)} className="border-b border-gray-100 py-4">
+                <button type="button" key={String(notification.id ?? notification.created_at)}
+                  onClick={() => openNotification(notification)}
+                  className="w-full text-left border-b border-gray-100 py-4 hover:bg-gray-50 cursor-pointer">
                   <p className="text-[16px] font-medium text-[#1F1D1D]">
                     {text(notification.title, "Notification")}
                   </p>
@@ -541,7 +559,7 @@ export default function ProfileContainer({
                       ? new Date(String(notification.created_at)).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
                       : ""}
                   </p>
-                </div>
+                </button>
               )) : (
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 text-gray-400">
                   <p className="text-sm font-normal">No notifications yet.</p>
@@ -644,6 +662,15 @@ export default function ProfileContainer({
       </main>
 
       <Footer onTabChange={onTabChange} />
+      {inviteOpen && (
+        <InviteFriendsModal
+          onClose={() => setInviteOpen(false)}
+          onSend={(name, contact) => {
+            setInviteOpen(false);
+            void inviteFriend(name, contact);
+          }}
+        />
+      )}
     </div>
   );
 }

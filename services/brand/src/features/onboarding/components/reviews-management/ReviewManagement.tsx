@@ -87,13 +87,16 @@ function useNow() {
   return now;
 }
 
-function ReviewDetails({ review, onClose }: { review: ApiRecord; onClose: () => void }) {
+function ReviewDetails({ review, now, onClose, onChanged }: {
+  review: ApiRecord; now: number; onClose: () => void; onChanged: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const receipt = (review.receipt ?? null) as ApiRecord | null;
   const answers = (Array.isArray(review.questions_and_answers) ? review.questions_and_answers : []) as ApiRecord[];
   const checks = (Array.isArray(review.verification) ? review.verification : []) as ApiRecord[];
   const email = String(review.customer_email ?? "");
-  const meta = [formatDate(String(review.created_at ?? "")), review.retailer, review.region].filter(Boolean).join(" · ");
+  const meta = [formatDate(String(review.created_at ?? "")), review.retailer, review.region,
+    review.reward ? `${formatMoney(review.reward)} reward` : ""].filter(Boolean).join(" · ");
 
   const copy = async () => {
     await navigator.clipboard.writeText(email);
@@ -102,7 +105,7 @@ function ReviewDetails({ review, onClose }: { review: ApiRecord; onClose: () => 
   };
 
   return (
-    <aside className={`${cardClass} flex flex-col gap-4 text-sm lg:sticky lg:top-4`}>
+    <aside className={`${cardClass} flex flex-col gap-4 text-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto`}>
       <div className="flex justify-between items-start">
         <h3 className="font-jakarta text-lg font-bold text-[#131B2E]">Review Details</h3>
         <button onClick={onClose} aria-label="Close" className="text-[#94A3B8] hover:text-[#131B2E] text-lg cursor-pointer"><X className="w-5 h-5" /></button>
@@ -149,14 +152,14 @@ function ReviewDetails({ review, onClose }: { review: ApiRecord; onClose: () => 
       )}
 
       {(receipt || checks.length > 0) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="flex flex-col gap-4">
           {receipt && (
             <div>
               <div className={headingClass}>Receipt Evidence</div>
               {receipt.image_url ? (
                 <a href={String(receipt.image_url)} target="_blank" rel="noreferrer" className="block mt-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={String(receipt.image_url)} alt="Receipt" className="w-full h-28 object-cover rounded-lg border border-[#EAEDFF]" />
+                  <img src={String(receipt.image_url)} alt="Receipt" className="w-full max-h-72 object-contain object-top bg-[#F8F9FF] rounded-lg border border-[#EAEDFF]" />
                 </a>
               ) : (
                 <p className="text-xs text-[#64748B] mt-2">Verified receipt</p>
@@ -194,6 +197,13 @@ function ReviewDetails({ review, onClose }: { review: ApiRecord; onClose: () => 
           <p className="text-xs text-[#94A3B8] mt-2">On your plan, the customer&apos;s email is shown only for 1–3 star reviews.</p>
         )}
       </div>
+
+      {Number(review.rating) <= 3 && review.status !== "removed" && (
+        <LowRatingResponse key={`r-${String(review.id)}`} review={review} now={now} onChanged={onChanged} />
+      )}
+      {(review.status === "held" || review.status === "published") && (
+        <FlagForRemoval key={`f-${String(review.id)}`} review={review} onChanged={onChanged} />
+      )}
     </aside>
   );
 }
@@ -222,8 +232,8 @@ function LowRatingResponse({ review, now, onChanged }: { review: ApiRecord; now:
   };
 
   return (
-    <section className={`${cardClass} flex flex-col gap-3`}>
-      <h4 className="font-jakarta font-bold text-[#131B2E]">Low-Rating Response (1–3 Stars)</h4>
+    <section className="border-t border-[#F1F2FA] pt-3 flex flex-col gap-3">
+      <div className={headingClass}>Low-Rating Response</div>
       {held && Boolean(review.held_until) && (
         <div className="bg-red-50/60 border border-red-100 rounded-xl p-3">
           <div className="text-xs text-red-700">Auto-publish in</div>
@@ -263,6 +273,7 @@ function LowRatingResponse({ review, now, onChanged }: { review: ApiRecord; now:
 
 function FlagForRemoval({ review, onChanged }: { review: ApiRecord; onChanged: () => void }) {
   const brandReviewAction = useBrandApiStore((s) => s.brandReviewAction);
+  const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -281,9 +292,23 @@ function FlagForRemoval({ review, onChanged }: { review: ApiRecord; onChanged: (
     }
   };
 
+  if (!open) {
+    return (
+      <section className="border-t border-[#F1F2FA] pt-3">
+        <button onClick={() => setOpen(true)}
+          className="h-9 px-4 rounded-full border border-red-200 text-red-600 text-xs font-bold cursor-pointer">
+          Flag for Removal
+        </button>
+      </section>
+    );
+  }
+
   return (
-    <section className={`${cardClass} flex flex-col gap-3`}>
-      <h4 className="font-jakarta font-bold text-[#131B2E]">Flag Review for Removal</h4>
+    <section className="border-t border-[#F1F2FA] pt-3 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <div className={headingClass}>Flag Review for Removal</div>
+        <button onClick={() => setOpen(false)} className="text-xs font-bold text-[#64748B] cursor-pointer">Cancel</button>
+      </div>
       <div className="flex flex-col gap-1.5">
         {FLAG_REASONS.map((r) => (
           <label key={r} className="flex items-center gap-2 text-xs text-[#454656] cursor-pointer">
@@ -412,11 +437,28 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
         Back
       </button>
 
-      <div className="flex flex-col gap-1.5">
-        <h2 className="text-3xl font-extrabold font-jakarta text-[#131B2E] tracking-tight">Review Management</h2>
-        <p className="text-[#454656] text-sm md:text-base font-medium">
-          Monitor, moderate, and respond to product reviews. Build trust with authentic shopper feedback.
-        </p>
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <h2 className="text-3xl font-extrabold font-jakarta text-[#131B2E] tracking-tight">Review Management</h2>
+          <p className="text-[#454656] text-sm md:text-base font-medium">
+            Monitor, moderate, and respond to product reviews. Build trust with authentic shopper feedback.
+          </p>
+        </div>
+        <div className="flex flex-col items-start lg:items-end gap-1 flex-shrink-0">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => void download("csv")} disabled={Boolean(downloading)}
+              className="h-10 px-5 rounded-full border border-[#001BD2]/30 bg-white text-[#001BD2] text-sm font-bold disabled:opacity-50 cursor-pointer">
+              {downloading === "csv" ? "Downloading…" : "Download CSV"}
+            </button>
+            <button onClick={() => void download("text")} disabled={Boolean(downloading)}
+              className="h-10 px-5 rounded-full border border-[#001BD2]/30 bg-white text-[#001BD2] text-sm font-bold disabled:opacity-50 cursor-pointer">
+              {downloading === "text" ? "Downloading…" : "Download Reviews"}
+            </button>
+          </div>
+          <p className="text-[11px] text-[#94A3B8]">
+            Exports include &quot;Verified Purchase · Rewarded for an honest review.&quot; API integration coming soon.
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 w-full">
@@ -478,7 +520,7 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
 
       {error && <div className="text-sm font-semibold text-red-700">{error}</div>}
 
-      <div className={`grid grid-cols-1 gap-6 items-start ${selected ? "lg:grid-cols-[minmax(0,1fr)_380px]" : ""}`}>
+      <div className={`grid grid-cols-1 gap-6 items-start ${selected ? "lg:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
         <div className="bg-white border border-[#EAEDFF] rounded-[20px] shadow-sm overflow-x-auto">
           <table className="w-full border-collapse text-sm text-[#454656]">
             <thead>
@@ -488,9 +530,9 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
                 <th className="p-4 text-left">Rating</th>
                 <th className="p-4 text-left">Review Title</th>
                 <th className="p-4 text-left">Status</th>
-                <th className="p-4 text-left">Reward</th>
-                <th className="p-4 text-left">Submitted</th>
-                <th className="p-4" aria-label="Open" />
+                {!selected && <th className="p-4 text-left">Reward</th>}
+                {!selected && <th className="p-4 text-left">Submitted</th>}
+                {!selected && <th className="p-4" aria-label="Open" />}
               </tr>
             </thead>
             <tbody>
@@ -504,7 +546,7 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
                       <div className="font-bold text-[#131B2E]">{String(review.shopper_name ?? "Customer")}</div>
                       {review.verified_purchase ? <VerifiedBadge /> : null}
                     </td>
-                    <td className="p-4 max-w-[240px]">
+                    <td className={`p-4 ${selected ? "max-w-[190px]" : "max-w-[240px]"}`}>
                       <div className="flex items-center gap-3">
                         <span className="w-10 h-10 rounded-lg bg-[#F2F3FF] overflow-hidden flex items-center justify-center flex-shrink-0">
                           {productImage.get(String(review.product ?? "")) ? (
@@ -521,21 +563,21 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
                       </div>
                     </td>
                     <td className="p-4"><Stars rating={Number(review.rating ?? 0)} /></td>
-                    <td className="p-4 max-w-[200px] truncate">{String(review.title ?? "")}</td>
+                    <td className={`p-4 truncate ${selected ? "max-w-[150px]" : "max-w-[200px]"}`}>{String(review.title ?? "")}</td>
                     <td className="p-4">
                       <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${STATUS_BADGE[reviewStatus] ?? ""}`}>
                         {STATUS_LABEL[reviewStatus] ?? reviewStatus}
                       </span>
                     </td>
-                    <td className="p-4">{review.reward ? formatMoney(review.reward) : "—"}</td>
-                    <td className="p-4 whitespace-nowrap">{formatDate(String(review.created_at ?? ""))}</td>
-                    <td className="p-4"><ChevronRight className="w-4 h-4 text-[#94A3B8]" /></td>
+                    {!selected && <td className="p-4">{review.reward ? formatMoney(review.reward) : "—"}</td>}
+                    {!selected && <td className="p-4 whitespace-nowrap">{formatDate(String(review.created_at ?? ""))}</td>}
+                    {!selected && <td className="p-4"><ChevronRight className="w-4 h-4 text-[#94A3B8]" /></td>}
                   </tr>
                 );
               })}
               {data && reviews.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="p-10 text-center text-sm font-semibold text-slate-400">
+                  <td colSpan={selected ? 5 : 8} className="p-10 text-center text-sm font-semibold text-slate-400">
                     No reviews match the current selection.
                   </td>
                 </tr>
@@ -548,46 +590,15 @@ export default function ReviewManagement({ onBack, initialProductFilter }: Revie
             setPage: (next) => setPageState({ key: filterKey, page: next }),
           }} />
         </div>
-        {selected && <ReviewDetails review={selected} onClose={() => setSelectedId(null)} />}
+        {selected && <ReviewDetails review={selected} now={now} onClose={() => setSelectedId(null)} onChanged={changed} />}
       </div>
+      {!selected && reviews.length > 0 && (
+        <p className="text-xs text-[#64748B] -mt-3">
+          Select a review to see the full text and receipt, respond, or flag it. Reviews rated 1–3 stars are held for
+          seven days and publish automatically if no action is taken.
+        </p>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-        {selected && Number(selected.rating) <= 3 && selected.status !== "removed" ? (
-          <LowRatingResponse key={`r-${String(selected.id)}`} review={selected} now={now} onChanged={changed} />
-        ) : (
-          <section className={`${cardClass} text-sm text-[#64748B]`}>
-            <h4 className="font-jakarta font-bold text-[#131B2E] mb-2">Low-Rating Response (1–3 Stars)</h4>
-            Reviews rated three stars or lower are held for seven days. Select one to contact the customer, add a
-            response, or flag it. If no action is taken, it publishes automatically.
-          </section>
-        )}
-        {selected && (selected.status === "held" || selected.status === "published") ? (
-          <FlagForRemoval key={`f-${String(selected.id)}`} review={selected} onChanged={changed} />
-        ) : (
-          <section className={`${cardClass} text-sm text-[#64748B]`}>
-            <h4 className="font-jakarta font-bold text-[#131B2E] mb-2">Flag Review for Removal</h4>
-            Select a published or held review to flag it for Nibbl. Every flag and outcome is recorded in the audit history.
-          </section>
-        )}
-        <section className={`${cardClass} flex flex-col gap-2`}>
-          <h4 className="font-jakarta font-bold text-[#131B2E]">Export Reviews</h4>
-          <button onClick={() => void download("csv")} disabled={Boolean(downloading)}
-            className="h-10 rounded-full border border-[#001BD2]/30 text-[#001BD2] text-sm font-bold disabled:opacity-50 cursor-pointer">
-            {downloading === "csv" ? "Downloading…" : "Download CSV"}
-          </button>
-          <button onClick={() => void download("text")} disabled={Boolean(downloading)}
-            className="h-10 rounded-full border border-[#001BD2]/30 text-[#001BD2] text-sm font-bold disabled:opacity-50 cursor-pointer">
-            {downloading === "text" ? "Downloading…" : "Download Reviews"}
-          </button>
-          <p className="text-[11px] text-[#94A3B8] text-center">
-            Every exported review includes &quot;Verified Purchase · Rewarded for an honest review.&quot;
-          </p>
-          <div className="flex items-center justify-between bg-[#F8F9FF] rounded-xl px-3 py-2 text-xs text-[#454656]">
-            API Integration
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">Coming soon</span>
-          </div>
-        </section>
-      </div>
     </div>
   );
 }

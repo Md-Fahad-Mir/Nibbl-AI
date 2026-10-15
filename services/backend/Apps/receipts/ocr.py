@@ -270,6 +270,8 @@ def _map_item(item: dict) -> ExtractedItem:
     raw_quantity = _to_decimal(item.get("quantity"))
 
     # A measurement unit means quantity is a package size, not a count.
+    unit_price = _to_decimal(item.get("unit_price"))
+    total_price = _to_decimal(item.get("total_price"))
     if unit and unit.lower().rstrip(".") in _MEASUREMENT_UNITS:
         quantity = 1
         size_suffix = f"{_trim_number(raw_quantity)}{unit}" if raw_quantity is not None else ""
@@ -279,12 +281,15 @@ def _map_item(item: dict) -> ExtractedItem:
     else:
         quantity = 1
         size_suffix = ""
+    # A single-item line usually prints only its total.
+    if unit_price is None and total_price is not None:
+        unit_price = (total_price / max(quantity, 1)).quantize(Decimal("0.01"))
 
     return ExtractedItem(
         description=description,
         quantity=max(quantity, 1),
         unit=unit,
-        unit_price=_to_decimal(item.get("unit_price")),
+        unit_price=unit_price,
         sku=_clean(item.get("sku")),
         description_with_size=(
             f"{description} {size_suffix}".strip() if size_suffix else description

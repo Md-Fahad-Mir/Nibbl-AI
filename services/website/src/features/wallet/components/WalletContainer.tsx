@@ -11,6 +11,7 @@ import BankDetailsModal from "./BankDetailsModal";
 import VerifyPhoneModal from "./VerifyPhoneModal";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
 import { ApiError, ApiRecord, nibblApi } from "@/lib/api/backendApi";
+import { Lock, ShieldCheck } from "lucide-react";
 
 interface WalletContainerProps {
   onTabChange: (tab: "offer" | "wallet" | "scan" | "profile" | "brand" | "notification", extra?: string) => void;
@@ -19,6 +20,8 @@ interface WalletContainerProps {
 export default function WalletContainer({ onTabChange }: WalletContainerProps) {
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  // "add" = Add payout method from the Wallet page (no withdrawal afterwards).
+  const [bankMode, setBankMode] = useState<"withdraw" | "add">("withdraw");
   const [walletMessage, setWalletMessage] = useState<string | null>(null);
   // Master: "Payout account already connected" → Request Review.
   const [duplicateAccount, setDuplicateAccount] = useState<{ provider: string; handle: string } | null>(null);
@@ -80,6 +83,43 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
           </p>
         )}
         
+        {/* Master Wallet Overview + Payout Methods */}
+        <section className="w-full max-w-[1100px] flex flex-col gap-3" aria-label="Payout methods">
+          <h2 className="text-[18px] font-semibold text-[#1F1D1D]">Payout method</h2>
+          {payoutMethods.length === 0 ? (
+            <p className="text-[14px] text-[#575757]">Add PayPal or Venmo to withdraw your rewards.</p>
+          ) : (
+            payoutMethods.map((method) => {
+              const status = String(method.review_status ?? "approved");
+              return (
+                <div key={String(method.id)} className="flex items-center gap-3 rounded-[12px] border border-gray-100 bg-white p-4">
+                  <span className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold ${
+                    method.provider === "venmo" ? "bg-[#008CFF]" : "bg-[#003087]"}`}>
+                    {method.provider === "venmo" ? "V" : "P"}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[15px] font-semibold text-[#1F1D1D]">{method.provider === "venmo" ? "Venmo" : "PayPal"}</span>
+                    <span className="block text-[13px] text-[#575757] truncate">{String(method.handle ?? "")}</span>
+                  </span>
+                  <span className={`text-[12px] font-semibold rounded-full px-2.5 py-1 flex items-center gap-1 ${
+                    status === "approved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                    {status === "approved" ? <><Lock className="w-3 h-3" /> Added</> : "Pending review"}
+                  </span>
+                </div>
+              );
+            })
+          )}
+          <p className="flex items-start gap-2 rounded-[10px] bg-[#F5F6FF] px-3 py-2 text-[12px] text-[#575757]">
+            <ShieldCheck className="w-4 h-4 text-[#3E3EDF] flex-shrink-0" />
+            One PayPal or Venmo recipient identity may be used per Nibbl account. Nibbl confirms a payout method after a
+            payment is successfully received.
+          </p>
+          <button type="button" onClick={() => { setBankMode("add"); setIsBankModalOpen(true); }}
+            className="self-start h-10 px-4 rounded-[10px] border border-[#3E3EDF] text-[#3E3EDF] text-[14px] font-semibold cursor-pointer">
+            Add payout method
+          </button>
+        </section>
+
         <div id="wallet-history-section" className="w-full flex justify-center mt-2">
           <WalletActivity items={activityItems} onOpen={setOpenItem} />
         </div>
@@ -94,6 +134,7 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
           onClose={() => setIsWithdrawModalOpen(false)}
           onAddMethod={() => {
             setIsWithdrawModalOpen(false);
+            setBankMode("withdraw");
             setIsBankModalOpen(true);
           }}
           onNeedPhone={(methodId) => {
@@ -115,7 +156,8 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
           onClose={() => setIsBankModalOpen(false)}
           onSubmit={(details) => {
             setIsBankModalOpen(false);
-            if (!canWithdraw) {
+            const addOnly = bankMode === "add";
+            if (!addOnly && !canWithdraw) {
               setWalletMessage("You need at least $0.01 available before requesting a withdrawal.");
               return;
             }
@@ -131,7 +173,8 @@ export default function WalletContainer({ onTabChange }: WalletContainerProps) {
                   return;
                 }
                 await loadWallet();
-                setIsWithdrawModalOpen(true);
+                if (addOnly) setWalletMessage("Payout method added.");
+                else setIsWithdrawModalOpen(true);
               })
               .catch((error: unknown) => {
                 const code = error instanceof ApiError ? (error.data as { code?: string } | null)?.code : undefined;

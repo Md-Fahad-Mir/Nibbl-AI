@@ -7,10 +7,8 @@ import PendingRebatesCard from "./PendingRebatesCard";
 import EarnMoreCard from "./EarnMoreCard";
 import ReceiptHistoryCard from "./ReceiptHistoryCard";
 import ActivityHistoryCard from "./ActivityHistoryCard";
-import InviteFriendsCard from "./InviteFriendsCard";
 import ReceiptSubmitFlow from "./ReceiptSubmitFlow";
 import ReviewChatModal from "./ReviewChatModal";
-import InviteFriendsModal from "./InviteFriendsModal";
 import { useConsumerApiStore } from "@/stores/useConsumerApiStore";
 
 // Shopper-facing names for wallet ledger categories.
@@ -85,7 +83,6 @@ export default function MyRewardContainer({
     reviewOpportunities,
     unreadCount,
     loadRewardsHub,
-    inviteFriend,
   } = useConsumerApiStore();
 
   useEffect(() => {
@@ -146,7 +143,6 @@ export default function MyRewardContainer({
     return () => clearTimeout(timer);
   }, [autoSelectReservationId, onClearAutoSelectReservation]);
 
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   
   const [localReceipts] = useState<Receipt[]>([]);
   const [localActivities, setLocalActivities] = useState<Activity[]>([]);
@@ -249,10 +245,10 @@ export default function MyRewardContainer({
 
       <main className="flex-grow flex flex-col items-center py-10 px-4 sm:px-6 max-w-[1440px] mx-auto w-full relative">
         <h1 className="text-[32px] font-medium leading-[39px] text-[#1F1D1D] text-center mb-10 mt-4">
-          {focusedReservationId ? "Rewards" : "My Rewards"}
+          My Offers
         </h1>
         <p className="max-w-[669px] -mt-8 mb-4 text-center text-[18px] leading-[26px] text-[#8A8A8A]">
-          Track your rewards, upload receipts, and earn more with every purchase.
+          Submit receipts for your active offers and finish reviews to earn.
         </p>
 
         {/* Content Layout stack (Frame 2147229211) */}
@@ -284,7 +280,6 @@ export default function MyRewardContainer({
             activities={activities}
           />
           
-          <InviteFriendsCard onInviteClick={() => setIsInviteModalOpen(true)} />
           
         </div>
       </main>
@@ -310,26 +305,6 @@ export default function MyRewardContainer({
         />
       )}
 
-      {isInviteModalOpen && (
-        <InviteFriendsModal
-          onClose={() => setIsInviteModalOpen(false)}
-          onSend={(name, contact) => {
-            setIsInviteModalOpen(false);
-            void inviteFriend(name, contact);
-            const newActivity: Activity = {
-              id: `act-${Date.now()}`,
-              type: "referral",
-              title: `Referral Invited: ${name}`,
-              subtitle: `Invitation link sent to ${contact}`,
-              statusText: "Pending",
-              statusColor: "text-[#D7930A]",
-              iconBg: "#4E31E3",
-              iconSrc: "/myreward/user-circle-02.svg",
-            };
-            setLocalActivities((prev) => [newActivity, ...prev]);
-          }}
-        />
-      )}
     </div>
   );
 }

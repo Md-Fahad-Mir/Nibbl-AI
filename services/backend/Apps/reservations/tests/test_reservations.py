@@ -223,6 +223,7 @@ class ReservationApiTests(APITestCase):
         # Paginated envelope: {count, next, previous, results}
         self.assertEqual(listing.data["count"], 1)
         self.assertEqual(len(listing.data["results"]), 1)
+        self.assertIn("campaign_image_url", listing.data["results"][0])  # My Offers card image
 
         detail = self.client.get(
             reverse("v1:reservations:reservation-detail", args=[reservation.id])

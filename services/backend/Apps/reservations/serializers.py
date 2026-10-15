@@ -13,6 +13,8 @@ class ReservationSerializer(serializers.ModelSerializer):
     offer_headline = serializers.CharField(source="campaign.offer_headline", read_only=True)
     brand_name = serializers.CharField(source="campaign.brand.name", read_only=True)
     product_name = serializers.SerializerMethodField()
+    # Master My Offers card image: campaign image, else the first product's (additive).
+    campaign_image_url = serializers.SerializerMethodField()
     # Where the app POSTs the receipt photo. Our own endpoint — the OCR service
     # is internal and is never called directly by the client.
     receipt_upload_url = serializers.SerializerMethodField()
@@ -32,6 +34,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             "offer_headline",
             "brand_name",
             "product_name",
+            "campaign_image_url",
             "kind",
             "offer_type",
             "reward_amount",
@@ -67,6 +70,16 @@ class ReservationSerializer(serializers.ModelSerializer):
     def get_product_name(self, obj):
         first_product = obj.campaign.products.first()
         return first_product.name if first_product else ""
+
+    def get_campaign_image_url(self, obj) -> str:
+        image = obj.campaign.image
+        if not image:
+            product = obj.campaign.products.first()
+            image = product.image_url if product else None
+        if not image:
+            return ""
+        request = self.context.get("request")
+        return request.build_absolute_uri(image.url) if request else image.url
 
     def get_receipt_upload_url(self, obj):
         path = reverse("v1:receipts:receipt-list")

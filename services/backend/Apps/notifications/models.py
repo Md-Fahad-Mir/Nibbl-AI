@@ -18,6 +18,7 @@ class NotificationType(models.TextChoices):
     CAMPAIGN_REVIEW = "campaign_review", "Campaign review update"
     RECEIPT_REVIEW_NEEDED = "receipt_review_needed", "Receipt waiting for your review"
     LOW_RATING_REVIEW = "low_rating_review", "New negative review"
+    REVIEW_FLAG_DECISION = "review_flag_decision", "Review flag decision"
     # Brand (Master Settings §3).
     WALLET_LOW = "wallet_low", "Wallet below 25%"
     CAMPAIGN_PAUSED = "campaign_paused", "Campaign paused"

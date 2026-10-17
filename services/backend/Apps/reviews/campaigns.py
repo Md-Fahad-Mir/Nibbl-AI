@@ -749,6 +749,16 @@ def decide_flag(review: Review, *, remove: bool, admin, note: str = "") -> Revie
     review.save(update_fields=["status", "published_at", "updated_at"])
     _audit(review, AuditLog.Action.APPROVE if remove else AuditLog.Action.REJECT, admin,
            event="flag_decision", removed=remove, note=note)
+    from Apps.notifications.brand import notify_brand
+
+    outcome = ("Nibbl removed it." if remove
+               else "Nibbl found it within the review rules, so it stays published.")
+    notify_brand(
+        review.brand, "review_flag_decision",
+        message=f"You flagged the {review.rating}★ review of {review.product.name}. {outcome}"
+                + (f" Note from Nibbl: {note}" if note else ""),
+        reference_type="review", reference_id=review.id,
+    )
     return review
 
 

@@ -43,6 +43,8 @@ BRAND_NOTIFICATIONS = [
      "Nibbl approved, rejected or asked for changes to a campaign."),
     (NotificationType.RECEIPT_REVIEW_NEEDED, "Receipts waiting for your review",
      "A receipt needs your decision before its 7-day deadline."),
+    (NotificationType.REVIEW_FLAG_DECISION, "Review flag decisions",
+     "Nibbl decided on a review you flagged for removal."),
 ]
 BRAND_TYPES = {t for t, _l, _d in BRAND_NOTIFICATIONS}
 

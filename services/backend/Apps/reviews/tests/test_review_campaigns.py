@@ -175,9 +175,27 @@ class ReviewCampaignTests(APITestCase):
         admin = User.objects.create_user(email="a@x.com", password="x", full_name="A", role=User.Role.ADMIN, is_staff=True)
         self.client.force_authenticate(admin)
         self.assertEqual(len(self.client.get(reverse("v1:reviews:admin-flagged")).data), 1)
-        self.client.post(reverse("v1:reviews:admin-flag-decision", args=[review.id, "remove"]), {}, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse("v1:reviews:admin-flag-decision", args=[review.id, "remove"]), {}, format="json")
         review.refresh_from_db()
         self.assertEqual(review.status, "removed")
+        # The flag form promises the brand hears the outcome.
+        from Apps.notifications.models import Notification
+
+        notice = Notification.objects.get(user=self.owner, type="review_flag_decision")
+        self.assertIn("Nibbl removed it.", notice.data["message"])
+
+    def test_kept_flag_tells_the_brand_it_stays_published(self):
+        _user, review = self._low_review()
+        review = rc.flag(review, reason="Other policy violation", actor=self.owner)
+        admin = User.objects.create_user(email="a@x.com", password="x", full_name="A", role=User.Role.ADMIN, is_staff=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            rc.decide_flag(review, remove=False, admin=admin, note="Honest opinion.")
+        from Apps.notifications.models import Notification
+
+        message = Notification.objects.get(user=self.owner, type="review_flag_decision").data["message"]
+        self.assertIn("stays published", message)
+        self.assertIn("Honest opinion.", message)
 
     def test_expired_opportunity_releases_reserve(self):
         self.verified_receipt()

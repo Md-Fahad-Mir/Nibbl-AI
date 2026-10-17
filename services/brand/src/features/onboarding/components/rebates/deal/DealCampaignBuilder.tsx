@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ImagePlus, Search } from "lucide-react";
+import { ImageIcon, ImagePlus, Search } from "lucide-react";
 import { ApiRecord } from "@/lib/api/backendApi";
 import { DealCampaignInput, RetailerOption, useBrandApiStore } from "@/stores/useBrandApiStore";
 import LaunchFundingModal, { launchReady } from "./LaunchFundingModal";
@@ -346,7 +346,11 @@ export default function DealCampaignBuilder({ campaign, onCancel, onSaved }: Dea
                       )
                     }
                   />
-                  <img src={product.imageSrc} alt="" className="w-9 h-9 rounded-lg object-cover bg-[#F2F3FF]" />
+                  {product.imageSrc ? (
+                    <img src={product.imageSrc} alt="" className="w-9 h-9 rounded-lg object-cover bg-[#F2F3FF]" />
+                  ) : (
+                    <span className="w-9 h-9 rounded-lg bg-[#F2F3FF] flex items-center justify-center"><ImageIcon className="w-4 h-4 text-[#C5C5D9]" /></span>
+                  )}
                   <span className="text-sm font-semibold text-[#131B2E] flex-1">{product.name}</span>
                   <span className="text-xs text-[#94A3B8]">{product.category || "No category"}</span>
                 </label>

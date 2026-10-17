@@ -112,7 +112,8 @@ const mapProduct = (item: ApiRecord, index: number, fallbackBrandName = ""): Pro
         ? (item.brand as ApiRecord).name
         : undefined)
   ),
-  imageSrc: backendAssetUrl(item.image_url ?? item.image, "/Auth/rebateImage.svg"),
+  // No stock fallback: screens show an empty-image placeholder, as shoppers see.
+  imageSrc: backendAssetUrl(item.image_url ?? item.image, ""),
   category: String(item.category ?? ""),
   flavor: String(
     item.flavor ??

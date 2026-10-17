@@ -6,7 +6,7 @@ import { ApiRecord } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import DeleteProductModal from "./DeleteProductModal";
 import { formatDate, formatInteger, formatMoney, toNumber } from "../../utils/backendMappers";
-import { Star } from "lucide-react";
+import { ImageIcon, Star } from "lucide-react";
 
 interface Product {
   id: string;
@@ -167,11 +167,15 @@ export default function ProductDetailsView({
           {/* Visual Image Card */}
           <div className="bg-white border border-slate-100 rounded-[20px] shadow-sm overflow-hidden w-full h-[420px] md:h-[460px] grid grid-rows-[minmax(0,1fr)_auto]">
             <div className="min-h-0 w-full bg-gradient-to-b from-slate-50 to-white flex items-center justify-center p-6">
-              <img
-                src={product.imageSrc}
-                alt={product.name}
-                className="block max-h-full max-w-full object-contain"
-              />
+              {product.imageSrc ? (
+                <img
+                  src={product.imageSrc}
+                  alt={product.name}
+                  className="block max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <ImageIcon className="w-16 h-16 text-[#C5C5D9]" aria-label="No product image" />
+              )}
             </div>
             <div className="border-t border-slate-100 bg-white px-6 py-4 flex flex-col gap-2 items-start">
               <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-3 py-1 rounded uppercase tracking-wider">BEST SELLER</span>

@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useMemo, useState } from "react";
-import { Check, Clock, DollarSign, GripVertical, Info, Lock, MessageSquare, Plus, Search, ShieldCheck, Sparkles, Star, Upload, X } from "lucide-react";
+import { Check, Clock, DollarSign, GripVertical, ImageIcon, Info, Lock, MessageSquare, Plus, Search, ShieldCheck, Sparkles, Star, Upload, X } from "lucide-react";
 import { ApiRecord, apiClient, backendApi } from "@/lib/api/backendApi";
 import { useBrandApiStore } from "@/stores/useBrandApiStore";
 import TestReviewChatModal from "./TestReviewChatModal";
@@ -227,7 +227,11 @@ export default function ReviewCampaignBuilder({ campaign, onCancel, onSaved }: R
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
               {chosen.map((p) => (
                 <div key={p.id} className="relative border border-[#EAEDFF] rounded-xl p-3 flex gap-3">
-                  <img src={p.imageSrc} alt="" className="w-16 h-16 rounded-lg object-contain bg-slate-50" />
+                  {p.imageSrc ? (
+                    <img src={p.imageSrc} alt="" className="w-16 h-16 rounded-lg object-contain bg-slate-50" />
+                  ) : (
+                    <span className="w-16 h-16 rounded-lg bg-slate-50 flex items-center justify-center flex-shrink-0"><ImageIcon className="w-6 h-6 text-[#C5C5D9]" /></span>
+                  )}
                   <div className="text-xs flex flex-col gap-0.5 min-w-0">
                     <b className="text-sm text-[#131B2E] truncate">{p.name}</b>
                     <span className="text-[#454656] truncate">{[p.flavor, p.sizeLabel].filter(Boolean).join(" · ")}</span>

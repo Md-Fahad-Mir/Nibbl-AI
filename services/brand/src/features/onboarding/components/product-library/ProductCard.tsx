@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { Ellipsis, Pencil, Star } from "lucide-react";
+import { Ellipsis, ImageIcon, Pencil, Star } from "lucide-react";
 import { Product } from "../../utils/mockData";
 
 interface ProductCardProps {
@@ -28,10 +28,16 @@ export default function ProductCard({ product, onViewDetails, onEditProduct, onV
       <div className="relative">
         <button onClick={() => onViewDetails(product)} aria-label={`View ${product.name}`}
           className="relative w-full h-[190px] bg-slate-50 rounded-xl overflow-hidden cursor-pointer block">
-          {!imageLoaded && <div className="absolute inset-0 bg-slate-100 animate-pulse" />}
-          <img src={product.imageSrc} alt={product.name} loading="lazy"
-            onLoad={() => setImageLoaded(true)} onError={() => setImageLoaded(true)}
-            className={`w-full h-full object-contain transition-opacity duration-200 ${imageLoaded ? "opacity-100" : "opacity-0"}`} />
+          {product.imageSrc ? (
+            <>
+              {!imageLoaded && <div className="absolute inset-0 bg-slate-100 animate-pulse" />}
+              <img src={product.imageSrc} alt={product.name} loading="lazy"
+                onLoad={() => setImageLoaded(true)} onError={() => setImageLoaded(true)}
+                className={`w-full h-full object-contain transition-opacity duration-200 ${imageLoaded ? "opacity-100" : "opacity-0"}`} />
+            </>
+          ) : (
+            <span className="w-full h-full flex items-center justify-center"><ImageIcon className="w-10 h-10 text-[#C5C5D9]" /></span>
+          )}
         </button>
         <button type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Product actions" aria-expanded={menuOpen}
           className="absolute right-2 top-2 w-8 h-8 rounded-full bg-white shadow flex items-center justify-center text-[#454656] cursor-pointer">
